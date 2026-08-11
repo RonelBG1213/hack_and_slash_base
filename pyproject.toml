@@ -1,0 +1,14 @@
+[project]
+name = "hack-and-slash"
+version = "0.1.0"
+description = "Top-down twin-stick hack and slash"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+# SDL must never open a window during the suite. tests/conftest.py sets
+# SDL_VIDEODRIVER=dummy before anything imports pygame -- done there rather than
+# here so it needs no pytest plugin.

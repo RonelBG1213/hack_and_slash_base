@@ -1,0 +1,170 @@
+"""Paints `assets/sprites.png`.
+
+The art is generated, never committed. Two reasons: nothing binary goes in the
+repo, and no amount of not-being-an-artist blocks the code. Replacing this with
+real art means dropping in a PNG with the same cell layout -- the game reads
+cells by index and does not care what is in them.
+
+Everything here is drawn with hard edges and no anti-aliasing. A pixel-art game
+scaled up by whole numbers turns any soft edge into a smear, and `main.py
+--smoke` fails the build if one appears.
+
+    python tools/gen_art.py
+"""
+
+from __future__ import annotations
+
+import os
+import random
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+# No window is needed to paint into a surface, and asking for one on a headless
+# machine fails outright.
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+
+import pygame  # noqa: E402
+
+from hack_and_slash import config  # noqa: E402
+
+CELL = config.TILE
+
+# Fixed seed: the speckles on the floor are decoration, but a build that
+# produces a different PNG every time makes "did the art change?" unanswerable.
+RNG = random.Random(20260811)
+
+TRANSPARENT = (0, 0, 0, 0)
+
+
+# --- painters ----------------------------------------------------------------
+def paint_floor(surface: pygame.Surface) -> None:
+    surface.fill((38, 40, 52))
+    # A few darker flecks so a large room does not read as one flat colour.
+    for _ in range(7):
+        x, y = RNG.randrange(CELL), RNG.randrange(CELL)
+        surface.set_at((x, y), (32, 34, 45))
+    for _ in range(3):
+        x, y = RNG.randrange(CELL), RNG.randrange(CELL)
+        surface.set_at((x, y), (45, 47, 60))
+
+
+def paint_wall(surface: pygame.Surface) -> None:
+    surface.fill((74, 78, 96))
+    # A lit top edge and a shadowed bottom one. This is the whole reason walls
+    # read as solid from a top-down camera rather than as differently coloured
+    # floor.
+    pygame.draw.rect(surface, (98, 104, 124), (0, 0, CELL, 3))
+    pygame.draw.rect(surface, (48, 51, 65), (0, CELL - 3, CELL, 3))
+    pygame.draw.rect(surface, (58, 62, 78), (0, 0, 1, CELL))
+
+
+def _body(
+    surface: pygame.Surface,
+    main: tuple[int, int, int],
+    dark: tuple[int, int, int],
+    light: tuple[int, int, int],
+    width: int,
+    height: int,
+) -> pygame.Rect:
+    """A blocky torso centred in the cell, lit from above."""
+    rect = pygame.Rect(0, 0, width, height)
+    rect.center = (CELL // 2, CELL // 2 + 1)
+    pygame.draw.rect(surface, dark, rect)
+    pygame.draw.rect(surface, main, rect.inflate(-2, -2))
+    pygame.draw.rect(surface, light, (rect.x + 1, rect.y + 1, rect.width - 2, 2))
+    return rect
+
+
+def paint_hero(surface: pygame.Surface) -> None:
+    rect = _body(surface, (86, 148, 202), (38, 74, 112), (150, 200, 236), 10, 12)
+    # Two eyes, so the front of the sprite is obvious at 1x.
+    surface.set_at((rect.centerx - 2, rect.centery), (240, 244, 250))
+    surface.set_at((rect.centerx + 2, rect.centery), (240, 244, 250))
+
+
+def paint_grunt(surface: pygame.Surface) -> None:
+    rect = _body(surface, (126, 168, 96), (58, 84, 44), (168, 204, 136), 9, 11)
+    surface.set_at((rect.centerx - 2, rect.centery), (28, 32, 26))
+    surface.set_at((rect.centerx + 2, rect.centery), (28, 32, 26))
+
+
+def paint_charger(surface: pygame.Surface) -> None:
+    # Wider and heavier than the others, because the thing it does is run you
+    # over and the silhouette should say so before the telegraph does.
+    rect = _body(surface, (198, 96, 78), (104, 42, 36), (232, 148, 122), 13, 12)
+    # Horns.
+    pygame.draw.rect(surface, (240, 226, 200), (rect.x, rect.y - 2, 2, 3))
+    pygame.draw.rect(surface, (240, 226, 200), (rect.right - 2, rect.y - 2, 2, 3))
+    surface.set_at((rect.centerx - 3, rect.centery + 1), (250, 240, 120))
+    surface.set_at((rect.centerx + 3, rect.centery + 1), (250, 240, 120))
+
+
+def paint_archer(surface: pygame.Surface) -> None:
+    rect = _body(surface, (156, 118, 196), (78, 56, 104), (198, 168, 226), 8, 11)
+    # A hood, to separate it from the grunt at a glance.
+    pygame.draw.rect(surface, (98, 72, 132), (rect.x, rect.y - 1, rect.width, 4))
+    surface.set_at((rect.centerx - 1, rect.centery + 1), (250, 244, 200))
+    surface.set_at((rect.centerx + 1, rect.centery + 1), (250, 244, 200))
+
+
+def paint_arrow(surface: pygame.Surface) -> None:
+    # Drawn pointing right; the renderer rotates it to match its heading.
+    mid = CELL // 2
+    pygame.draw.rect(surface, (228, 202, 128), (mid - 4, mid - 1, 7, 2))
+    pygame.draw.rect(surface, (250, 240, 196), (mid + 3, mid - 2, 3, 4))
+    pygame.draw.rect(surface, (140, 116, 78), (mid - 5, mid - 2, 2, 4))
+
+
+def paint_shadow(surface: pygame.Surface) -> None:
+    # Sits under every body. Without it, things look like they are floating
+    # rather than standing on the floor -- the cheapest depth cue there is.
+    pygame.draw.ellipse(surface, (0, 0, 0, 90), (3, CELL - 6, CELL - 6, 5))
+
+
+PAINTERS = {
+    "floor": paint_floor,
+    "wall": paint_wall,
+    "hero": paint_hero,
+    "grunt": paint_grunt,
+    "charger": paint_charger,
+    "archer": paint_archer,
+    "arrow": paint_arrow,
+    "shadow": paint_shadow,
+}
+
+
+def main() -> int:
+    pygame.init()
+
+    missing = [name for name in config.SPRITE_ORDER if name not in PAINTERS]
+    if missing:
+        print(f"no painter for: {', '.join(missing)}", file=sys.stderr)
+        return 1
+
+    columns = config.ATLAS_COLUMNS
+    rows = (len(config.SPRITE_ORDER) + columns - 1) // columns
+    atlas = pygame.Surface((columns * CELL, rows * CELL), pygame.SRCALPHA)
+    atlas.fill(TRANSPARENT)
+
+    for index, name in enumerate(config.SPRITE_ORDER):
+        cell = pygame.Surface((CELL, CELL), pygame.SRCALPHA)
+        cell.fill(TRANSPARENT)
+        PAINTERS[name](cell)
+        atlas.blit(cell, ((index % columns) * CELL, (index // columns) * CELL))
+
+    config.ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+    pygame.image.save(atlas, str(config.SPRITE_ATLAS))
+    pygame.quit()
+
+    print(
+        f"wrote {config.SPRITE_ATLAS.relative_to(ROOT)}  "
+        f"({len(config.SPRITE_ORDER)} sprites, {columns}x{rows} cells of {CELL}px)"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

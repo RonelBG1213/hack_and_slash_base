@@ -1,0 +1,71 @@
+{
+  "_comment": [
+    "Swing timings, in simulation ticks at 60 ticks per second.",
+    "",
+    "A swing runs windup -> active -> recovery. Only the active window can hit",
+    "anything. Windup is the tell: it is what makes an attack dodgeable, and it",
+    "is the single number to reach for when an enemy feels unfair. Recovery is",
+    "the price of missing -- long recovery makes a whiff punishable.",
+    "",
+    "reach is measured in pixels from the body's centre to the far edge of the",
+    "swing; a tile is 16. arc_degrees is the full width of the cone, so 100",
+    "means 50 degrees either side of where you are facing."
+  ],
+
+  "sword": {
+    "name": "Sword",
+    "damage": 7,
+    "variance": 2,
+    "arc_degrees": 100,
+    "reach": 27,
+    "windup": 5,
+    "active": 4,
+    "recovery": 9,
+    "knockback": 3.4,
+    "hitstop": 4
+  },
+
+  "claw": {
+    "name": "Claws",
+    "damage": 6,
+    "variance": 1,
+    "arc_degrees": 80,
+    "reach": 20,
+    "windup": 20,
+    "active": 3,
+    "recovery": 22,
+    "knockback": 2.2,
+    "hitstop": 2
+  },
+
+  "gore": {
+    "name": "Gore",
+    "damage": 13,
+    "variance": 2,
+    "arc_degrees": 120,
+    "reach": 22,
+    "windup": 32,
+    "active": 26,
+    "recovery": 26,
+    "knockback": 5.0,
+    "hitstop": 5,
+    "_comment": "The active window is long because it stays open for the whole dash."
+  },
+
+  "arrow": {
+    "name": "Bow",
+    "damage": 8,
+    "variance": 1,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 26,
+    "active": 1,
+    "recovery": 24,
+    "knockback": 1.6,
+    "hitstop": 2,
+    "projectile": true,
+    "projectile_speed": 2.7,
+    "projectile_radius": 2.5,
+    "projectile_lifetime": 180
+  }
+}

@@ -1,0 +1,8 @@
+# IMPORTANT: pygame-ce, NOT pygame.
+# Classic pygame 2.6.1 publishes no cp314 wheel; on Python 3.14 `pip install pygame`
+# falls back to a source build and fails on Windows. pygame-ce is the maintained
+# community fork and ships cp314 wheels. It is API-compatible: code still does
+# `import pygame`. Never install both into the same environment -- they collide
+# on the `pygame` import name.
+pygame-ce==2.5.8
+pytest==8.3.4

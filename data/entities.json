@@ -1,0 +1,73 @@
+{
+  "_comment": [
+    "Speeds are pixels per simulation tick; multiply by 60 for pixels per second.",
+    "A tile is 16 pixels, so the hero's 1.7 is about six and a half tiles a second.",
+    "",
+    "Every enemy is slower than the hero. That is the deal the whole fight rests",
+    "on: you can always disengage, so getting hit is a decision you made rather",
+    "than something the arena did to you.",
+    "",
+    "aggro is in pixels -- how far an enemy notices you from."
+  ],
+
+  "hero": {
+    "name": "Hero",
+    "faction": "hero",
+    "sprite": "hero",
+    "hp": 100,
+    "speed": 1.7,
+    "radius": 5.0,
+    "weapon": "sword",
+    "brain": "player",
+    "dodge_speed": 4.2,
+    "dodge_ticks": 11,
+    "iframe_ticks": 9,
+    "dodge_cooldown": 30
+  },
+
+  "grunt": {
+    "name": "Grunt",
+    "faction": "enemy",
+    "sprite": "grunt",
+    "hp": 18,
+    "speed": 1.05,
+    "radius": 5.0,
+    "weapon": "claw",
+    "brain": "chaser",
+    "aggro": 220,
+    "_comment": "Straightforward pressure. Walks at you, swings when close."
+  },
+
+  "charger": {
+    "name": "Charger",
+    "faction": "enemy",
+    "sprite": "charger",
+    "hp": 30,
+    "speed": 0.75,
+    "radius": 6.5,
+    "weapon": "gore",
+    "brain": "charger",
+    "aggro": 260,
+    "charge_speed": 3.6,
+    "charge_range": 150,
+    "_comment": [
+      "Slow until it commits, then faster than you. Punishes standing in a line",
+      "with it. The long windup on 'gore' is the tell you dodge on."
+    ]
+  },
+
+  "archer": {
+    "name": "Archer",
+    "faction": "enemy",
+    "sprite": "archer",
+    "hp": 14,
+    "speed": 0.95,
+    "radius": 5.0,
+    "weapon": "arrow",
+    "brain": "archer",
+    "aggro": 320,
+    "preferred_range": 140,
+    "retreat_range": 80,
+    "_comment": "Punishes standing still in the open. Backs away when you close."
+  }
+}
