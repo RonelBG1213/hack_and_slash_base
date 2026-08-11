@@ -24,10 +24,8 @@ one, and moving any of them changes the game:
 
 from __future__ import annotations
 
-import math
-
 from .. import config
-from ..core.collision import circle_separation, move_and_collide
+from ..core.collision import circle_separation, move_and_collide, path_is_clear
 from ..core.vec2 import ZERO, Vec2, from_angle
 from . import actions, ai, combat
 from .entities import ActionState, Entity
@@ -203,8 +201,10 @@ def _step_projectiles(world: World) -> None:
             continue
 
         moved = shot.pos + shot.velocity
-        tile = world.level.tile
-        if world.is_solid(int(math.floor(moved.x / tile)), int(math.floor(moved.y / tile))):
+        # Swept, not sampled. A projectile fast enough to cross a tile in one
+        # tick would otherwise land cleanly on the far side of a wall it never
+        # touched -- the same failure substepping fixed for bodies.
+        if not path_is_clear(shot.pos, moved, world.is_solid, world.level.tile):
             world.emit(Event(EventKind.PROJECTILE_SPENT, moved, shot.id))
             continue
 

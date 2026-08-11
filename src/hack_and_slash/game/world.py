@@ -13,7 +13,7 @@ replaying and every damage assertion in the suite would become a coin toss.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 
 from ..core.level import Level

@@ -18,7 +18,7 @@ Three brains, three questions they ask the player:
 from __future__ import annotations
 
 from ..core.collision import line_of_sight
-from ..core.vec2 import ZERO, Vec2
+from ..core.vec2 import Vec2
 from . import actions
 from .entities import Entity
 from .intent import NOTHING, Intent

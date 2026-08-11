@@ -8,8 +8,6 @@ balance. This file is what makes "cosmetic" a fact rather than an intention.
 
 from __future__ import annotations
 
-import pytest
-
 from hack_and_slash.core.vec2 import Vec2
 from hack_and_slash.game import intent as intents
 from hack_and_slash.game.events import Event, EventKind

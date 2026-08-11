@@ -9,7 +9,6 @@ import pytest
 from hack_and_slash import config
 from hack_and_slash.core.vec2 import Vec2
 from hack_and_slash.game import intent as intents
-from hack_and_slash.game.entities import ActionState
 from hack_and_slash.game.sim import Accumulator, step
 from hack_and_slash.game.world import Outcome
 

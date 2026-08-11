@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from hack_and_slash import config
 from hack_and_slash.core import level_io
 from hack_and_slash.core.level import EnemySpawn, Level

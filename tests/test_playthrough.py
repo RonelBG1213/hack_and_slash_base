@@ -13,13 +13,16 @@ because the *game* stopped being winnable, which is the thing worth knowing.
 
 from __future__ import annotations
 
-import pytest
-
 from hack_and_slash import config
 from hack_and_slash.core import level_io
-from hack_and_slash.core.vec2 import ZERO, Vec2
-from hack_and_slash.game import actions
-from hack_and_slash.game.entities import ActionState, Entity
+from hack_and_slash.core.vec2 import Vec2
+from hack_and_slash.game.autoplay import (
+    REACTION_SLOPPY,
+    Autoplay,
+    autoplay,
+    play_out,
+    reckless,
+)
 from hack_and_slash.game.intent import NOTHING, Intent
 from hack_and_slash.game.sim import step
 from hack_and_slash.game.world import Outcome, World
@@ -31,69 +34,28 @@ from .helpers import BESTIARY, open_room
 #: hanging the suite.
 TICK_LIMIT = 9000
 
-#: Below this fraction of health the policy stops pressing and backs off.
-CAUTIOUS_BELOW = 0.45
-
-#: How close an incoming attack has to be before the policy rolls away from it.
-DANGER_RADIUS = 46.0
+#: Enough seeds that a bracket assertion is about the balance rather than about
+#: one lucky fight. The sim is deterministic, so each is a fixed outcome.
+SEEDS = range(8)
 
 
-def arena() -> World:
+def arena(seed: int = 7) -> World:
     level = level_io.load(config.LEVELS_DIR / "arena.json")
-    return World(level, BESTIARY, seed=7)
-
-
-# --- a hero that plays badly but plays ---------------------------------------
-def autoplay(world: World) -> Intent:
-    """Close in, swing when in range, roll away from anything about to land.
-
-    Deliberately simple: if a policy this crude can clear the arena, a person
-    can. If it stops being able to, the arena or the numbers have drifted.
-    """
-    hero = world.hero
-    if hero is None or not hero.is_alive:
-        return NOTHING
-
-    enemies = world.enemies()
-    if not enemies:
-        return NOTHING
-
-    threat = _incoming(hero, enemies)
-    if threat is not None and hero.dodge_cooldown <= 0 and actions.can_act(hero):
-        away = (hero.pos - threat.pos).normalized()
-        return Intent(move=away, aim=(threat.pos - hero.pos).normalized(), dodge=True)
-
-    target = min(enemies, key=lambda e: e.pos.distance_sq_to(hero.pos))
-    toward = (target.pos - hero.pos).normalized()
-    distance = hero.pos.distance_to(target.pos)
-    strike_range = hero.type.weapon.reach + target.radius - 4.0
-
-    if hero.health_fraction < CAUTIOUS_BELOW and distance < strike_range * 1.6:
-        # Hurt: back off and let the dodge come off cooldown rather than trading.
-        return Intent(move=-toward, aim=toward)
-
-    if distance <= strike_range:
-        return Intent(aim=toward, attack=True)
-
-    return Intent(move=toward, aim=toward)
-
-
-def _incoming(hero: Entity, enemies: list[Entity]) -> Entity | None:
-    """The nearest enemy whose attack is about to land on us."""
-    for enemy in enemies:
-        if enemy.pos.distance_to(hero.pos) > DANGER_RADIUS:
-            continue
-        if enemy.state in (ActionState.WINDUP, ActionState.ACTIVE):
-            return enemy
-    return None
+    return World(level, BESTIARY, seed=seed)
 
 
 def play(world: World, policy, limit: int = TICK_LIMIT) -> int:
-    for tick in range(limit):
-        if world.outcome is not Outcome.RUNNING:
-            return tick
-        step(world, policy(world))
-    return limit
+    return play_out(world, policy, limit)
+
+
+def wins_across_seeds(policy) -> int:
+    """How many of the standard seeds this policy can clear."""
+    won = 0
+    for seed in SEEDS:
+        world = arena(seed)
+        play(world, policy)
+        won += world.outcome is Outcome.WON
+    return won
 
 
 # --- the run -----------------------------------------------------------------
@@ -123,6 +85,48 @@ def test_clearing_the_arena_takes_a_believable_amount_of_time() -> None:
 
     assert world.outcome is Outcome.WON
     assert 10 < seconds < 180, f"cleared in {seconds:.0f}s"
+
+
+# --- the difficulty bracket --------------------------------------------------
+# Two tests, and they only mean anything together. The floor alone permits a
+# walkover; the ceiling alone permits an unwinnable fight.
+def test_the_floor_a_skilled_hero_wins_every_seed() -> None:
+    """Doing the right things has to reliably work.
+
+    Not "usually" -- every seed. A run lost to the arena rolling badly rather
+    than to the player is the thing this forbids.
+    """
+    assert wins_across_seeds(autoplay) == len(SEEDS)
+
+
+def test_the_ceiling_walking_in_swinging_loses_every_seed() -> None:
+    """The arena has to punish playing badly, or none of the combat matters.
+
+    The instrument here is a hero that never disengages -- *not* one with slow
+    reactions, which was the obvious choice and turned out to measure almost
+    nothing. Reaction time barely moves this fight: see
+    `test_reaction_time_is_not_what_decides_this_fight` below, which pins that
+    finding so a future tuning pass notices if it stops being true.
+    """
+    assert wins_across_seeds(reckless) == 0
+
+
+def test_reaction_time_is_not_what_decides_this_fight() -> None:
+    """A recorded finding, not a goal -- and a tripwire under the test above.
+
+    Rolling costs uptime and lengthens the fight, so a hero that never dodges
+    finishes about as healthy as one with perfect reflexes. That is why the
+    ceiling is built on refusing to disengage instead of on reacting late.
+
+    If this ever fails, the finding has stopped holding: dodging has started to
+    carry the fight, and the ceiling test should be reconsidered rather than
+    this one simply relaxed.
+    """
+    sloppy_wins = wins_across_seeds(Autoplay(reaction_ticks=REACTION_SLOPPY))
+    assert sloppy_wins >= len(SEEDS) - 1, (
+        f"a slow-reacting hero now wins only {sloppy_wins}/{len(SEEDS)} -- dodging "
+        "has become decisive, so the ceiling test is measuring the wrong thing"
+    )
 
 
 def test_standing_still_gets_you_killed() -> None:

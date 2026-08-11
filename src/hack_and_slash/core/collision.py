@@ -193,23 +193,40 @@ def move_and_collide(
     return pos
 
 
-def line_of_sight(a: Vec2, b: Vec2, is_solid: SolidFn, tile: int) -> bool:
-    """True when no solid tile sits between two points.
+def path_is_clear(a: Vec2, b: Vec2, is_solid: SolidFn, tile: int) -> bool:
+    """True when no solid tile lies anywhere on the segment from `a` to `b`.
 
-    Sampled along the segment at half-tile steps rather than walked with a DDA:
-    a ranged enemy asking "can I see the hero" does not need exactness, and this
-    is short enough to be obviously correct.
+    A *swept* test, and that is the whole point of it. Checking only where
+    something ended up is the same mistake `move_and_collide` substeps to avoid:
+    both endpoints of a long jump can sit on open floor with a wall in between.
+    Anything that moves further than a tile in one tick needs this rather than a
+    look at its destination.
+
+    Sampled at half-tile steps rather than walked with a DDA. The step count
+    grows with the distance, so a long path is not sampled more thinly than a
+    short one -- a fixed number of samples would let walls leak through at range.
     """
     delta = b - a
     distance = delta.length()
     if distance < EPSILON:
-        return not is_solid(int(a.x // tile), int(a.y // tile))
+        return not is_solid(int(math.floor(a.x / tile)), int(math.floor(a.y / tile)))
+
     steps = max(1, int(distance / (tile * 0.5)))
     for i in range(steps + 1):
         point = a + delta * (i / steps)
         if is_solid(int(math.floor(point.x / tile)), int(math.floor(point.y / tile))):
             return False
     return True
+
+
+def line_of_sight(a: Vec2, b: Vec2, is_solid: SolidFn, tile: int) -> bool:
+    """True when nothing solid stands between two points.
+
+    The same test as `path_is_clear`, under the name that reads correctly where
+    it is used: an archer asks whether it can see you, an arrow asks whether its
+    path is clear. Same geometry, different question.
+    """
+    return path_is_clear(a, b, is_solid, tile)
 
 
 # --- swings ------------------------------------------------------------------

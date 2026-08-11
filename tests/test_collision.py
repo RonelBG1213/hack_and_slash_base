@@ -17,6 +17,7 @@ from hack_and_slash.core.collision import (
     cone_hits,
     line_of_sight,
     move_and_collide,
+    path_is_clear,
     resolve_circle_vs_tiles,
 )
 from hack_and_slash.core.vec2 import Vec2
@@ -187,6 +188,45 @@ def test_a_wide_arc_covers_everything() -> None:
     for degrees in (0, 90, 180, 270):
         target = Vec2(math.cos(math.radians(degrees)), math.sin(math.radians(degrees))) * 20
         assert cone_hits(Vec2(0, 0), 0.0, full, 40.0, target, 4.0)
+
+
+# --- swept paths -------------------------------------------------------------
+def test_a_path_is_swept_not_sampled_at_its_endpoints() -> None:
+    """What makes this usable for a fast projectile.
+
+    Both ends of the jump below sit on open floor; only the middle is wall. A
+    check that looks at where something *landed* sees nothing wrong, which is
+    exactly how a bolt ends up on the far side of a wall with no error.
+    """
+    thin_wall = solid_map(
+        [
+            ".....",
+            ".....",
+            "#####",
+            ".....",
+            ".....",
+        ]
+    )
+    start, end = Vec2(40, 20), Vec2(40, 60)
+    assert not thin_wall(*(int(start.x // TILE), int(start.y // TILE)))
+    assert not thin_wall(*(int(end.x // TILE), int(end.y // TILE)))
+    assert not path_is_clear(start, end, thin_wall, TILE)
+
+
+def test_a_path_across_open_floor_is_clear() -> None:
+    assert path_is_clear(Vec2(20, 40), Vec2(60, 40), FLAT_WALL, TILE)
+
+
+def test_a_very_long_path_is_still_sampled_densely_enough() -> None:
+    # Sampling is per half tile, so the step count has to grow with distance --
+    # a fixed number of samples would thin out until walls leaked through.
+    thin_wall = solid_map(["." * 40] * 10 + ["#" * 40] + ["." * 40] * 10)
+    assert not path_is_clear(Vec2(80, 40), Vec2(80, 320), thin_wall, TILE)
+
+
+def test_a_zero_length_path_checks_where_it_stands() -> None:
+    assert path_is_clear(Vec2(40, 40), Vec2(40, 40), FLAT_WALL, TILE)
+    assert not path_is_clear(Vec2(40, 8), Vec2(40, 8), FLAT_WALL, TILE)
 
 
 # --- sight -------------------------------------------------------------------

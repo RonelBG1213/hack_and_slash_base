@@ -7,9 +7,7 @@ archer that shoots through a pillar, is not a harder enemy, it is a broken one.
 
 from __future__ import annotations
 
-import pytest
-
-from hack_and_slash.core.level import EnemySpawn, Level
+from hack_and_slash.core.level import Level
 from hack_and_slash.core.vec2 import Vec2
 from hack_and_slash.game import ai, intent as intents
 from hack_and_slash.game.entities import ActionState
@@ -187,6 +185,55 @@ def test_an_arrow_stops_at_a_wall_instead_of_passing_through() -> None:
     run(world, 600)
     assert all(shot.id != tracked for shot in world.projectiles), (
         "an arrow is still in flight inside a sealed room"
+    )
+
+
+def test_a_fast_projectile_cannot_skip_over_a_wall() -> None:
+    """The same mistake the substepped entity movement already fixed.
+
+    Checking only where a projectile *landed* misses everything it flew over.
+    Arrows get away with it today purely because 2.7px per tick cannot clear a
+    16px tile -- the correctness rests on one number in weapons.json rather than
+    on the code. Give a crossbow enemy a fast bolt and walls stop working, with
+    no error to say so.
+
+    The speed here is deliberately larger than a tile, which is the case a
+    destination-only check cannot handle.
+    """
+    from hack_and_slash.game.world import Projectile
+
+    # An interior wall with open floor on *both* sides. That is the shape that
+    # exposes the bug: a destination-only check needs somewhere legal to land on
+    # the far side, and the outer border of a plain room offers none.
+    room = open_room(30, 24)
+    rows = list(room.rows)
+    rows[10] = "#" * 30
+    level = Level(
+        name="barrier", rows=tuple(rows), hero_spawn=(2, 2), enemy_spawns=(), tile=16
+    )
+
+    world = make_world(level)
+    world.spawn_projectile(
+        Projectile(
+            id=world.take_projectile_id(),
+            owner_id=999,
+            faction=ARCHER.faction,
+            pos=level.tile_center(15, 5),
+            velocity=Vec2(0, 60),  # nearly four tiles in a single tick
+            radius=2.5,
+            damage=1,
+            knockback=0.0,
+            ticks_left=90,
+        )
+    )
+    tracked = world.projectiles[0].id
+
+    run(world, 3)
+
+    survivor = next((s for s in world.projectiles if s.id == tracked), None)
+    assert survivor is None or survivor.pos.y < 10 * 16, (
+        f"a projectile at {survivor.pos if survivor else None} is past a wall it "
+        "never touched -- its path was never swept, only its landing spot checked"
     )
 
 

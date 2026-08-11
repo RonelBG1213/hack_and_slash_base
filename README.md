@@ -127,6 +127,44 @@ numbers and hitstop live in `render/effects.py`, fed by events the sim emits and
 never reads back. `tests/test_effects.py` runs the same seeded fight with
 effects on and off and demands the two come out identical.
 
+## Balance
+
+```sh
+python tools/balance.py
+```
+
+Runs reference heroes over many seeds and prints where the fight sits. The part
+that decides anything is the bracket, and both ends have to hold:
+
+| | must | currently |
+| --- | --- | --- |
+| **skilled** — closes in, swings, backs off when hurt | win every seed | 8/8, ~17s, worst finish 47/100 |
+| **face-tank** — walks in swinging, never disengages | lose every seed | 0/8 |
+
+Only the floor and the fight is unfair; only the ceiling and there is no fight.
+`tests/test_playthrough.py` pins both.
+
+**A finding worth knowing before you tune anything.** The obvious way to model a
+bad player is a slow reaction time, and it measures almost nothing here — a hero
+that never dodges finishes about as healthy as one with perfect reflexes, because
+rolling costs uptime and lengthens the fight. What actually separates winning
+from losing is *disengaging when hurt*, which is why the ceiling is built on
+refusing to do that. A test pins the finding, so if dodging ever becomes decisive
+the bracket gets revisited rather than quietly drifting.
+
+Treat that as a caution rather than a verdict on the dodge: these bots have
+perfect information and no idea pillars exist, and a human's dodge is doing work
+theirs never needs to. It is measured, not settled.
+
+**If the bracket breaks, reach for durability first.** An enemy that dies before
+its attack cadence lets it swing again applies no pressure however hard it hits,
+and that is arithmetic rather than taste — at the numbers here a grunt lives
+about 46 ticks of contact against a 65-tick gap between its swings, so it gets
+one attack off and no more. Then count and placement (`tools/make_level.py`),
+then cadence (`PAUSE_AFTER_ATTACK` in `game/ai.py`). Enemy damage and hero HP
+last: raising damage makes one mistake lethal, which is a harsher game rather
+than a tighter one.
+
 ## Tuning
 
 The numbers are data. To make the charger fairer, raise its windup:
@@ -157,6 +195,7 @@ new one is a new `case` in `decide` plus a name in the JSON.
 ```sh
 python tools/gen_art.py                          # rebuild assets/sprites.png
 python tools/make_level.py                       # rebuild levels/arena.json
+python tools/balance.py                          # where the fight sits
 python tools/screenshot.py play out.png          # render a scene headlessly
 python tools/screenshot.py play out.png --ticks 240   # ...mid-fight
 ```
@@ -177,6 +216,14 @@ python tools/screenshot.py play out.png --ticks 240   # ...mid-fight
   roll is the player's verb alone.
 - **No sound.** Nothing here would have to change to add it; hits already emit
   events with everything a sound cue needs.
+- **Projectiles are swept along their centre line only.** `path_is_clear` ignores
+  the arrow's radius, so a shot can clip a wall corner by a pixel or two before
+  it stops. Cosmetic at this scale; making it exact means sweeping a circle
+  rather than a segment.
+- **The dodge's worth is measured, not settled.** The reference bots gain nothing
+  from it (see Balance). They also have perfect information and no positioning
+  sense, so that says more about them than about the roll — but it is the one
+  claim in this README that hands on a keyboard could still overturn.
 - **The charger commits absolutely.** Once it dashes it cannot stop, including
   into a wall. That is the point, but it does mean a clever player can farm it
   against pillars.
