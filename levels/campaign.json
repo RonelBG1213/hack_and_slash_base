@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "name": "Hack and Slash",
+  "stages": [
+    "stage1.json",
+    "stage2.json",
+    "stage3.json",
+    "stage4.json"
+  ]
+}

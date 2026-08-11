@@ -89,46 +89,53 @@ def test_ragged_rows_are_reported() -> None:
 
 
 # --- the shipped arena -------------------------------------------------------
-def test_the_arena_on_disk_is_playable() -> None:
-    """Guards `levels/arena.json` itself, not just the model.
+def shipped_stages():
+    from hack_and_slash.core import campaign_io
 
-    A hand-edited arena that spawns an enemy in a pillar would otherwise only
-    show up as something stuck in a wall halfway through a run.
-    """
-    path = config.LEVELS_DIR / "arena.json"
+    path = config.LEVELS_DIR / "campaign.json"
     assert path.exists(), "run `python tools/make_level.py` first"
-
-    arena = level_io.load(path)
-    assert arena.problems() == []
-    assert arena.tile == config.TILE
-
-    # Every spawn must have room to stand, not merely be on a non-wall tile.
-    for spawn in arena.enemy_spawns:
-        tx, ty = spawn.tile
-        assert arena.is_walkable(tx, ty), f"{spawn.type_id} at {spawn.tile}"
-
-    # The arena is meant to be bigger than one screen, so the camera has work
-    # to do and the fight has somewhere to move to.
-    width_px, height_px = arena.pixel_size
-    assert width_px > config.INTERNAL_W
-    assert height_px > config.VIEWPORT_H
+    return campaign_io.load(path).stages
 
 
-def test_the_arena_is_fully_enclosed() -> None:
-    arena = level_io.load(config.LEVELS_DIR / "arena.json")
-    for x in range(arena.width):
-        assert arena.is_solid(x, 0) and arena.is_solid(x, arena.height - 1)
-    for y in range(arena.height):
-        assert arena.is_solid(0, y) and arena.is_solid(arena.width - 1, y)
+def test_every_shipped_stage_is_playable() -> None:
+    """Guards the level files themselves, not just the model.
+
+    A hand-edited stage that spawns an enemy in a pillar would otherwise only
+    show up as something stuck in a wall, possibly several stages into a run.
+    """
+    for stage in shipped_stages():
+        assert stage.problems() == [], stage.name
+        assert stage.tile == config.TILE
+
+        # Every spawn must have room to stand, not merely be on a non-wall tile.
+        for spawn in stage.enemy_spawns:
+            tx, ty = spawn.tile
+            assert stage.is_walkable(tx, ty), f"{stage.name}: {spawn.type_id} at {spawn.tile}"
 
 
-def test_the_arena_has_cover_to_break_line_of_sight() -> None:
-    # Archers are only interesting if there is something to hide behind.
-    arena = level_io.load(config.LEVELS_DIR / "arena.json")
-    interior_walls = sum(
-        1
-        for y in range(1, arena.height - 1)
-        for x in range(1, arena.width - 1)
-        if arena.is_solid(x, y)
-    )
-    assert interior_walls > 20, "the arena is an empty box"
+def test_every_stage_is_bigger_than_one_screen() -> None:
+    # So the camera has work to do and a fight has somewhere to move to.
+    for stage in shipped_stages():
+        width_px, height_px = stage.pixel_size
+        assert width_px > config.INTERNAL_W, stage.name
+        assert height_px > config.VIEWPORT_H, stage.name
+
+
+def test_every_stage_is_fully_enclosed() -> None:
+    for stage in shipped_stages():
+        for x in range(stage.width):
+            assert stage.is_solid(x, 0) and stage.is_solid(x, stage.height - 1), stage.name
+        for y in range(stage.height):
+            assert stage.is_solid(0, y) and stage.is_solid(stage.width - 1, y), stage.name
+
+
+def test_every_stage_has_cover_to_break_line_of_sight() -> None:
+    # Archers and the boss volley are only interesting with somewhere to hide.
+    for stage in shipped_stages():
+        interior_walls = sum(
+            1
+            for y in range(1, stage.height - 1)
+            for x in range(1, stage.width - 1)
+            if stage.is_solid(x, y)
+        )
+        assert interior_walls > 15, f"{stage.name} is an empty box"

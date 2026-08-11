@@ -122,8 +122,10 @@ def _begin_actions(world: World, entity: Entity, intent: Intent) -> None:
         )
         return  # a dodge and an attack cannot start on the same tick
 
-    if intent.attack and actions.begin_attack(entity):
+    if intent.attack and actions.begin_attack(entity, weapon_index=intent.weapon):
         if not entity.is_hero:
+            # Read *after* the attack starts, so the pause is measured against
+            # the attack actually chosen rather than the type's default one.
             entity.attack_cooldown = ai.cooldown_for(entity)
 
 
@@ -150,10 +152,10 @@ def _self_propulsion(entity: Entity, intent: Intent) -> Vec2:
     if entity.state is ActionState.DODGING:
         return entity.dash_dir * entity.type.dodge_speed
 
-    if entity.state is ActionState.ACTIVE and entity.type.charge_speed > 0:
-        # The charger's dash *is* its attack: it moves for as long as the hitbox
-        # is open, in the direction it committed to when the telegraph started.
-        return entity.dash_dir * entity.type.charge_speed
+    if entity.state is ActionState.ACTIVE and entity.weapon.is_charge:
+        # A charge *is* its attack: the body moves for as long as the hitbox is
+        # open, in the direction it committed to when the telegraph started.
+        return entity.dash_dir * entity.weapon.charge_speed
 
     scale = actions.movement_scale(entity)
     if scale <= 0.0:
@@ -219,7 +221,7 @@ def _advance_state(world: World, entity: Entity) -> None:
     if entered is not ActionState.ACTIVE:
         return
 
-    weapon = entity.type.weapon
+    weapon = entity.weapon
     if weapon.projectile:
         _loose_projectile(world, entity)
         world.emit(
@@ -234,23 +236,37 @@ def _advance_state(world: World, entity: Entity) -> None:
 
 
 def _loose_projectile(world: World, entity: Entity) -> None:
-    weapon = entity.type.weapon
-    heading = from_angle(entity.facing)
-    world.spawn_projectile(
-        Projectile(
-            id=world.take_projectile_id(),
-            owner_id=entity.id,
-            faction=entity.type.faction,
-            # Started clear of the shooter's own body, so an arrow cannot be
-            # born already overlapping something standing next to the archer.
-            pos=entity.pos + heading * (entity.radius + weapon.projectile_radius + 1.0),
-            velocity=heading * weapon.projectile_speed,
-            radius=weapon.projectile_radius,
-            damage=combat.roll_damage(weapon, world.rng),
-            knockback=weapon.knockback,
-            ticks_left=weapon.projectile_lifetime,
+    """Fire this attack's shots, fanned evenly across its spread.
+
+    One shot goes straight ahead and ignores the spread entirely, so an archer
+    is unchanged by the existence of volleys. Several fan symmetrically about
+    the facing, which is what turns a shot you sidestep into a wall you have to
+    go around.
+    """
+    weapon = entity.weapon
+    count = max(1, weapon.projectile_count)
+
+    for index in range(count):
+        # -0.5..+0.5 across the fan; a single shot lands exactly on the facing.
+        offset = 0.0 if count == 1 else (index / (count - 1) - 0.5) * weapon.spread
+        heading = from_angle(entity.facing + offset)
+        world.spawn_projectile(
+            Projectile(
+                id=world.take_projectile_id(),
+                owner_id=entity.id,
+                faction=entity.type.faction,
+                # Started clear of the shooter's own body, so a shot cannot be
+                # born already overlapping something standing next to it.
+                pos=entity.pos + heading * (entity.radius + weapon.projectile_radius + 1.0),
+                velocity=heading * weapon.projectile_speed,
+                radius=weapon.projectile_radius,
+                # Rolled per shot: a volley that lands three identical numbers
+                # reads as one hit rather than three.
+                damage=combat.roll_damage(weapon, world.rng),
+                knockback=weapon.knockback,
+                ticks_left=weapon.projectile_lifetime,
+            )
         )
-    )
 
 
 def _settle(world: World) -> None:

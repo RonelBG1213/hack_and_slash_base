@@ -28,7 +28,9 @@ class Hud:
         self.font = pygame.font.Font(None, 16)
         self.small = pygame.font.Font(None, 13)
 
-    def draw(self, surface: pygame.Surface, world: World, tick: int) -> None:
+    def draw(
+        self, surface: pygame.Surface, world: World, run=None, tick: int = 0
+    ) -> None:
         top = config.INTERNAL_H - config.HUD_H
         pygame.draw.rect(surface, config.PANEL, (0, top, config.INTERNAL_W, config.HUD_H))
         pygame.draw.line(
@@ -40,7 +42,8 @@ class Hud:
             self._draw_health(surface, hero, top, tick)
             self._draw_dodge(surface, hero, top)
 
-        self._draw_remaining(surface, world, top)
+        self._draw_remaining(surface, world, top, run)
+        self._draw_boss_bar(surface, world)
 
     # --- health --------------------------------------------------------------
     def _draw_health(
@@ -94,10 +97,46 @@ class Hud:
         surface.blit(label, (x + size + 4, y - 1))
 
     # --- progress ------------------------------------------------------------
-    def _draw_remaining(self, surface: pygame.Surface, world: World, top: int) -> None:
+    def _draw_remaining(
+        self, surface: pygame.Surface, world: World, top: int, run=None
+    ) -> None:
         left = len(world.enemies())
-        text = "arena clear" if left == 0 else f"{left} left"
+        text = "stage clear" if left == 0 else f"{left} left"
         label = self.font.render(text, False, config.ACCENT if left else config.GOOD)
+        right = config.INTERNAL_W - 8
         surface.blit(
-            label, (config.INTERNAL_W - label.get_width() - 8, top + BAR_Y_OFFSET - BAR_H - 2)
+            label, (right - label.get_width(), top + BAR_Y_OFFSET - BAR_H - 2)
         )
+
+        if run is not None:
+            # Which stage of how many. The only sense of progress a run gives,
+            # since there is nothing to collect and no map to look at.
+            stage = self.small.render(
+                f"stage {run.stage_number}/{run.stage_count}", False, config.GREY
+            )
+            surface.blit(stage, (right - stage.get_width(), top + BAR_Y_OFFSET + 2))
+
+    def _draw_boss_bar(self, surface: pygame.Surface, world: World) -> None:
+        """A bar across the top for anything big enough to deserve one.
+
+        Driven by `sprite_scale` rather than a name or a flag: a thing drawn
+        twice the size of everything else is a thing whose health the player
+        needs to be able to read, and that stays true for whatever gets added
+        next. A 12px pip over a boss is not a boss.
+        """
+        bosses = [e for e in world.enemies() if e.type.sprite_scale > 1]
+        if not bosses:
+            return
+        boss = bosses[0]
+
+        width = config.INTERNAL_W - 60
+        left, top = 30, 8
+
+        pygame.draw.rect(surface, (12, 12, 16), (left - 1, top - 1, width + 2, 6))
+        pygame.draw.rect(surface, (52, 26, 30), (left, top, width, 4))
+        filled = int(width * boss.health_fraction)
+        if filled > 0:
+            pygame.draw.rect(surface, config.BAD, (left, top, filled, 4))
+
+        label = self.small.render(boss.type.name.upper(), False, config.WHITE)
+        surface.blit(label, ((config.INTERNAL_W - label.get_width()) // 2, top + 6))

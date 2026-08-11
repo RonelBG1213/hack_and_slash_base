@@ -88,7 +88,7 @@ def resolve_swings(world) -> None:
     for attacker in world.entities:
         if attacker.state is not ActionState.ACTIVE or not attacker.is_alive:
             continue
-        weapon = attacker.type.weapon
+        weapon = attacker.weapon
         if weapon.projectile:
             continue  # loosed at the windup transition; the arrow does the hitting
 

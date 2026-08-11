@@ -22,7 +22,20 @@
     "dodge_speed": 4.2,
     "dodge_ticks": 11,
     "iframe_ticks": 9,
-    "dodge_cooldown": 30
+    "dodge_cooldown": 30,
+
+    "_heal": [
+      "Health recovered on clearing a stage. Damage carries between stages, so",
+      "this is the dial deciding whether that is tense or punishing: at 0 a",
+      "single bad stage ends the run three stages later, at 100 stages stop",
+      "adding up to anything.",
+      "",
+      "22 is the tightest value that still clears every seed with a skilled",
+      "hero -- measured, not guessed. At 15 the floor breaks (7/8 runs), and at",
+      "30 the worst run still finishes on 74hp, which is not a run that was ever",
+      "in danger. Rerun tools/balance.py after changing it."
+    ],
+    "heal_between_stages": 22
   },
 
   "grunt": {
@@ -48,7 +61,6 @@
     "weapon": "gore",
     "brain": "charger",
     "aggro": 260,
-    "charge_speed": 3.6,
     "charge_range": 150,
     "_comment": [
       "Slow until it commits, then faster than you. Punishes standing in a line",
@@ -69,5 +81,33 @@
     "preferred_range": 140,
     "retreat_range": 80,
     "_comment": "Punishes standing still in the open. Backs away when you close."
+  },
+
+  "boss": {
+    "name": "The Warden",
+    "faction": "enemy",
+    "sprite": "boss",
+    "sprite_scale": 2,
+    "hp": 150,
+    "speed": 0.62,
+    "radius": 11.0,
+    "weapons": ["boss_sweep", "boss_crush", "boss_volley"],
+    "brain": "boss",
+    "aggro": 500,
+    "charge_range": 200,
+    "preferred_range": 130,
+    "retreat_range": 55,
+    "_comment": [
+      "Slower than anything else in the game and much harder to kill, so the",
+      "fight lasts long enough for its three attacks to become a pattern you",
+      "read rather than three things that happen to you.",
+      "",
+      "aggro covers the whole arena -- there is no sneaking up on it, and no",
+      "corner it forgets about you in.",
+      "",
+      "Below half health it stops pausing between attacks (see game/ai.py). That",
+      "is the whole phase system: no new moves to learn at the moment you are",
+      "least able to learn them, just less room to breathe."
+    ]
   }
 }

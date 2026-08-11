@@ -10,7 +10,7 @@ from typing import Optional
 import pygame
 
 from .. import config
-from ..core.level import Level
+from ..core.campaign import Campaign
 from ..game.entities import Bestiary
 from ..render.atlas import Atlas
 from .base import Scene
@@ -27,8 +27,10 @@ CONTROLS = [
 
 
 class MenuScene(Scene):
-    def __init__(self, level: Level, bestiary: Bestiary, atlas: Atlas, seed: int = 0) -> None:
-        self.level = level
+    def __init__(
+        self, campaign: Campaign, bestiary: Bestiary, atlas: Atlas, seed: int = 0
+    ) -> None:
+        self.campaign = campaign
         self.bestiary = bestiary
         self.atlas = atlas
         self.seed = seed
@@ -49,12 +51,18 @@ class MenuScene(Scene):
         return None
 
     def _start(self) -> PlayScene:
+        return self._start_at(0)
+
+    def _start_at(self, stage_index: int) -> PlayScene:
         return PlayScene(
-            self.level,
+            self.campaign,
             self.bestiary,
             self.atlas,
             seed=self.seed,
-            on_exit=lambda: MenuScene(self.level, self.bestiary, self.atlas, self.seed),
+            start_stage=stage_index,
+            on_exit=lambda: MenuScene(
+                self.campaign, self.bestiary, self.atlas, self.seed
+            ),
         )
 
     def update(self, elapsed_seconds: float) -> Optional[Scene]:
@@ -67,7 +75,9 @@ class MenuScene(Scene):
         title = self.title.render("HACK AND SLASH", False, config.ACCENT)
         surface.blit(title, ((config.INTERNAL_W - title.get_width()) // 2, 28))
 
-        subtitle = self.small.render(self.level.name, False, config.GREY)
+        subtitle = self.small.render(
+            f"{self.campaign.name}  --  {len(self.campaign)} stages", False, config.GREY
+        )
         surface.blit(subtitle, ((config.INTERNAL_W - subtitle.get_width()) // 2, 66))
 
         left = 96

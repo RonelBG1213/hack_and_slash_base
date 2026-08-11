@@ -110,6 +110,22 @@ def paint_archer(surface: pygame.Surface) -> None:
     surface.set_at((rect.centerx + 1, rect.centery + 1), (250, 244, 200))
 
 
+def paint_boss(surface: pygame.Surface) -> None:
+    # Fills its cell, because the renderer draws it at 2x and anything with a
+    # margin would float inside a 32px footprint. Pale and cold against the warm
+    # red charger, so the two never read as the same threat.
+    rect = _body(surface, (188, 178, 214), (78, 72, 104), (232, 226, 244), 14, 14)
+
+    # A crown of spikes along the top.
+    for x in range(rect.x + 1, rect.right - 1, 3):
+        pygame.draw.rect(surface, (246, 240, 250), (x, rect.y - 2, 1, 3))
+
+    # Wide-set eyes, low on the face -- the silhouette cue that this is not
+    # another grunt even at a glance.
+    pygame.draw.rect(surface, (250, 96, 88), (rect.centerx - 4, rect.centery + 1, 2, 2))
+    pygame.draw.rect(surface, (250, 96, 88), (rect.centerx + 2, rect.centery + 1, 2, 2))
+
+
 def paint_arrow(surface: pygame.Surface) -> None:
     # Drawn pointing right; the renderer rotates it to match its heading.
     mid = CELL // 2
@@ -131,6 +147,7 @@ PAINTERS = {
     "grunt": paint_grunt,
     "charger": paint_charger,
     "archer": paint_archer,
+    "boss": paint_boss,
     "arrow": paint_arrow,
     "shadow": paint_shadow,
 }

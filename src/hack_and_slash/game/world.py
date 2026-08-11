@@ -43,11 +43,25 @@ class Projectile:
 
 
 class World:
-    def __init__(self, level: Level, bestiary: Bestiary, seed: int = 0) -> None:
+    def __init__(
+        self,
+        level: Level,
+        bestiary: Bestiary,
+        seed: int = 0,
+        carry_hp: int | None = None,
+    ) -> None:
+        """One stage in progress.
+
+        `carry_hp` is the hero's health on arrival -- the whole of the carry-over
+        mechanism between stages. None means a fresh hero at full health, which
+        is what a standalone fight and every test that predates the run layer
+        expect.
+        """
         self.level = level
         self.bestiary = bestiary
         self.rng = random.Random(seed)
         self.seed = seed
+        self.carry_hp = carry_hp
 
         self.tick = 0
         self.outcome = Outcome.RUNNING
@@ -77,6 +91,14 @@ class World:
     def _populate(self) -> None:
         hero_type = self.bestiary["hero"]
         hero = spawn(self._take_id(), hero_type, self.level.tile_center(*self.level.hero_spawn))
+
+        if self.carry_hp is not None:
+            # Clamped at both ends. Above the maximum would turn a generous heal
+            # into permanent bonus health; at or below zero would start the stage
+            # already lost, with the death playing out before the player has
+            # touched anything.
+            hero.hp = max(1, min(self.carry_hp, hero_type.hp))
+
         self.hero_id = hero.id
         self.entities.append(hero)
 

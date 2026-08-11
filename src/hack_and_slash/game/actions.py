@@ -43,24 +43,34 @@ def can_dodge(entity: Entity) -> bool:
     return can_act(entity) and entity.type.can_dodge and entity.dodge_cooldown <= 0
 
 
-def begin_attack(entity: Entity, facing: float | None = None) -> bool:
+def begin_attack(
+    entity: Entity, facing: float | None = None, weapon_index: int = 0
+) -> bool:
     """Start a swing. Returns False when the body was not free to.
 
     Callers get a bool rather than an exception because "the player mashed
     attack during recovery" is the normal case, not an error.
+
+    `weapon_index` is chosen once, here, and holds for the whole attack. That is
+    what keeps a multi-attack body honest: it winds up, hits and recovers on the
+    same weapon, so the tell a player read is the attack that lands.
     """
     if not can_act(entity):
         return False
     if facing is not None:
         entity.facing = facing
+
+    # Out-of-range would otherwise surface much later as an IndexError from
+    # inside the state machine, with nothing pointing back at the brain.
+    entity.weapon_index = weapon_index % len(entity.type.weapons)
     entity.state = ActionState.WINDUP
     entity.state_ticks = 0
     # A fresh swing forgets what the last one hit, which is what stops a
     # multi-tick active window dealing its damage once per tick.
     entity.hit_ids.clear()
 
-    if entity.type.charge_speed > 0:
-        # A charger locks its heading now, at the *start* of the telegraph, not
+    if entity.weapon.is_charge:
+        # A charge locks its heading now, at the *start* of the telegraph, not
         # when the dash fires. That is what gives the player the whole windup to
         # step out of the line -- lock it at the end and the tell tells you
         # nothing you can act on.
@@ -94,7 +104,7 @@ def begin_dodge(entity: Entity, direction: Vec2) -> bool:
 
 def state_duration(entity: Entity) -> int:
     """How many ticks the current state lasts."""
-    weapon = entity.type.weapon
+    weapon = entity.weapon
     match entity.state:
         case ActionState.WINDUP:
             return weapon.windup

@@ -13,7 +13,7 @@ from .helpers import BESTIARY
 
 
 def test_every_shipped_type_loads() -> None:
-    assert set(BESTIARY.types) == {"hero", "grunt", "charger", "archer"}
+    assert set(BESTIARY.types) == {"hero", "grunt", "charger", "archer", "boss"}
 
 
 def test_comment_keys_are_not_loaded_as_content() -> None:
@@ -60,10 +60,25 @@ def test_the_hero_is_faster_than_everything_it_fights() -> None:
 
 
 def test_the_charger_is_faster_than_the_hero_only_while_charging() -> None:
-    # Which is what makes the charge a threat and the telegraph the answer.
+    """Which is what makes the charge a threat and the telegraph the answer.
+
+    The dash speed belongs to the *weapon*, not the creature -- a body with
+    several attacks must only dash on the one that is actually a charge.
+    """
     charger = BESTIARY["charger"]
     assert charger.speed < BESTIARY["hero"].speed
-    assert charger.charge_speed > BESTIARY["hero"].speed
+    assert charger.weapon.charge_speed > BESTIARY["hero"].speed
+    assert charger.weapon.is_charge
+
+
+def test_only_charging_attacks_carry_a_dash() -> None:
+    # The bug this forbids: a boss drifting forward during its ranged attack
+    # because the dash was a property of the creature rather than the attack.
+    boss = BESTIARY["boss"]
+    charging = [w.id for w in boss.weapons if w.is_charge]
+    assert charging == ["boss_crush"], f"unexpected charging attacks: {charging}"
+    assert not BESTIARY.weapons["sword"].is_charge
+    assert not BESTIARY.weapons["claw"].is_charge
 
 
 def test_only_the_hero_can_dodge() -> None:

@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..core.collision import path_is_clear
+from ..core.vec2 import Vec2
 from . import actions
 from .entities import ActionState, Entity
 from .intent import NOTHING, Intent
@@ -79,7 +81,7 @@ class Autoplay:
         target = min(enemies, key=lambda e: e.pos.distance_sq_to(hero.pos))
         toward = (target.pos - hero.pos).normalized()
         distance = hero.pos.distance_to(target.pos)
-        strike_range = hero.type.weapon.reach + target.radius - REACH_MARGIN
+        strike_range = hero.weapon.reach + target.radius - REACH_MARGIN
 
         if hero.health_fraction < CAUTIOUS_BELOW and distance < strike_range * 1.6:
             # Hurt: back off and let the dodge come off cooldown rather than trade.
@@ -88,17 +90,77 @@ class Autoplay:
         if distance <= strike_range:
             return Intent(aim=toward, attack=True)
 
-        return Intent(move=toward, aim=toward)
+        return Intent(move=self._approach(world, hero, target), aim=toward)
+
+    def _approach(self, world, hero: Entity, target: Entity) -> Vec2:
+        """A direction that actually gets closer, pillars included.
+
+        Walking straight at the target is right in the open and wrong the moment
+        anything is in the way: nothing in this game paths around walls, so a
+        hero and an enemy on opposite sides of a pillar will stand there pushing
+        into it until the tick limit. A person walks round. Without this the bot
+        cannot finish a stage that a player finds trivial, and the difficulty
+        bracket ends up measuring the bot rather than the game.
+
+        Deliberately the cheapest thing that works -- probe each way round and
+        take the side that opens a clear line. It is not pathfinding and is not
+        trying to be; a U-shaped wall would still defeat it.
+        """
+        toward = (target.pos - hero.pos).normalized()
+        tile = world.level.tile
+
+        if path_is_clear(hero.pos, target.pos, world.is_solid, tile):
+            return toward
+
+        sideways = toward.perpendicular()
+        for side in (1.0, -1.0):
+            probe = hero.pos + sideways * (side * tile * 2.0)
+            if path_is_clear(probe, target.pos, world.is_solid, tile):
+                # Angled rather than straight sideways, so it keeps closing
+                # while it clears the obstacle.
+                return (toward + sideways * (side * 1.5)).normalized()
+
+        # Neither way round helps from here. Slide one way -- fixed, not random,
+        # so a seeded run still replays exactly.
+        return sideways
 
     def _noticed_threat(self, hero: Entity, enemies: list[Entity]) -> Entity | None:
-        """The nearest attack close enough to matter and old enough to have seen."""
+        """The nearest attack that is close enough to land, and old enough to see.
+
+        "Close enough to land" is measured against the attack in progress, not a
+        flat radius. That distinction stops a pathology rather than shaving a
+        number: a boss is winding up or swinging roughly half the time, so a hero
+        that rolls at any nearby attack rolls forever and never swings back. It
+        would dodge a volley it is standing on top of, which is not a danger, and
+        die having never attacked.
+        """
         for enemy in enemies:
-            if enemy.pos.distance_to(hero.pos) > DANGER_RADIUS:
-                continue
             elapsed = _ticks_since_attack_began(enemy)
-            if elapsed >= 0 and elapsed >= self.reaction_ticks:
+            if elapsed < 0 or elapsed < self.reaction_ticks:
+                continue
+            if enemy.pos.distance_to(hero.pos) <= _threat_range(enemy, hero):
                 return enemy
         return None
+
+
+def _threat_range(enemy: Entity, hero: Entity) -> float:
+    """How far the attack this enemy is mid-way through can actually reach.
+
+    A projectile attack returns zero: rolling is not how you avoid an arrow, and
+    treating one as a dodge trigger is what makes a hero stand in front of an
+    archer rolling until the cooldown runs out. You move instead, which the rest
+    of the policy already does.
+    """
+    weapon = enemy.weapon
+    if weapon.projectile:
+        return 0.0
+
+    reach = weapon.reach + hero.radius + enemy.radius
+    if weapon.is_charge:
+        # A charge threatens the whole line it is about to cover, not just the
+        # length of the horns.
+        reach += weapon.charge_speed * weapon.active
+    return min(reach, DANGER_RADIUS + reach)
 
 
 def _ticks_since_attack_began(enemy: Entity) -> int:
@@ -112,7 +174,7 @@ def _ticks_since_attack_began(enemy: Entity) -> int:
     if enemy.state is ActionState.WINDUP:
         return enemy.state_ticks
     if enemy.state is ActionState.ACTIVE:
-        return enemy.type.weapon.windup + enemy.state_ticks
+        return enemy.weapon.windup + enemy.state_ticks
     return -1
 
 
@@ -146,9 +208,22 @@ class Reckless:
         return Intent(move=toward, aim=toward, attack=True)
 
 
-#: The default instrument: perfect reflexes, no positioning sense. Matches the
-#: behaviour these tests were written against before latency existed.
-autoplay = Autoplay()
+#: The reference for "a competent player", and deliberately *not* the
+#: zero-latency one.
+#:
+#: A hero that answers every telegraph on the tick it opens is not skilled, it is
+#: twitchy, and against something that is winding up or swinging half the time --
+#: a boss -- it rolls perpetually and never swings back. That is an artifact of
+#: the instrument rather than a fact about the game, and it stayed invisible
+#: while every fight was ordinary enemies with gaps between their attacks.
+#:
+#: Twelve ticks is about two hundred milliseconds: a real reaction to a clear
+#: tell, and enough of one that dodging is a decision rather than a reflex.
+autoplay = Autoplay(reaction_ticks=REACTION_SHARP)
+
+#: The twitchy end, kept for the reaction ladder. Useful as a comparison, and a
+#: standing reminder of why it is not the default.
+twitchy = Autoplay(reaction_ticks=REACTION_PERFECT)
 
 #: The other end of the bracket.
 reckless = Reckless()

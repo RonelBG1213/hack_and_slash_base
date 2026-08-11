@@ -1,7 +1,9 @@
 # Hack and Slash
 
 A top-down twin-stick arena brawler. Move with WASD, aim with the mouse, click
-to swing, roll to survive. Clear the arena or die in it.
+to swing, roll to survive. Four stages, then The Warden. Your wounds come with
+you from one stage to the next, so how well you clear stage one is still with
+you at the boss.
 
 Python 3.14 + pygame-ce. No engine, no build step.
 
@@ -41,6 +43,15 @@ mistake, not a free action.
 | **Grunt** | Can you make space? Walks in and swings. |
 | **Charger** | Are you standing in a line with it? Long telegraph, committed dash — sidestep it or eat it. |
 | **Archer** | Are you standing still in the open? Keeps its distance and needs line of sight, so pillars are the answer. |
+| **The Warden** | All three at once. It picks its attack from range alone -- sweep up close, a committed charge at mid range, a five-shot fan from far -- so every position has an answer and the fight is about moving between them. Below half health it stops pausing between attacks; it never learns a new move, so nothing you worked out stops being true. |
+
+### The run
+
+Four stages, rising from four grunts in an open yard to the boss. Health carries
+between them and you recover 22 on clearing one, so a run is a single arc rather
+than four separate fights -- but a bad stage costs you rather than ending you.
+`R` starts a new run, never a new stage: replaying the boss at full health is
+exactly the tension the carry-over exists to create.
 
 Your dodge roll is invulnerable from its very first frame, and the
 invulnerability ends *before* the roll does — so rolling at the right moment
@@ -54,11 +65,11 @@ python -m venv .venv
 # .venv/bin/python -m pip install -r requirements.txt     # macOS / Linux
 ```
 
-The art and the arena are both generated, not committed. Build them once:
+The art and the stages are both generated, not committed. Build them once:
 
 ```sh
 .venv/Scripts/python tools/gen_art.py       # assets/sprites.png
-.venv/Scripts/python tools/make_level.py    # levels/arena.json
+.venv/Scripts/python tools/make_level.py    # levels/stage1..4.json + campaign.json
 ```
 
 > **Use `pygame-ce`, not `pygame`.** On Python 3.14 the classic `pygame` package
@@ -72,7 +83,8 @@ The art and the arena are both generated, not committed. Build them once:
 | Command | What it does |
 | --- | --- |
 | `python main.py` | Play |
-| `python main.py --seed 7` | Play a specific run — the same seed replays the same fight |
+| `python main.py --seed 7` | Play a specific run — the same seed replays the same run |
+| `python main.py --stage 4` | Jump straight to a stage. For tuning: you arrive at full health, so it is not the fight a run gives you |
 | `python main.py --smoke` | Pixel-fidelity check: every sprite must upscale with hard edges |
 | `python -m pytest` | Full suite, headless, no window |
 
@@ -94,12 +106,12 @@ attack should cost position, not responsiveness.
 
 ```
 src/hack_and_slash/
-  core/     vectors, level, collision, spatial index    <- no pygame
-  game/     entities, actions, combat, AI, the tick     <- no pygame
+  core/     vectors, level, campaign, collision, spatial index   <- no pygame
+  game/     entities, actions, combat, AI, run, the tick          <- no pygame
   render/   atlas, camera, renderer, HUD, effects
   scenes/   menu, play, smoke
 data/       entities.json, weapons.json   -- content, not code
-levels/     arena.json
+levels/     stage1..4.json, campaign.json
 tools/      art generator, level builder, headless screenshots
 ```
 
@@ -133,28 +145,36 @@ effects on and off and demands the two come out identical.
 python tools/balance.py
 ```
 
-Runs reference heroes over many seeds and prints where the fight sits. The part
-that decides anything is the bracket, and both ends have to hold:
+Runs reference heroes over many seeds and prints where the game sits. Two
+brackets, because they fail independently — a run can be unwinnable while every
+stage is fine alone (the heal is too small), and every stage can be fine while
+the run never gets tense (the heal is too large).
 
 | | must | currently |
 | --- | --- | --- |
-| **skilled** — closes in, swings, backs off when hurt | win every seed | 8/8, ~17s, worst finish 47/100 |
-| **face-tank** — walks in swinging, never disengages | lose every seed | 0/8 |
+| **every stage**, entered at full health | clear on every seed | 8/8 each, 4–18s |
+| **whole run**, health carrying | clear on every seed | 8/8, ~52s, worst finish 58/100 |
+| **face-tank** — walks in swinging, never disengages | lose every run | 0/8 |
 
-Only the floor and the fight is unfair; only the ceiling and there is no fight.
-`tests/test_playthrough.py` pins both.
+Only the floor and the game is unfair; only the ceiling and there is no game.
+`tests/test_playthrough.py` pins all three.
 
-**A finding worth knowing before you tune anything.** The obvious way to model a
-bad player is a slow reaction time, and it measures almost nothing here — a hero
-that never dodges finishes about as healthy as one with perfect reflexes, because
-rolling costs uptime and lengthens the fight. What actually separates winning
-from losing is *disengaging when hurt*, which is why the ceiling is built on
-refusing to do that. A test pins the finding, so if dodging ever becomes decisive
-the bracket gets revisited rather than quietly drifting.
+**Two findings worth knowing before you tune anything.**
 
-Treat that as a caution rather than a verdict on the dodge: these bots have
-perfect information and no idea pillars exist, and a human's dodge is doing work
-theirs never needs to. It is measured, not settled.
+*Reaction time is not what decides these fights.* Across slow and moderate
+reactions the outcome barely moves — rolling costs uptime and lengthens a fight,
+so reacting sooner does not obviously pay. What separates winning from losing is
+*disengaging when hurt*, which is why the ceiling is a hero that refuses to.
+
+*A zero-tick reaction is not skill, it is an artifact.* A hero answering every
+telegraph on the tick it opens rolls perpetually against something winding up or
+swinging half the time — the boss — and never swings back. It loses 7 of 8 runs
+where the twelve-tick policy wins all 8. So the reference hero is the twelve-tick
+one. That was invisible until there was a boss to expose it, and it is the reason
+to distrust any single bot as a stand-in for a player.
+
+Treat both as cautions rather than verdicts on the dodge: these bots have perfect
+information and only the crudest sense that pillars exist. Measured, not settled.
 
 **If the bracket breaks, reach for durability first.** An enemy that dies before
 its attack cadence lets it swing again applies no pressure however hard it hits,
@@ -194,24 +214,28 @@ new one is a new `case` in `decide` plus a name in the JSON.
 
 ```sh
 python tools/gen_art.py                          # rebuild assets/sprites.png
-python tools/make_level.py                       # rebuild levels/arena.json
+python tools/make_level.py                       # rebuild the four stages
 python tools/balance.py                          # where the fight sits
 python tools/screenshot.py play out.png          # render a scene headlessly
-python tools/screenshot.py play out.png --ticks 240   # ...mid-fight
+python tools/screenshot.py play out.png --stage 4 --ticks 240   # ...mid-fight
 ```
 
 ## Known limits
 
-- **One arena.** The slice is a single fight. Floors, loot and progression are
-  the obvious next thing and are deliberately not started.
-- **No level editor.** `tools/make_level.py` describes the arena as a border plus
-  a list of pillar rectangles and writes the JSON. An editor is roughly half a
-  project on its own; a twenty-line script is the honest trade for one level.
+- **No progression beyond health.** No upgrades, no loot, no build. A run is four
+  fights and what you have left; picking an upgrade between stages is the obvious
+  next thing and is deliberately not started.
+- **No level editor.** `tools/make_level.py` describes each stage as a border
+  plus a list of pillar rectangles and writes the JSON. An editor is roughly half
+  a project on its own; a short script is the honest trade for four stages.
 - **Placeholder art.** Generated shapes, not drawn sprites. Replace
   `assets/sprites.png` with a PNG of the same cell layout to swap in real art.
-- **Enemies do not path around walls.** They walk straight at you, so a pillar
-  will hold a grunt up. Fine in an open arena, wrong the moment there is a
-  corridor — that needs A* over the tile grid, which would live in `core/`.
+- **Nothing paths around walls.** Enemies walk straight at you, so a pillar will
+  hold a grunt up. This constrains level design rather than being invisible: a
+  pillar that seals a lane strands whatever is behind it, and the player has to
+  go and fetch a grunt that spent the fight pushing into a wall. An early draft
+  of stage 1 did exactly that. Real pathing means A* over the tile grid, in
+  `core/`.
 - **Enemies do not dodge.** Expressed as data: they have no `dodge_ticks`. The
   roll is the player's verb alone.
 - **No sound.** Nothing here would have to change to add it; hits already emit
@@ -220,10 +244,15 @@ python tools/screenshot.py play out.png --ticks 240   # ...mid-fight
   the arrow's radius, so a shot can clip a wall corner by a pixel or two before
   it stops. Cosmetic at this scale; making it exact means sweeping a circle
   rather than a segment.
-- **The dodge's worth is measured, not settled.** The reference bots gain nothing
-  from it (see Balance). They also have perfect information and no positioning
-  sense, so that says more about them than about the roll — but it is the one
-  claim in this README that hands on a keyboard could still overturn.
+- **The dodge's worth is measured, not settled.** The reference bots gain little
+  from it, and the twitchiest one is actively crippled by it (see Balance). They
+  have perfect information and only the crudest sense of pillars, so that says
+  more about them than about the roll — but it is the claim in this README most
+  likely to be overturned by hands on a keyboard.
+- **The boss has one phase change and no second moveset.** Below half health it
+  stops pausing between attacks. Deliberate — nothing new to learn at the moment
+  you can least afford to — but it does mean the fight has no surprise in it once
+  you have read the three attacks.
 - **The charger commits absolutely.** Once it dashes it cannot stop, including
   into a wall. That is the point, but it does mean a clever player can farm it
   against pillars.

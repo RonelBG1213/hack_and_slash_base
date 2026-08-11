@@ -12,7 +12,7 @@ import pygame
 import pytest
 
 from hack_and_slash import config
-from hack_and_slash.core import level_io
+from hack_and_slash.core import campaign_io
 from hack_and_slash.core.vec2 import Vec2
 from hack_and_slash.game.intent import Intent
 from hack_and_slash.game.sim import step
@@ -44,8 +44,8 @@ def atlas(display):
     return load_atlas()
 
 
-def arena_level():
-    return level_io.load(config.LEVELS_DIR / "arena.json")
+def campaign():
+    return campaign_io.load(config.LEVELS_DIR / "campaign.json")
 
 
 def is_blank(surface: pygame.Surface) -> bool:
@@ -82,20 +82,20 @@ def test_the_upscale_used_by_the_app_invents_no_colours(atlas) -> None:
 # --- scenes draw -------------------------------------------------------------
 def test_the_menu_draws_something(atlas) -> None:
     surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
-    MenuScene(arena_level(), BESTIARY, atlas).draw(surface)
+    MenuScene(campaign(), BESTIARY, atlas).draw(surface)
     assert not is_blank(surface)
 
 
 def test_the_opening_frame_of_a_fight_draws_something(atlas) -> None:
     surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
-    PlayScene(arena_level(), BESTIARY, atlas).draw(surface)
+    PlayScene(campaign(), BESTIARY, atlas).draw(surface)
     assert not is_blank(surface)
 
 
 def test_a_fight_in_progress_draws_without_raising(atlas) -> None:
     """Covers the states a still frame misses: open hitboxes, arrows in flight,
     a charger telegraphing, damage numbers, bodies flashing."""
-    scene = PlayScene(arena_level(), BESTIARY, atlas)
+    scene = PlayScene(campaign(), BESTIARY, atlas)
     surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
 
     press = Intent(move=Vec2(1, 0), aim=Vec2(1, 0), attack=True)
@@ -112,7 +112,7 @@ def test_a_fight_in_progress_draws_without_raising(atlas) -> None:
 
 
 def test_the_result_banner_draws_over_a_finished_run(atlas) -> None:
-    scene = PlayScene(arena_level(), BESTIARY, atlas)
+    scene = PlayScene(campaign(), BESTIARY, atlas)
     scene.world.hero.hp = 0
     step(scene.world, Intent())
 
@@ -122,7 +122,7 @@ def test_the_result_banner_draws_over_a_finished_run(atlas) -> None:
 
 
 def test_restarting_gives_a_fresh_world(atlas) -> None:
-    scene = PlayScene(arena_level(), BESTIARY, atlas, seed=3)
+    scene = PlayScene(campaign(), BESTIARY, atlas, seed=3)
     scene.world.hero.hp = 5
     restarted = scene.restarted()
 

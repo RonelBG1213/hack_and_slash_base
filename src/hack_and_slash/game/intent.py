@@ -31,6 +31,10 @@ class Intent:
     attack: bool = False
     dodge: bool = False
 
+    #: Which of the attacker's attacks to use. Only a boss has more than one, so
+    #: everything else leaves this at zero and never thinks about it.
+    weapon: int = 0
+
     @property
     def wants_to_move(self) -> bool:
         return not self.move.is_zero()

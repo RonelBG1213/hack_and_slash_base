@@ -26,7 +26,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 import pygame  # noqa: E402
 
 from hack_and_slash import config  # noqa: E402
-from hack_and_slash.core import level_io  # noqa: E402
+from hack_and_slash.core import campaign_io  # noqa: E402
 from hack_and_slash.core.vec2 import Vec2  # noqa: E402
 from hack_and_slash.game.entities import load_bestiary  # noqa: E402
 from hack_and_slash.game.intent import Intent  # noqa: E402
@@ -36,11 +36,11 @@ from hack_and_slash.scenes.menu import MenuScene  # noqa: E402
 from hack_and_slash.scenes.play import PlayScene  # noqa: E402
 
 
-def build_scene(name: str, level, bestiary, atlas, seed: int):
+def build_scene(name: str, campaign, bestiary, atlas, seed: int, stage: int):
     if name == "menu":
-        return MenuScene(level, bestiary, atlas, seed=seed)
+        return MenuScene(campaign, bestiary, atlas, seed=seed)
     if name == "play":
-        return PlayScene(level, bestiary, atlas, seed=seed)
+        return PlayScene(campaign, bestiary, atlas, seed=seed, start_stage=stage)
     raise SystemExit(f"unknown scene '{name}' -- try 'play' or 'menu'")
 
 
@@ -68,18 +68,19 @@ def main() -> int:
     parser.add_argument("--ticks", type=int, default=0, help="simulate this long first")
     parser.add_argument("--scale", type=int, default=3, help="upscale factor for the PNG")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--level", default="arena")
+    parser.add_argument("--stage", type=int, default=1, help="1-based stage to shoot")
     args = parser.parse_args()
 
     pygame.init()
     # A dummy display still has to exist for font rendering and conversion.
     pygame.display.set_mode((config.WINDOW_W, config.WINDOW_H))
 
-    level = level_io.load(config.LEVELS_DIR / f"{args.level}.json")
+    campaign = campaign_io.load(config.LEVELS_DIR / "campaign.json")
     bestiary = load_bestiary(config.ENTITIES_DATA, config.WEAPONS_DATA)
     atlas = load_atlas()
 
-    scene = build_scene(args.scene, level, bestiary, atlas, args.seed)
+    stage = max(0, min(args.stage - 1, len(campaign) - 1))
+    scene = build_scene(args.scene, campaign, bestiary, atlas, args.seed, stage)
     if args.ticks and isinstance(scene, PlayScene):
         advance(scene, args.ticks)
 

@@ -91,6 +91,7 @@ SPRITE_ORDER = (
     "grunt",
     "charger",
     "archer",
+    "boss",
     "arrow",
     "shadow",
 )

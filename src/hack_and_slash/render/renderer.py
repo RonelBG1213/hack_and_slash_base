@@ -76,13 +76,21 @@ class Renderer:
                 )
 
     def _draw_shadows(self, surface: pygame.Surface, world: World, camera: Camera) -> None:
-        shadow = self.atlas["shadow"]
-        half = shadow.get_width() // 2
+        base = self.atlas["shadow"]
         for entity in world.entities:
             if not camera.is_on_screen(entity.pos):
                 continue
+            # Scaled with the body. A boss standing on a grunt-sized shadow looks
+            # like it is hovering.
+            scale = entity.type.sprite_scale
+            shadow = (
+                base if scale == 1
+                else pygame.transform.scale(
+                    base, (base.get_width() * scale, base.get_height() * scale)
+                )
+            )
             sx, sy = camera.to_screen(entity.pos)
-            surface.blit(shadow, (sx - half, sy - half))
+            surface.blit(shadow, (sx - shadow.get_width() // 2, sy - shadow.get_height() // 2))
 
     # --- bodies --------------------------------------------------------------
     def _draw_bodies(self, surface: pygame.Surface, world: World, camera: Camera) -> None:
@@ -94,11 +102,26 @@ class Renderer:
             self._draw_body(surface, entity, camera)
             self._draw_enemy_health(surface, entity, camera)
 
-    def _draw_body(self, surface: pygame.Surface, entity: Entity, camera: Camera) -> None:
+    def _scaled(self, name: str, entity: Entity) -> pygame.Surface:
+        """The sprite for a body, flashed and sized.
+
+        `pygame.transform.scale` is nearest-neighbour and `smoothscale` is not.
+        Only the former belongs here: a blurred boss would fail `main.py --smoke`,
+        which is exactly the guard doing its job.
+        """
         name = entity.type.sprite
         sprite = (
             self.atlas.tinted(name, FLASH_COLOR) if entity.flash > 0 else self.atlas[name]
         )
+        scale = entity.type.sprite_scale
+        if scale > 1:
+            sprite = pygame.transform.scale(
+                sprite, (sprite.get_width() * scale, sprite.get_height() * scale)
+            )
+        return sprite
+
+    def _draw_body(self, surface: pygame.Surface, entity: Entity, camera: Camera) -> None:
+        sprite = self._scaled(entity.type.sprite, entity)
 
         sx, sy = camera.to_screen(entity.pos)
         half = sprite.get_width() // 2
@@ -131,10 +154,10 @@ class Renderer:
         rather than the direction of the hero, because those are different once
         the player starts moving -- and the difference is the whole enemy.
         """
-        if entity.state is not ActionState.WINDUP or entity.type.charge_speed <= 0:
+        if entity.state is not ActionState.WINDUP or not entity.weapon.is_charge:
             return
 
-        progress = entity.state_ticks / max(1, entity.type.weapon.windup)
+        progress = entity.state_ticks / max(1, entity.weapon.windup)
         start = camera.to_screen(entity.pos)
         end = camera.to_screen(entity.pos + entity.dash_dir * TELEGRAPH_LENGTH)
         # Brightens as the charge nears release, so "how long have I got" is
@@ -161,7 +184,7 @@ class Renderer:
         for entity in world.entities:
             if entity.state is not ActionState.ACTIVE:
                 continue
-            weapon = entity.type.weapon
+            weapon = entity.weapon
             if weapon.projectile or weapon.reach <= 0:
                 continue
             if not camera.is_on_screen(entity.pos):

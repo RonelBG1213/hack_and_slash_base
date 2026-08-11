@@ -60,14 +60,29 @@ class Weapon:
     recovery: int
     knockback: float
     hitstop: int
+    #: Speed of the dash this attack carries the body forward at, for the whole
+    #: of its active window. A property of the *attack*, not the creature: a boss
+    #: that charges on one attack must not drift forward on the other two.
+    charge_speed: float = 0.0
+
     projectile: bool = False
     projectile_speed: float = 0.0
     projectile_radius: float = 0.0
     projectile_lifetime: int = 0
 
+    #: Shots per volley, and the total angle they fan across. One shot ignores
+    #: the spread; three across 30 degrees is a wall you step around rather than
+    #: a bullet you sidestep.
+    projectile_count: int = 1
+    spread: float = 0.0
+
     @property
     def total_ticks(self) -> int:
         return self.windup + self.active + self.recovery
+
+    @property
+    def is_charge(self) -> bool:
+        return self.charge_speed > 0.0
 
     @classmethod
     def from_dict(cls, weapon_id: str, payload: dict) -> "Weapon":
@@ -83,10 +98,13 @@ class Weapon:
             recovery=int(payload["recovery"]),
             knockback=float(payload.get("knockback", 0.0)),
             hitstop=int(payload.get("hitstop", 0)),
+            charge_speed=float(payload.get("charge_speed", 0.0)),
             projectile=bool(payload.get("projectile", False)),
             projectile_speed=float(payload.get("projectile_speed", 0.0)),
             projectile_radius=float(payload.get("projectile_radius", 2.0)),
             projectile_lifetime=int(payload.get("projectile_lifetime", 120)),
+            projectile_count=int(payload.get("projectile_count", 1)),
+            spread=math.radians(float(payload.get("spread_degrees", 0.0))),
         )
 
 
@@ -99,9 +117,18 @@ class EntityType:
     hp: int
     speed: float
     radius: float
-    weapon: Weapon
+
+    #: Every attack this thing has, in the order the data listed them. Most
+    #: things have exactly one; a boss is a boss largely because it has several.
+    weapons: tuple[Weapon, ...]
+
     brain: str
     aggro: float = 0.0
+
+    #: Whole-number upscale for the sprite. The atlas is a fixed 16px grid, so
+    #: this is how something draws bigger than a tile without a second grid --
+    #: and a whole number keeps the pixels hard, which `--smoke` enforces.
+    sprite_scale: int = 1
 
     # Hero only. Zero on everything else, which is how "enemies cannot dodge"
     # is expressed -- as data, not as a branch in the sim.
@@ -110,8 +137,13 @@ class EntityType:
     iframe_ticks: int = 0
     dodge_cooldown: int = 0
 
-    # Charger only.
-    charge_speed: float = 0.0
+    #: Health recovered between stages. The whole progression system, and the
+    #: dial that decides whether carrying damage forward is tense or punishing.
+    heal_between_stages: int = 0
+
+    #: How close a charging brain gets before committing. A decision about when
+    #: to attack, so it belongs to the creature -- the dash itself belongs to the
+    #: weapon.
     charge_range: float = 0.0
 
     # Archer only.
@@ -122,11 +154,27 @@ class EntityType:
     def can_dodge(self) -> bool:
         return self.dodge_ticks > 0
 
+    @property
+    def weapon(self) -> Weapon:
+        """The default attack.
+
+        Kept so everything with one attack -- which is everything except the
+        boss -- reads the way it always did.
+        """
+        return self.weapons[0]
+
     @classmethod
     def from_dict(cls, type_id: str, payload: dict, weapons: dict[str, Weapon]) -> "EntityType":
-        weapon_id = payload["weapon"]
-        if weapon_id not in weapons:
-            raise KeyError(f"{type_id} wants weapon '{weapon_id}', which is not in weapons.json")
+        # "weapon" for the ordinary single-attack case, "weapons" for anything
+        # that switches between several. Accepting both keeps the data honest
+        # about which things are simple.
+        wanted = payload.get("weapons") or [payload["weapon"]]
+        for weapon_id in wanted:
+            if weapon_id not in weapons:
+                raise KeyError(
+                    f"{type_id} wants weapon '{weapon_id}', which is not in weapons.json"
+                )
+
         return cls(
             id=type_id,
             name=payload.get("name", type_id),
@@ -135,14 +183,15 @@ class EntityType:
             hp=int(payload["hp"]),
             speed=float(payload["speed"]),
             radius=float(payload["radius"]),
-            weapon=weapons[weapon_id],
+            weapons=tuple(weapons[w] for w in wanted),
+            sprite_scale=int(payload.get("sprite_scale", 1)),
             brain=payload.get("brain", "chaser"),
             aggro=float(payload.get("aggro", 0.0)),
             dodge_speed=float(payload.get("dodge_speed", 0.0)),
             dodge_ticks=int(payload.get("dodge_ticks", 0)),
             iframe_ticks=int(payload.get("iframe_ticks", 0)),
             dodge_cooldown=int(payload.get("dodge_cooldown", 0)),
-            charge_speed=float(payload.get("charge_speed", 0.0)),
+            heal_between_stages=int(payload.get("heal_between_stages", 0)),
             charge_range=float(payload.get("charge_range", 0.0)),
             preferred_range=float(payload.get("preferred_range", 0.0)),
             retreat_range=float(payload.get("retreat_range", 0.0)),
@@ -206,6 +255,12 @@ class Entity:
     state: ActionState = ActionState.IDLE
     state_ticks: int = 0  # ticks spent in the current state
 
+    #: Which of the type's attacks is in progress. Chosen when a swing starts
+    #: and left alone until the next one, so every phase of an attack -- its
+    #: windup, its hitbox, its recovery -- reads the same weapon. Change this
+    #: mid-swing and a body would wind up with one attack and land another.
+    weapon_index: int = 0
+
     #: Bodies already hit by the swing in progress. Cleared when a new swing
     #: starts. Without it a four-tick active window deals damage four times.
     hit_ids: set[int] = field(default_factory=set)
@@ -224,6 +279,16 @@ class Entity:
     # which is what lets the feel pass be turned off without changing a fight.
     flash: int = 0
     last_hit_by: int | None = None
+
+    @property
+    def weapon(self) -> Weapon:
+        """The attack this body is currently using.
+
+        Everything that asks about timings, reach or damage goes through here
+        rather than through `type.weapon`, so a thing with several attacks
+        behaves correctly without any of that code knowing bosses exist.
+        """
+        return self.type.weapons[self.weapon_index]
 
     @property
     def is_alive(self) -> bool:

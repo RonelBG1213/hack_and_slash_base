@@ -33,9 +33,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="seed for the run; the same seed replays the same fight",
     )
     parser.add_argument(
-        "--level",
-        default="arena",
-        help="name of a level in levels/ (without .json)",
+        "--stage",
+        type=int,
+        default=1,
+        help="start at this stage (1-based). For tuning -- you arrive at full "
+        "health, so it is not the same fight as reaching it through a run",
     )
     return parser.parse_args(argv)
 
@@ -52,33 +54,32 @@ def main(argv: list[str] | None = None) -> int:
     import pygame
 
     from hack_and_slash import config
-    from hack_and_slash.core import level_io
-    from hack_and_slash.core.level_io import LevelFormatError
+    from hack_and_slash.core import campaign_io
+    from hack_and_slash.core.campaign_io import CampaignFormatError
     from hack_and_slash.game.entities import load_bestiary
     from hack_and_slash.render.atlas import MissingAtlasError, load as load_atlas
     from hack_and_slash.scenes.base import App
     from hack_and_slash.scenes.menu import MenuScene
 
-    level_path = config.LEVELS_DIR / f"{args.level}.json"
-    if not level_path.exists():
-        print(
-            f"no level at {level_path} -- run `python tools/make_level.py` to build it",
-            file=sys.stderr,
-        )
-        return 1
-
     try:
-        level = level_io.load(level_path)
-    except LevelFormatError as exc:
-        print(f"cannot load {level_path.name}: {exc}", file=sys.stderr)
+        campaign = campaign_io.load(config.LEVELS_DIR / "campaign.json")
+    except CampaignFormatError as exc:
+        print(str(exc), file=sys.stderr)
         return 1
 
-    problems = level.problems()
+    problems = campaign.problems()
     if problems:
-        # Refuse rather than start a run that cannot be finished.
-        print(f"{level_path.name} is not playable:", file=sys.stderr)
+        # Refuse rather than start a run that cannot be finished -- possibly
+        # several stages after the mistake.
+        print("the campaign is not playable:", file=sys.stderr)
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
+        return 1
+
+    if not 1 <= args.stage <= len(campaign):
+        print(
+            f"--stage must be between 1 and {len(campaign)}", file=sys.stderr
+        )
         return 1
 
     bestiary = load_bestiary(config.ENTITIES_DATA, config.WEAPONS_DATA)
@@ -95,7 +96,13 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    App(MenuScene(level, bestiary, atlas, seed=args.seed)).run()
+    menu = MenuScene(campaign, bestiary, atlas, seed=args.seed)
+    if args.stage > 1:
+        # Skip the title screen when jumping to a stage -- the only reason to
+        # pass --stage is to look at that stage.
+        App(menu._start_at(args.stage - 1)).run()
+    else:
+        App(menu).run()
     return 0
 
 

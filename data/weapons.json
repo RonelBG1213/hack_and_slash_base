@@ -49,7 +49,12 @@
     "recovery": 26,
     "knockback": 5.0,
     "hitstop": 5,
-    "_comment": "The active window is long because it stays open for the whole dash."
+    "charge_speed": 3.6,
+    "_comment": [
+      "The active window is long because it stays open for the whole dash.",
+      "charge_speed belongs to the attack rather than to the creature: a body",
+      "with several attacks must only dash on the one that is a charge."
+    ]
   },
 
   "arrow": {
@@ -67,5 +72,65 @@
     "projectile_speed": 2.7,
     "projectile_radius": 2.5,
     "projectile_lifetime": 180
+  },
+
+  "_boss_comment": [
+    "The boss's three attacks. Each answers a different position, so the fight",
+    "is about where you stand rather than how fast you click:",
+    "  sweep  -- punishes standing next to it",
+    "  crush  -- punishes standing in a line with it",
+    "  volley -- punishes standing still at range",
+    "All three telegraph longer than anything else in the game. A boss that is",
+    "hard because it is fast is just an unfair grunt; this one should be hard",
+    "because it is always asking you to be somewhere else."
+  ],
+
+  "boss_sweep": {
+    "name": "Sweep",
+    "damage": 14,
+    "variance": 3,
+    "arc_degrees": 200,
+    "reach": 40,
+    "windup": 30,
+    "active": 6,
+    "recovery": 30,
+    "knockback": 6.0,
+    "hitstop": 6,
+    "_comment": "Nearly all the way round, so backing off beats circling."
+  },
+
+  "boss_crush": {
+    "name": "Crush",
+    "damage": 17,
+    "variance": 3,
+    "arc_degrees": 130,
+    "reach": 30,
+    "windup": 38,
+    "active": 28,
+    "recovery": 34,
+    "knockback": 7.0,
+    "hitstop": 7,
+    "charge_speed": 3.9,
+    "_comment": "The longest tell in the game, and the hardest hit. Sidestep it."
+  },
+
+  "boss_volley": {
+    "name": "Volley",
+    "damage": 9,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 32,
+    "active": 1,
+    "recovery": 26,
+    "knockback": 2.0,
+    "hitstop": 3,
+    "projectile": true,
+    "projectile_speed": 2.5,
+    "projectile_radius": 3.0,
+    "projectile_lifetime": 200,
+    "projectile_count": 5,
+    "spread_degrees": 44,
+    "_comment": "A fan, not a bullet -- you go around it rather than sidestep it."
   }
 }
