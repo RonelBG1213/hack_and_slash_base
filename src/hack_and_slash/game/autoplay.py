@@ -32,9 +32,6 @@ from .world import Outcome
 #: Below this fraction of health the policy stops trading and backs off.
 CAUTIOUS_BELOW = 0.45
 
-#: How close an incoming attack has to be before it is worth rolling away from.
-DANGER_RADIUS = 46.0
-
 #: Struck off the nearest enemy's reach so the policy commits from inside its
 #: range rather than at the exact edge, where any drift is a whiff.
 REACH_MARGIN = 4.0
@@ -273,6 +270,24 @@ def _threat_range(enemy: Entity, hero: Entity) -> float:
     treating one as a dodge trigger is what makes a hero stand in front of an
     archer rolling until the cooldown runs out. You move instead, which the rest
     of the policy already does.
+
+    A charge threatens the whole line it is about to cover -- for a charger that
+    is 127px, near enough eight tiles -- and answering all of it is deliberate
+    rather than an oversight.
+
+    That is worth stating because the code used to say otherwise. This returned
+    `min(reach, DANGER_RADIUS + reach)`, next to a `DANGER_RADIUS = 46.0`
+    documented as "how close an incoming attack has to be before it is worth
+    rolling away from". The expression can never fire -- the right-hand side
+    exceeds the left for any positive constant -- so the cap described in that
+    comment had never once been applied, and the full line was always used.
+
+    Implementing it was tried and is worse. Capping the charge extension at 46
+    costs the Archer a run it otherwise completes (3/3 -> 2/3 on `CLASS_SEEDS`)
+    and costs the Magician stages 13 and 17, while fixing nothing: this policy
+    has no pathfinding and cannot sidestep late, so it has to answer a charge
+    while there is still room to. The dead constant is therefore deleted rather
+    than honoured, and the behaviour is exactly what it has always been.
     """
     weapon = enemy.weapon
     if weapon.projectile:
@@ -280,10 +295,8 @@ def _threat_range(enemy: Entity, hero: Entity) -> float:
 
     reach = weapon.reach + hero.radius + enemy.radius
     if weapon.is_charge:
-        # A charge threatens the whole line it is about to cover, not just the
-        # length of the horns.
         reach += weapon.charge_speed * weapon.active
-    return min(reach, DANGER_RADIUS + reach)
+    return reach
 
 
 def _ticks_since_attack_began(enemy: Entity) -> int:
