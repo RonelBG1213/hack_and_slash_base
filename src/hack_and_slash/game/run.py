@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from ..core.campaign import Campaign
-from .entities import Bestiary
+from .entities import DEFAULT_HERO, Bestiary, EntityType
 from .world import Outcome, World
 
 
@@ -43,6 +43,11 @@ class Run:
     seed: int = 0
     outcome: RunOutcome = RunOutcome.RUNNING
 
+    #: Which class is being played. Fixed for the whole run -- it is chosen
+    #: before stage one and there is no way to change it afterwards, which is
+    #: what makes it a run and not a loadout.
+    hero_type_id: str = DEFAULT_HERO
+
     #: Where this run began. Normally zero; non-zero only when a tool jumped
     #: straight to a stage, and remembered so a restart returns there rather
     #: than silently dropping the tool back to stage one.
@@ -57,7 +62,12 @@ class Run:
     # --- lifecycle -----------------------------------------------------------
     @classmethod
     def start(
-        cls, campaign: Campaign, bestiary: Bestiary, seed: int = 0, at_stage: int = 0
+        cls,
+        campaign: Campaign,
+        bestiary: Bestiary,
+        seed: int = 0,
+        at_stage: int = 0,
+        hero_type_id: str = DEFAULT_HERO,
     ) -> "Run":
         """Begin a run.
 
@@ -69,17 +79,40 @@ class Run:
         return cls(
             campaign=campaign,
             bestiary=bestiary,
-            world=World(campaign[index], bestiary, seed=cls._stage_seed(seed, index)),
+            world=World(
+                campaign[index],
+                bestiary,
+                seed=cls._stage_seed(seed, index),
+                hero_type_id=hero_type_id,
+            ),
             index=index,
             seed=seed,
             start_index=index,
+            hero_type_id=hero_type_id,
         )
 
     def restart(self) -> "Run":
-        """A fresh hero, back where this run began. Nothing carries over."""
+        """A fresh hero, back where this run began. Nothing carries over.
+
+        The class does carry over -- restarting is a second attempt at the same
+        run, not a return to the character select.
+        """
         return Run.start(
-            self.campaign, self.bestiary, seed=self.seed, at_stage=self.start_index
+            self.campaign,
+            self.bestiary,
+            seed=self.seed,
+            at_stage=self.start_index,
+            hero_type_id=self.hero_type_id,
         )
+
+    @property
+    def hero_type(self) -> EntityType:
+        """The class being played, whether or not its body is still alive.
+
+        Read from the bestiary rather than off `world.hero`, which is None once
+        the hero has been culled -- the run still needs to know what it was.
+        """
+        return self.bestiary[self.hero_type_id]
 
     @staticmethod
     def _stage_seed(seed: int, index: int) -> int:
@@ -144,10 +177,11 @@ class Run:
         # A cleared stage always leaves the hero alive -- the run would be lost
         # otherwise -- but the property is Optional, so this stays defensive.
         surviving = hero.hp if hero is not None else 1
-        heal = self.bestiary["hero"].heal_between_stages
+        hero_type = self.hero_type
+        heal = hero_type.heal_between_stages
 
         before = surviving
-        carried = min(surviving + heal, self.bestiary["hero"].hp)
+        carried = min(surviving + heal, hero_type.hp)
 
         self.index += 1
         self.world = World(
@@ -155,6 +189,7 @@ class Run:
             self.bestiary,
             seed=self._stage_seed(self.seed, self.index),
             carry_hp=carried,
+            hero_type_id=self.hero_type_id,
         )
         self.just_advanced = True
         self.healed = carried - before

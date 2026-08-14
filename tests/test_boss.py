@@ -16,12 +16,22 @@ from hack_and_slash.game.entities import ActionState
 from hack_and_slash.game.events import EventKind
 from hack_and_slash.game.sim import step
 
-from .helpers import BESTIARY, add_enemy, enemies_idle, make_world, open_room, run
+from .helpers import BESTIARY, HERO, add_enemy, enemies_idle, make_world, open_room, run
 
 BOSS = BESTIARY["boss"]
 SWEEP = BOSS.weapons[ai.BOSS_SWEEP]
 CRUSH = BOSS.weapons[ai.BOSS_CRUSH]
 VOLLEY = BOSS.weapons[ai.BOSS_VOLLEY]
+
+#: All four act bosses, and everything that is not one. Derived from the brain
+#: rather than listed, so a fifth boss is covered by these tests the moment it
+#: exists rather than the moment somebody remembers to add it here.
+BOSSES = tuple(t for t in BESTIARY.types.values() if t.brain == "boss")
+ORDINARY = tuple(
+    t
+    for t in BESTIARY.types.values()
+    if t.faction.value == "enemy" and t.brain != "boss"
+)
 
 
 def arena_with_boss(distance: float):
@@ -41,7 +51,7 @@ def chosen_attack(distance: float) -> int:
 
 # --- choosing an attack ------------------------------------------------------
 def test_standing_next_to_it_gets_the_sweep() -> None:
-    assert chosen_attack(SWEEP.reach + BESTIARY["hero"].radius - 10) == ai.BOSS_SWEEP
+    assert chosen_attack(SWEEP.reach + HERO.radius - 10) == ai.BOSS_SWEEP
 
 
 def test_standing_at_mid_range_gets_the_crush() -> None:
@@ -191,18 +201,30 @@ def test_enrage_does_not_shorten_the_telegraphs() -> None:
 
 
 # --- it is a real fight ------------------------------------------------------
-def test_the_boss_is_the_toughest_thing_in_the_game() -> None:
-    for type_id, entity_type in BESTIARY.types.items():
-        if entity_type.faction.value == "enemy" and type_id != "boss":
-            assert BOSS.hp > entity_type.hp, f"{type_id} is tougher than the boss"
+def test_every_boss_is_tougher_than_any_ordinary_enemy() -> None:
+    """What makes an act's ending feel like one.
+
+    Checked across all four rather than for the Warden alone: a later boss with
+    less health than a brute would end its act on an anticlimax, and the number
+    that would have caused it lives in a JSON file nobody rereads.
+    """
+    toughest_ordinary = max(e.hp for e in ORDINARY)
+    for boss in BOSSES:
+        assert boss.hp > toughest_ordinary, f"{boss.id} is not tougher than the field"
 
 
-def test_the_boss_is_slower_than_everything_including_the_hero() -> None:
-    # Its speed is the entire reason there is breathing room in the fight.
-    assert BOSS.speed < BESTIARY["hero"].speed
-    for type_id, entity_type in BESTIARY.types.items():
-        if entity_type.faction.value == "enemy" and type_id != "boss":
-            assert BOSS.speed < entity_type.speed, f"the boss outpaces {type_id}"
+def test_every_boss_is_slower_than_every_class() -> None:
+    """The deal the whole game rests on, at the one place it would hurt most.
+
+    Note what is *not* claimed any more. The Warden is slower than everything in
+    the game, which is why its own fight has so much breathing room -- but the
+    Houndmaster is deliberately faster than a brute, and asserting that no boss
+    outpaces any enemy would forbid that. What has to hold everywhere is that
+    you can walk away from a boss, on any class, including the slowest.
+    """
+    slowest_class = min(c.speed for c in BESTIARY.hero_classes)
+    for boss in BOSSES:
+        assert boss.speed < slowest_class, f"{boss.id} can run down the slowest class"
 
 
 def test_a_boss_fight_runs_without_raising() -> None:

@@ -63,7 +63,7 @@ from hack_and_slash.game.autoplay import (  # noqa: E402
     play_out,
     reckless,
 )
-from hack_and_slash.game.entities import load_bestiary  # noqa: E402
+from hack_and_slash.game.entities import DEFAULT_HERO, load_bestiary  # noqa: E402
 from hack_and_slash.game.run import Run, RunOutcome  # noqa: E402
 from hack_and_slash.game.sim import step  # noqa: E402
 from hack_and_slash.game.world import Outcome, World  # noqa: E402
@@ -75,7 +75,9 @@ LATENCIES = [
     ("asleep", 40),
 ]
 
-RUN_TICK_LIMIT = 40000
+#: Twenty stages, four of them bosses. Three times the old four-stage guard,
+#: which a healthy run still finishes in well under half of.
+RUN_TICK_LIMIT = 120000
 
 HEADER = f"{'':>16}  {'won':>7}  {'median':>7}  {'median hp':>9}  {'worst hp':>8}"
 RULE = "  " + "-" * 56
@@ -91,11 +93,11 @@ def summarise(wins: int, total: int, seconds: list[float], hp: list[int]) -> dic
     }
 
 
-def measure_stage(level, bestiary, policy, seeds: range) -> dict:
+def measure_stage(level, bestiary, policy, seeds: range, hero: str = DEFAULT_HERO) -> dict:
     """One stage in isolation, entered at full health."""
     wins, seconds, hp_left = 0, [], []
     for seed in seeds:
-        world = World(level, bestiary, seed=seed)
+        world = World(level, bestiary, seed=seed, hero_type_id=hero)
         ticks = play_out(world, policy)
         if world.outcome is Outcome.WON:
             wins += 1
@@ -104,11 +106,11 @@ def measure_stage(level, bestiary, policy, seeds: range) -> dict:
     return summarise(wins, len(seeds), seconds, hp_left)
 
 
-def measure_run(campaign, bestiary, policy, seeds: range) -> dict:
+def measure_run(campaign, bestiary, policy, seeds: range, hero: str = DEFAULT_HERO) -> dict:
     """A whole run, with health carrying between stages."""
     wins, seconds, hp_left = 0, [], []
     for seed in seeds:
-        run = Run.start(campaign, bestiary, seed=seed)
+        run = Run.start(campaign, bestiary, seed=seed, hero_type_id=hero)
         ticks = 0
         for ticks in range(RUN_TICK_LIMIT):
             if run.is_over:
@@ -120,6 +122,26 @@ def measure_run(campaign, bestiary, policy, seeds: range) -> dict:
             seconds.append(ticks / config.TICKS_PER_SEC)
             hp_left.append(run.world.hero.hp if run.world.hero else 0)
     return summarise(wins, len(seeds), seconds, hp_left)
+
+
+def furthest_stage(campaign, bestiary, policy, seeds: range, hero: str) -> tuple[int, str]:
+    """Where the worst run of the set died, for a class that cannot finish.
+
+    A row reading 0/8 says a class is broken but not where, and with twenty
+    stages "somewhere" is not a useful answer. This gives the tuning pass the
+    stage to look at first.
+    """
+    worst, name = len(campaign), ""
+    for seed in seeds:
+        run = Run.start(campaign, bestiary, seed=seed, hero_type_id=hero)
+        for _ in range(RUN_TICK_LIMIT):
+            if run.is_over:
+                break
+            step(run.world, policy(run.world))
+            run.settle()
+        if run.outcome is not RunOutcome.WON and run.index < worst:
+            worst, name = run.index, run.level.name
+    return worst + 1, name
 
 
 def row(label: str, data: dict) -> str:
@@ -166,43 +188,99 @@ def verdict(stages: list[tuple[str, dict]], run_skilled: dict, run_tank: dict) -
     return notes
 
 
+def measure_class(campaign, bestiary, hero: str, seeds: range, full: bool) -> list[str]:
+    """One class, top to bottom. Returns whatever is out of balance about it."""
+    name = bestiary[hero].name
+    print(f"\n{'=' * 60}\n{name}  ({hero})\n{'=' * 60}")
+
+    stage_rows = []
+    if full:
+        print("\nper stage, skilled, entered at full health")
+        print(HEADER)
+        print(RULE)
+        for index, level in enumerate(campaign.stages, start=1):
+            data = measure_stage(level, bestiary, autoplay, seeds, hero)
+            stage_rows.append((f"stage {index} ({level.name})", data))
+            print(row(f"{index}. {level.name}", data))
+
+    print("\nwhole run, health carrying between stages")
+    print(HEADER)
+    print(RULE)
+    run_skilled = measure_run(campaign, bestiary, autoplay, seeds, hero)
+    run_tank = measure_run(campaign, bestiary, reckless, seeds, hero)
+    print(row("skilled", run_skilled))
+    print(row("face-tank", run_tank))
+
+    if run_skilled["wins"] < run_skilled["total"]:
+        stage, stage_name = furthest_stage(campaign, bestiary, autoplay, seeds, hero)
+        print(f"\n  worst run ended on stage {stage} ({stage_name})")
+
+    return [f"[{hero}] {note}" for note in verdict(stage_rows, run_skilled, run_tank)]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seeds", type=int, default=8)
+    parser.add_argument(
+        "--class",
+        dest="hero",
+        default=DEFAULT_HERO,
+        help="which class to measure, or 'all' for every one of them. Defaults "
+        "to the reference class, which is the only one whose numbers the "
+        "campaign was tuned against",
+    )
+    parser.add_argument(
+        "--stages",
+        action="store_true",
+        help="print the per-stage rows for every class, not just the reference. "
+        "Slow, and only worth it when a class is failing and you need to know "
+        "which stage did it",
+    )
     args = parser.parse_args()
 
     campaign = campaign_io.load(config.LEVELS_DIR / "campaign.json")
     bestiary = load_bestiary(config.ENTITIES_DATA, config.WEAPONS_DATA)
     seeds = range(args.seeds)
-    skilled = autoplay
 
-    print(f"{campaign.name}  --  {len(campaign)} stages, {args.seeds} seeds")
+    roster = [c.id for c in bestiary.hero_classes]
+    if args.hero == "all":
+        heroes = roster
+    elif args.hero in roster:
+        heroes = [args.hero]
+    else:
+        print(
+            f"unknown class '{args.hero}'; pick one of: {', '.join(roster)}, or 'all'",
+            file=sys.stderr,
+        )
+        return 1
 
-    print("\nper stage, skilled, entered at full health")
-    print(HEADER)
-    print(RULE)
-    stage_rows = []
-    for index, level in enumerate(campaign.stages, start=1):
-        data = measure_stage(level, bestiary, skilled, seeds)
-        stage_rows.append((f"stage {index} ({level.name})", data))
-        print(row(f"{index}. {level.name}", data))
+    print(
+        f"{campaign.name}  --  {len(campaign)} stages, {args.seeds} seeds, "
+        f"{len(heroes)} class{'es' if len(heroes) > 1 else ''}"
+    )
 
-    print("\nwhole run, health carrying between stages")
-    print(HEADER)
-    print(RULE)
-    run_skilled = measure_run(campaign, bestiary, skilled, seeds)
-    run_tank = measure_run(campaign, bestiary, reckless, seeds)
-    print(row("skilled", run_skilled))
-    print(row("face-tank", run_tank))
+    notes = []
+    for hero in heroes:
+        # The per-stage sweep is the expensive half. It always runs for the
+        # reference class, because that is the campaign's own measurement; for
+        # the others it is opt-in, since what usually matters about them is
+        # whether they can finish at all.
+        full = args.stages or hero == DEFAULT_HERO or len(heroes) == 1
+        notes += measure_class(campaign, bestiary, hero, seeds, full)
 
-    print("\nreaction ladder on the run -- informational; see the docstring")
-    print(HEADER)
-    print(RULE)
-    for name, ticks in LATENCIES:
-        print(row(f"{name} ({ticks})", measure_run(campaign, bestiary, Autoplay(ticks), seeds)))
+    if len(heroes) == 1:
+        print("\nreaction ladder on the run -- informational; see the docstring")
+        print(HEADER)
+        print(RULE)
+        for name, ticks in LATENCIES:
+            print(
+                row(
+                    f"{name} ({ticks})",
+                    measure_run(campaign, bestiary, Autoplay(ticks), seeds, heroes[0]),
+                )
+            )
 
     print()
-    notes = verdict(stage_rows, run_skilled, run_tank)
     if not notes:
         print("balance is where the design wants it. Leave the numbers alone.")
         return 0
@@ -215,9 +293,10 @@ def main() -> int:
         "attack cadence lets it swing again applies no pressure however hard it hits.\n"
         "Then count and placement (tools/make_level.py), then cadence\n"
         "(PAUSE_AFTER_ATTACK in game/ai.py). For a run that is failing while its\n"
-        "stages pass, the lever is heal_between_stages on the hero. Enemy damage and\n"
-        "hero hp last: raising damage makes one mistake lethal, which is a harsher\n"
-        "game rather than a tighter one."
+        "stages pass, the lever is heal_between_stages -- and it belongs to the class,\n"
+        "so it is the right lever for one class failing and the wrong one for all\n"
+        "five. Enemy damage and class hp last: raising damage makes one mistake\n"
+        "lethal, which is a harsher game rather than a tighter one."
     )
     return 0
 

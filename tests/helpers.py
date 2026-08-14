@@ -13,12 +13,26 @@ from contextlib import contextmanager
 from hack_and_slash import config
 from hack_and_slash.core.level import EnemySpawn, Level
 from hack_and_slash.core.vec2 import Vec2
-from hack_and_slash.game.entities import Bestiary, Entity, load_bestiary, spawn
+from hack_and_slash.game.entities import (
+    DEFAULT_HERO,
+    Bestiary,
+    Entity,
+    EntityType,
+    load_bestiary,
+    spawn,
+)
 from hack_and_slash.game.world import World
 
 #: Loaded once. The content files do not change during a run of the suite, and
 #: re-reading them for every test is the slowest thing in it.
 BESTIARY: Bestiary = load_bestiary(config.ENTITIES_DATA, config.WEAPONS_DATA)
+
+#: The class a test fights as unless it names another one. There are five, but a
+#: test about whether a cone hits what it is pointed at wants *a* hero rather
+#: than an opinion about which -- and the one it gets is the same one the
+#: campaign's recorded numbers were measured on, so a test and the balance
+#: harness are always talking about the same body.
+HERO: EntityType = BESTIARY[DEFAULT_HERO]
 
 
 def open_room(width: int = 20, height: int = 20) -> Level:

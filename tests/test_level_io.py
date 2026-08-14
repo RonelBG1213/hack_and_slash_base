@@ -20,7 +20,7 @@ SIMPLE = Level(
         "#####",
     ),
     hero_spawn=(1, 1),
-    enemy_spawns=(EnemySpawn("grunt", (3, 3)), EnemySpawn("archer", (3, 1))),
+    enemy_spawns=(EnemySpawn("grunt", (3, 3)), EnemySpawn("bowman", (3, 1))),
     tile=16,
 )
 

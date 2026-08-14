@@ -1,9 +1,9 @@
 # Hack and Slash
 
 A top-down twin-stick arena brawler. Move with WASD, aim with the mouse, click
-to swing, roll to survive. Four stages, then The Warden. Your wounds come with
-you from one stage to the next, so how well you clear stage one is still with
-you at the boss.
+to swing, roll to survive. Pick one of five classes, then twenty stages in four
+acts, each ending on a boss. Your wounds come with you from one stage to the
+next, so how well you clear stage one is still with you at the end of the act.
 
 Python 3.14 + pygame-ce. No engine, no build step.
 
@@ -42,16 +42,53 @@ mistake, not a free action.
 | --- | --- |
 | **Grunt** | Can you make space? Walks in and swings. |
 | **Charger** | Are you standing in a line with it? Long telegraph, committed dash — sidestep it or eat it. |
-| **Archer** | Are you standing still in the open? Keeps its distance and needs line of sight, so pillars are the answer. |
-| **The Warden** | All three at once. It picks its attack from range alone -- sweep up close, a committed charge at mid range, a five-shot fan from far -- so every position has an answer and the fight is about moving between them. Below half health it stops pausing between attacks; it never learns a new move, so nothing you worked out stops being true. |
+| **Bowman** | Are you standing still in the open? Keeps its distance and needs line of sight, so pillars are the answer. |
+| **Mage** | The same question from further out, and it hurts more. The hex is slow enough to walk out of, so it costs you position rather than health. |
+
+Two more arrive later. The **rat** is almost as fast as you are, so unlike a
+grunt it cannot be walked away from and left -- it dies to one hit of anything
+and never turns up alone. The **brute** is the opposite: slow enough to ignore
+and tough enough that killing it costs you the attention everything else in the
+room wants.
+
+Each act ends on a boss, and all four ask the same three questions from the same
+three distances -- sweep up close, a committed charge at mid range, a fan of shots
+from far -- so every position has a known answer and the fight is about moving
+between them. Below half health each one stops pausing between attacks. None of
+them learns a new move, so nothing you worked out stops being true.
+
+| Boss | Act | What is different about it |
+| --- | --- | --- |
+| **The Warden** | I | The one that teaches the pattern. Slowest thing in the game, longest gaps between attacks. |
+| **The Houndmaster** | II | The same three questions in a hurry -- faster body, shorter tells, a tight three-shot spray. |
+| **The Effigy** | III | The opposite reading. Enormous reach, the longest telegraph in the game, embers everywhere. |
+| **The Sovereign** | IV | Nothing new, and no room. Nine shots across a half-circle, and the reach to punish standing anywhere. |
+
+### The classes
+
+You pick one before the run and it is the whole of character building.
+
+| Class | What it asks of you |
+| --- | --- |
+| **Knight** | Can you afford to commit? Most health, most damage, worst mobility. The reference class -- the campaign is measured against it. |
+| **Rogue** | Can you stay in? Fragile and very fast, with a swing so short that whiffing costs nothing. |
+| **Archer** | Can you keep the room between you? Ranged, and a shot spends itself on the first thing it meets -- so the pillars that protect you eat your damage too. |
+| **Magician** | Can you find the gap? The hardest single hit in the game, behind the longest commitment. |
+| **Priest** | Can you last? Unremarkable in any one fight, and recovers two thirds of its health between stages. |
 
 ### The run
 
-Four stages, rising from four grunts in an open yard to the boss. Health carries
-between them and you recover 22 on clearing one, so a run is a single arc rather
-than four separate fights -- but a bad stage costs you rather than ending you.
-`R` starts a new run, never a new stage: replaying the boss at full health is
-exactly the tension the carry-over exists to create.
+Twenty stages in four acts. An act introduces one enemy, spends three stages
+combining it with everything that came before, and ends on a boss. Enemy counts
+rise inside an act and reset at the start of the next one, because a new idea
+deserves room.
+
+Health carries between stages and you recover a fixed amount on clearing one.
+How much is the class's own number, and for the Priest it is most of the class.
+So a run is a single arc rather than twenty separate fights, and a bad stage
+costs you rather than ending you. `R` starts a new run as the same class, never a
+new stage: replaying a boss at full health is exactly the tension the carry-over
+exists to create.
 
 Your dodge roll is invulnerable from its very first frame, and the
 invulnerability ends *before* the roll does — so rolling at the right moment
@@ -69,7 +106,7 @@ The art and the stages are both generated, not committed. Build them once:
 
 ```sh
 .venv/Scripts/python tools/gen_art.py       # assets/sprites.png
-.venv/Scripts/python tools/make_level.py    # levels/stage1..4.json + campaign.json
+.venv/Scripts/python tools/make_level.py    # levels/stage1..20.json + campaign.json
 ```
 
 > **Use `pygame-ce`, not `pygame`.** On Python 3.14 the classic `pygame` package
@@ -84,7 +121,8 @@ The art and the stages are both generated, not committed. Build them once:
 | --- | --- |
 | `python main.py` | Play |
 | `python main.py --seed 7` | Play a specific run — the same seed replays the same run |
-| `python main.py --stage 4` | Jump straight to a stage. For tuning: you arrive at full health, so it is not the fight a run gives you |
+| `python main.py --stage 10` | Jump straight to a stage. For tuning: you arrive at full health, so it is not the fight a run gives you |
+| `python main.py --class rogue` | Skip the character select and play a class straight away |
 | `python main.py --smoke` | Pixel-fidelity check: every sprite must upscale with hard edges |
 | `python -m pytest` | Full suite, headless, no window |
 
@@ -109,9 +147,9 @@ src/hack_and_slash/
   core/     vectors, level, campaign, collision, spatial index   <- no pygame
   game/     entities, actions, combat, AI, run, the tick          <- no pygame
   render/   atlas, camera, renderer, HUD, effects
-  scenes/   menu, play, smoke
+  scenes/   menu, select, play, smoke
 data/       entities.json, weapons.json   -- content, not code
-levels/     stage1..4.json, campaign.json
+levels/     stage1..20.json, campaign.json
 tools/      art generator, level builder, headless screenshots
 ```
 
@@ -207,27 +245,53 @@ then add `"brute"` to `SPRITE_ORDER` in `config.py` and a painter for it in
 `tools/gen_art.py`, and regenerate. `tests/test_atlas.py` fails if the data and
 the art disagree about which sprites exist.
 
-Brains are code, not data — `game/ai.py` has three, each about twenty lines. A
-new one is a new `case` in `decide` plus a name in the JSON.
+Brains are code, not data -- `game/ai.py` has four, each about twenty lines. A
+new one is a new `case` in `decide` plus a name in the JSON. Several creatures
+sharing one is normal: the bowman and the mage are both `"archer"`, which names a
+behaviour rather than a creature.
+
+Adding a **class** is the same move with `"faction": "hero"`, `"brain":
+"player"`, dodge fields and a `heal_between_stages`. There is no second place to
+register it -- the character select reads `bestiary.hero_classes`, which is
+whatever the faction says, in file order.
+
+Adding a **boss** has one trap worth knowing. The boss brain is positional:
+`weapons[0]` is the sweep it uses up close, `weapons[1]` is the charge it uses at
+mid range, `weapons[2]` is what it shoots. Declare them in any other order and it
+will telegraph one attack and land another. `tests/test_entities.py` pins that,
+along with the `sprite_scale: 2` that `render/hud.py` uses to decide what gets a
+boss health bar.
 
 ## Tools
 
 ```sh
 python tools/gen_art.py                          # rebuild assets/sprites.png
-python tools/make_level.py                       # rebuild the four stages
-python tools/balance.py                          # where the fight sits
-python tools/screenshot.py play out.png          # render a scene headlessly
-python tools/screenshot.py play out.png --stage 4 --ticks 240   # ...mid-fight
+python tools/make_level.py                       # rebuild the twenty stages
+python tools/balance.py                          # where the fight sits, reference class
+python tools/balance.py --class all --seeds 8    # ...every class
+python tools/screenshot.py select out.png        # render a scene headlessly
+python tools/screenshot.py play out.png --stage 20 --class priest --ticks 240
 ```
 
 ## Known limits
 
-- **No progression beyond health.** No upgrades, no loot, no build. A run is four
-  fights and what you have left; picking an upgrade between stages is the obvious
-  next thing and is deliberately not started.
-- **No level editor.** `tools/make_level.py` describes each stage as a border
-  plus a list of pillar rectangles and writes the JSON. An editor is roughly half
-  a project on its own; a short script is the honest trade for four stages.
+- **No progression beyond health.** No upgrades, no loot, no build. You pick a
+  class and that is the whole of character building; a run is twenty fights and
+  what you have left. This one is load-bearing rather than incidental: because the
+  hero never gets stronger, health on a later boss buys fight *length* and nothing
+  else, so the act bosses are not much tougher than the first and take their
+  difficulty from reach, cadence and arena instead. Both later bosses were drafted
+  far tankier and were unwinnable on every seed.
+- **No level editor.** `tools/make_level.py` describes each stage as a border plus
+  a list of pillar rectangles and writes the JSON. An editor is roughly half a
+  project on its own; a short script is still the honest trade at twenty stages,
+  though it is nearer the line than it was at four.
+- **Ranged escorts do not work on a boss stage.** A bowman never becomes the
+  nearest thing in the room, so it is never what you are fighting, so it never
+  dies -- a damage tax for the length of the fight with no answer available. The
+  act III boss stage was drafted with two of them and was unwinnable on every
+  seed. Every boss stage is escorted by melee now, which is a standing constraint
+  on level design rather than a bug that got fixed.
 - **Placeholder art.** Generated shapes, not drawn sprites. Replace
   `assets/sprites.png` with a PNG of the same cell layout to swap in real art.
 - **Nothing paths around walls.** Enemies walk straight at you, so a pillar will
@@ -249,10 +313,19 @@ python tools/screenshot.py play out.png --stage 4 --ticks 240   # ...mid-fight
   have perfect information and only the crudest sense of pillars, so that says
   more about them than about the roll — but it is the claim in this README most
   likely to be overturned by hands on a keyboard.
-- **The boss has one phase change and no second moveset.** Below half health it
-  stops pausing between attacks. Deliberate — nothing new to learn at the moment
-  you can least afford to — but it does mean the fight has no surprise in it once
-  you have read the three attacks.
+- **The bosses have one phase change and no second moveset.** Below half health
+  each stops pausing between attacks. Deliberate -- nothing new to learn at the
+  moment you can least afford to -- but it does mean a fight holds no surprise once
+  you have read the three attacks, and all four bosses share the shape.
+- **The enrage threshold is a fraction, so boss health barely affects
+  difficulty.** Halving a boss's HP does not halve the damage it deals you: it
+  spends the same *proportion* of a shorter fight enraged. Both later bosses were
+  tuned by damage in the end, after health changes moved the win rate by nothing
+  at all.
+- **Five classes, one campaign.** Every stage is tuned against the Knight and only
+  checked against the other four. They are not balanced against *each other* --
+  the Rogue and the Archer take about 17% of their health on a median stage where
+  the Knight takes 28%, and no attempt has been made to close that.
 - **The charger commits absolutely.** Once it dashes it cannot stop, including
   into a wall. That is the point, but it does mean a clever player can farm it
   against pillars.

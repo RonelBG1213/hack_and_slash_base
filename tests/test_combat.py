@@ -20,9 +20,12 @@ from hack_and_slash.game.entities import ActionState
 from hack_and_slash.game.events import EventKind
 from hack_and_slash.game.sim import step
 
-from .helpers import BESTIARY, add_enemy, enemies_idle, make_world, run
+from .helpers import BESTIARY, HERO, add_enemy, enemies_idle, make_world, run
 
-SWORD = BESTIARY.weapons["sword"]
+#: Whatever the reference class swings. Read off the class rather than
+#: named directly, so these tests follow the Knight if its weapon changes
+#: -- they are about the swing state machine, not about one weapon's stats.
+SWORD = HERO.weapon
 RIGHT = Vec2(1, 0)
 SEED = 4242
 

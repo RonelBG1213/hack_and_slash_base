@@ -1,42 +1,167 @@
 {
   "_comment": [
     "Speeds are pixels per simulation tick; multiply by 60 for pixels per second.",
-    "A tile is 16 pixels, so the hero's 1.7 is about six and a half tiles a second.",
+    "A tile is 16 pixels, so 1.7 is about six and a half tiles a second.",
     "",
-    "Every enemy is slower than the hero. That is the deal the whole fight rests",
-    "on: you can always disengage, so getting hit is a decision you made rather",
-    "than something the arena did to you.",
+    "Every enemy is slower than every class. That is the deal the whole fight",
+    "rests on: you can always disengage, so getting hit is a decision you made",
+    "rather than something the arena did to you. The binding number is the",
+    "Knight's 1.45 -- the slowest thing the player can be -- so nothing hostile",
+    "may exceed it, and a test enforces that against the slowest class rather",
+    "than against an average.",
     "",
     "aggro is in pixels -- how far an enemy notices you from."
   ],
 
-  "hero": {
-    "name": "Hero",
+  "_class_comment": [
+    "The five playable classes, in the order the character select shows them.",
+    "Anything with faction 'hero' is offered to the player, so this list is the",
+    "roster -- there is no second place to register a class.",
+    "",
+    "They are separated by what they ask of you, not by a power level:",
+    "  Knight    -- can you afford to commit? Slowest, toughest, hits hardest.",
+    "  Rogue     -- can you stay in? Fragile, fastest, no swing costs anything.",
+    "  Archer    -- can you keep the room between you? Ranged, average at all else.",
+    "  Magician  -- can you find the gap? Long commitment, biggest single hit.",
+    "  Priest    -- can you last? Middling everywhere, recovers twice as much.",
+    "",
+    "heal_between_stages is the class's own dial, not a global one, and every",
+    "one of the five was measured separately rather than scaled from a single",
+    "number. Scaling was tried first and does not work: what a class needs back",
+    "between stages depends on how much damage it takes to clear one, and that",
+    "varies by more than its health pool does. On a median stage the Rogue and",
+    "the Archer spend about 17% of their bar, the Knight 27%, the Priest 30% --",
+    "so the Priest needs the largest heal as a fraction and the Rogue one of the",
+    "smallest, which is the opposite of what the health pools suggest.",
+    "",
+    "That is also where the Priest's identity lives. Sixty-two of ninety-five is",
+    "two thirds of the bar back after every stage; nobody else clears half. It",
+    "is a run-level answer to a run-level problem, which is why the class looks",
+    "so ordinary on any single stage.",
+    "",
+    "Rerun tools/balance.py --class all after touching any of these. They are",
+    "measured numbers and they do not survive being guessed at."
+  ],
+
+  "knight": {
+    "name": "Knight",
     "faction": "hero",
-    "sprite": "hero",
-    "hp": 100,
-    "speed": 1.7,
-    "radius": 5.0,
-    "weapon": "sword",
+    "sprite": "knight",
+    "hp": 130,
+    "speed": 1.45,
+    "radius": 5.5,
+    "weapon": "greatsword",
     "brain": "player",
-    "dodge_speed": 4.2,
+    "dodge_speed": 3.6,
+    "dodge_ticks": 12,
+    "iframe_ticks": 8,
+    "dodge_cooldown": 38,
+    "heal_between_stages": 56,
+    "_comment": [
+      "The reference class -- the one the campaign is measured against, and the",
+      "default everywhere a class is not named. Most health, most damage, worst",
+      "mobility: the slowest roll on the longest cooldown, so disengaging is a",
+      "thing the Knight plans rather than a thing it does."
+    ]
+  },
+
+  "rogue": {
+    "name": "Rogue",
+    "faction": "hero",
+    "sprite": "rogue",
+    "hp": 80,
+    "speed": 1.95,
+    "radius": 4.5,
+    "weapon": "dagger",
+    "brain": "player",
+    "dodge_speed": 5.0,
+    "dodge_ticks": 10,
+    "iframe_ticks": 8,
+    "dodge_cooldown": 22,
+    "heal_between_stages": 38,
+    "_comment": [
+      "Fastest body and fastest roll on the shortest cooldown. Eighty health is",
+      "about three hits from an act boss, so the mobility is not a luxury -- it",
+      "is the only defence the class has."
+    ]
+  },
+
+  "archer": {
+    "name": "Archer",
+    "faction": "hero",
+    "sprite": "archer",
+    "hp": 85,
+    "speed": 1.70,
+    "radius": 5.0,
+    "weapon": "shortbow",
+    "brain": "player",
+    "dodge_speed": 4.4,
+    "dodge_ticks": 11,
+    "iframe_ticks": 9,
+    "dodge_cooldown": 28,
+    "heal_between_stages": 30,
+    "_comment": [
+      "Fights at the range the enemy archers want to, and wins that trade -- a",
+      "faster arrow and a much shorter windup. The catch is that a shot spends",
+      "itself on the first thing it touches, so the pillars that keep bowmen off",
+      "you also eat your damage, and a room full of rats closes the distance the",
+      "whole class depends on."
+    ]
+  },
+
+  "magician": {
+    "name": "Magician",
+    "faction": "hero",
+    "sprite": "magician",
+    "hp": 105,
+    "speed": 1.60,
+    "radius": 5.0,
+    "weapon": "arcane_bolt",
+    "brain": "player",
+    "dodge_speed": 4.6,
+    "dodge_ticks": 12,
+    "iframe_ticks": 10,
+    "dodge_cooldown": 32,
+    "heal_between_stages": 46,
+    "_comment": [
+      "The longest commitment of any class, on a body that cannot afford it.",
+      "Thirty-one ticks per bolt means every shot is a decision about the next",
+      "half second. Started at 75 health and lost six stages of the campaign",
+      "outright -- a class that commits for that long needs to survive being",
+      "wrong about it. The longest iframes in the game for the same reason."
+    ]
+  },
+
+  "priest": {
+    "name": "Priest",
+    "faction": "hero",
+    "sprite": "priest",
+    "hp": 95,
+    "speed": 1.55,
+    "radius": 5.0,
+    "weapon": "censer",
+    "brain": "player",
+    "dodge_speed": 4.0,
     "dodge_ticks": 11,
     "iframe_ticks": 9,
     "dodge_cooldown": 30,
-
-    "_heal": [
-      "Health recovered on clearing a stage. Damage carries between stages, so",
-      "this is the dial deciding whether that is tense or punishing: at 0 a",
-      "single bad stage ends the run three stages later, at 100 stages stop",
-      "adding up to anything.",
-      "",
-      "22 is the tightest value that still clears every seed with a skilled",
-      "hero -- measured, not guessed. At 15 the floor breaks (7/8 runs), and at",
-      "30 the worst run still finishes on 74hp, which is not a run that was ever",
-      "in danger. Rerun tools/balance.py after changing it."
-    ],
-    "heal_between_stages": 22
+    "heal_between_stages": 62,
+    "_comment": [
+      "Unremarkable in a fight and hard to finish off across a campaign. Forty",
+      "health back between stages is more than twice anyone else, which makes a",
+      "badly cleared stage recoverable rather than a debt carried into the next",
+      "act. The class is a run-level answer to a run-level problem, which is why",
+      "it looks so ordinary on any single stage."
+    ]
   },
+
+  "_enemy_comment": [
+    "Anything with faction 'enemy'. Brains are code (game/ai.py), not data --",
+    "'chaser', 'charger', 'archer' and 'boss' are the four that exist, and two",
+    "different creatures sharing one is normal. The 'archer' brain in particular",
+    "describes a behaviour (keep your distance, need line of sight) rather than",
+    "a creature: both the bowman and the mage use it."
+  ],
 
   "grunt": {
     "name": "Grunt",
@@ -49,6 +174,27 @@
     "brain": "chaser",
     "aggro": 220,
     "_comment": "Straightforward pressure. Walks at you, swings when close."
+  },
+
+  "rat": {
+    "name": "Rat",
+    "faction": "enemy",
+    "sprite": "rat",
+    "hp": 8,
+    "speed": 1.35,
+    "radius": 3.5,
+    "weapon": "bite",
+    "brain": "chaser",
+    "aggro": 260,
+    "_comment": [
+      "Dies to one hit from anything and is barely slower than you, so it cannot",
+      "be outrun the way a grunt can -- it has to be dealt with. Individually",
+      "trivial and collectively the reason the second act is about crowd control",
+      "rather than about any one enemy.",
+      "",
+      "Also the honest test of a ranged class: a rat closes the distance an",
+      "Archer or Magician is built around, and there are always more of them."
+    ]
   },
 
   "charger": {
@@ -68,10 +214,29 @@
     ]
   },
 
-  "archer": {
-    "name": "Archer",
+  "brute": {
+    "name": "Brute",
     "faction": "enemy",
-    "sprite": "archer",
+    "sprite": "brute",
+    "hp": 55,
+    "speed": 0.60,
+    "radius": 8.0,
+    "weapon": "maul",
+    "brain": "chaser",
+    "aggro": 240,
+    "_comment": [
+      "The slowest thing in the game that is not a boss, and the hardest hitting",
+      "thing that is not one either. Alone it is free damage -- you can walk away",
+      "from it indefinitely. The point of a brute is that it makes every other",
+      "enemy in the room more dangerous, because none of them let you spend the",
+      "time it takes to kill it."
+    ]
+  },
+
+  "bowman": {
+    "name": "Bowman",
+    "faction": "enemy",
+    "sprite": "bowman",
     "hp": 14,
     "speed": 0.95,
     "radius": 5.0,
@@ -82,6 +247,57 @@
     "retreat_range": 80,
     "_comment": "Punishes standing still in the open. Backs away when you close."
   },
+
+  "mage": {
+    "name": "Mage",
+    "faction": "enemy",
+    "sprite": "mage",
+    "hp": 16,
+    "speed": 0.85,
+    "radius": 5.0,
+    "weapon": "hex_bolt",
+    "brain": "archer",
+    "aggro": 340,
+    "preferred_range": 165,
+    "retreat_range": 95,
+    "_comment": [
+      "A bowman that stands further back and hurts much more. The hex is slow",
+      "enough to walk out of, so it costs you position rather than health -- and",
+      "position is what the third act keeps asking for."
+    ]
+  },
+
+  "_boss_comment": [
+    "One boss ends each act: stages 5, 10, 15 and 20.",
+    "",
+    "All four share the 'boss' brain, which is positional about its weapons --",
+    "weapons[0] is the sweep it uses up close, weapons[1] is the charge it uses",
+    "at mid range, weapons[2] is what it shoots from far away. Declare them in",
+    "any other order and it will telegraph one attack and land another. A test",
+    "enforces the ordering.",
+    "",
+    "sprite_scale 2 is not decoration: render/hud.py decides what gets a boss",
+    "health bar by looking for it. A boss without it fights normally and shows",
+    "no bar.",
+    "",
+    "Below half health every one of them stops pausing between attacks (see",
+    "game/ai.py). That is the whole phase system -- no new moves to learn at the",
+    "moment you are least able to learn them, just less room to breathe.",
+    "",
+    "**On why the later bosses are not much tougher than the first.** There is",
+    "no progression in this game: the Knight that fights the Sovereign on stage",
+    "20 swings exactly the greatsword it had on stage 1. So health on a boss buys",
+    "fight *length* and nothing else -- and a fight twice as long against the same",
+    "moveset is not twice as interesting, it is the same fight with more chances",
+    "to make the one mistake that ends it.",
+    "",
+    "This was measured rather than reasoned about. The Effigy started at 240 and",
+    "the Sovereign at 280, and both were unwinnable on every seed: not close,",
+    "not a tuning pass away -- the hero simply ran out of health partway down the",
+    "bar. What makes each of these harder than the Warden is the cadence, the",
+    "reach and the size of the arena, which is where a later boss should be",
+    "getting its difficulty from anyway."
+  ],
 
   "boss": {
     "name": "The Warden",
@@ -98,16 +314,82 @@
     "preferred_range": 130,
     "retreat_range": 55,
     "_comment": [
-      "Slower than anything else in the game and much harder to kill, so the",
-      "fight lasts long enough for its three attacks to become a pattern you",
-      "read rather than three things that happen to you.",
+      "End of act one, and the fight that teaches the pattern the other three",
+      "vary. Slower than anything else and much harder to kill, so it lasts long",
+      "enough for its three attacks to become something you read rather than",
+      "three things that happen to you.",
       "",
       "aggro covers the whole arena -- there is no sneaking up on it, and no",
-      "corner it forgets about you in.",
+      "corner it forgets about you in."
+    ]
+  },
+
+  "houndmaster": {
+    "name": "The Houndmaster",
+    "faction": "enemy",
+    "sprite": "houndmaster",
+    "sprite_scale": 2,
+    "hp": 130,
+    "speed": 0.95,
+    "radius": 10.0,
+    "weapons": ["hound_lash", "hound_lunge", "hound_spray"],
+    "brain": "boss",
+    "aggro": 500,
+    "charge_range": 210,
+    "preferred_range": 140,
+    "retreat_range": 60,
+    "_comment": [
+      "End of act two. Less health than the Warden and half again its speed --",
+      "the same three questions asked in a hurry. It closes the distance a ranged",
+      "class wants, and the shorter telegraphs mean the answers you learned on",
+      "stage five have to come faster rather than differently."
+    ]
+  },
+
+  "effigy": {
+    "name": "The Effigy",
+    "faction": "enemy",
+    "sprite": "effigy",
+    "sprite_scale": 2,
+    "hp": 150,
+    "speed": 0.45,
+    "radius": 12.0,
+    "weapons": ["effigy_swing", "effigy_topple", "effigy_embers"],
+    "brain": "boss",
+    "aggro": 600,
+    "charge_range": 190,
+    "preferred_range": 150,
+    "retreat_range": 50,
+    "_comment": [
+      "End of act three, and the opposite reading of the Warden: slower than",
+      "anything in the game, with the longest tells and the largest numbers.",
+      "Nothing it does is hard to see coming. The fight is long enough that the",
+      "question is whether you can keep answering correctly for two minutes, not",
+      "whether you can answer at all."
+    ]
+  },
+
+  "sovereign": {
+    "name": "The Sovereign",
+    "faction": "enemy",
+    "sprite": "sovereign",
+    "sprite_scale": 2,
+    "hp": 190,
+    "speed": 0.78,
+    "radius": 11.5,
+    "weapons": ["sovereign_arc", "sovereign_lance", "sovereign_rain"],
+    "brain": "boss",
+    "aggro": 700,
+    "charge_range": 230,
+    "preferred_range": 150,
+    "retreat_range": 55,
+    "_comment": [
+      "The last fight. Deliberately nothing new -- the same three attacks in the",
+      "same three positions the Warden used fifteen stages earlier, with every",
+      "number raised and none of the room. Everything the player learned still",
+      "applies, which is the point of ending on it rather than on a fourth idea.",
       "",
-      "Below half health it stops pausing between attacks (see game/ai.py). That",
-      "is the whole phase system: no new moves to learn at the moment you are",
-      "least able to learn them, just less room to breathe."
+      "aggro of 700 covers any arena it could be placed in."
     ]
   }
 }

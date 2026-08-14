@@ -23,8 +23,9 @@ from hack_and_slash.render.renderer import Renderer
 from hack_and_slash.scenes import smoke
 from hack_and_slash.scenes.menu import MenuScene
 from hack_and_slash.scenes.play import PlayScene
+from hack_and_slash.scenes.select import CharacterSelectScene
 
-from .helpers import BESTIARY, add_enemy, make_world
+from .helpers import BESTIARY, HERO, add_enemy, make_world
 
 
 @pytest.fixture(scope="module")
@@ -126,9 +127,63 @@ def test_restarting_gives_a_fresh_world(atlas) -> None:
     scene.world.hero.hp = 5
     restarted = scene.restarted()
 
-    assert restarted.world.hero.hp == BESTIARY["hero"].hp
+    assert restarted.world.hero.hp == HERO.hp
     assert restarted.world.tick == 0
     assert restarted.seed == 3, "a restart must replay the same run, not a new one"
+
+
+def test_restarting_keeps_the_class_you_picked(atlas) -> None:
+    """R is 'try that again', not 'go back to the character select'.
+
+    Worth its own test because the failure is quiet: the run restarts, it just
+    restarts as somebody else, and the default is a real class so nothing looks
+    broken until the player notices they are holding a different weapon.
+    """
+    scene = PlayScene(campaign(), BESTIARY, atlas, hero_type_id="priest")
+    restarted = scene.restarted()
+
+    assert restarted.hero_type_id == "priest"
+    assert restarted.world.hero.type.id == "priest"
+
+
+# --- the character select ----------------------------------------------------
+def test_the_character_select_draws_every_class(atlas) -> None:
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    scene = CharacterSelectScene(campaign(), BESTIARY, atlas)
+
+    # Each one in turn, because a class whose sprite is missing from the atlas
+    # raises only when it is the highlighted one being drawn at full brightness.
+    for index in range(len(BESTIARY.hero_classes)):
+        scene.index = index
+        scene.draw(surface)
+        assert not is_blank(surface)
+
+
+def test_choosing_a_class_starts_the_run_as_that_class(atlas) -> None:
+    """The one thing this screen exists to do.
+
+    Reaching into `_begin` rather than synthesising a keypress: the binding is
+    trivial and the handover is not, and it is the handover that would silently
+    drop the choice and start everyone as the default.
+    """
+    scene = CharacterSelectScene(campaign(), BESTIARY, atlas, seed=9)
+    scene.index = [c.id for c in BESTIARY.hero_classes].index("magician")
+
+    play = scene._begin()
+    assert play.hero_type_id == "magician"
+    assert play.world.hero.type.id == "magician"
+    assert play.world.hero.hp == BESTIARY["magician"].hp
+    assert play.seed == 9, "the run must carry the seed through the select screen"
+
+
+def test_the_roster_wraps_at_both_ends(atlas) -> None:
+    scene = CharacterSelectScene(campaign(), BESTIARY, atlas)
+    last = len(BESTIARY.hero_classes) - 1
+
+    scene._move(-1)
+    assert scene.index == last, "moving left off the start should wrap to the end"
+    scene._move(1)
+    assert scene.index == 0
 
 
 # --- the renderer directly ---------------------------------------------------

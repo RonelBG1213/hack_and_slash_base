@@ -23,7 +23,7 @@ def fight(seed: int, effects: Effects | None):
     """Run the same scripted fight, optionally draining events into Effects."""
     world = make_world(seed=seed)
     add_enemy(world, "grunt", world.hero.pos + Vec2(30, 0))
-    add_enemy(world, "archer", world.hero.pos + Vec2(-90, 40))
+    add_enemy(world, "bowman", world.hero.pos + Vec2(-90, 40))
 
     press = intents.Intent(move=RIGHT, aim=RIGHT, attack=True)
     for tick in range(300):

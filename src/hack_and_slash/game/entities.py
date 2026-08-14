@@ -21,6 +21,13 @@ from pathlib import Path
 
 from ..core.vec2 import ZERO, Vec2
 
+#: The class played when nobody has chosen one -- tests, tools, and every
+#: `World` or `Run` built without naming a class. The Knight rather than an
+#: average of the five, because a reference has to be a real thing the player
+#: can pick: the campaign is measured against it, and a number tuned against a
+#: hero nobody plays is a number tuned against nothing.
+DEFAULT_HERO = "knight"
+
 
 class Faction(str, Enum):
     HERO = "hero"
@@ -204,6 +211,20 @@ class Bestiary:
 
     weapons: dict[str, Weapon]
     types: dict[str, EntityType]
+
+    @property
+    def hero_classes(self) -> tuple[EntityType, ...]:
+        """The roster the player chooses from, in the order the data listed it.
+
+        Derived from the faction rather than from a separate list, so adding a
+        class is one entry in `entities.json` and nothing else -- there is no
+        second place to register it and therefore no way for the two to drift.
+
+        Order matters: it is the order the character select shows, so it comes
+        from the file rather than from sorting, and rearranging the roster is
+        done by rearranging the JSON.
+        """
+        return tuple(t for t in self.types.values() if t.faction is Faction.HERO)
 
     def __getitem__(self, type_id: str) -> EntityType:
         try:

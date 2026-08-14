@@ -78,17 +78,79 @@ def _body(
     return rect
 
 
-def paint_hero(surface: pygame.Surface) -> None:
-    rect = _body(surface, (86, 148, 202), (38, 74, 112), (150, 200, 236), 10, 12)
-    # Two eyes, so the front of the sprite is obvious at 1x.
-    surface.set_at((rect.centerx - 2, rect.centery), (240, 244, 250))
-    surface.set_at((rect.centerx + 2, rect.centery), (240, 244, 250))
+def _eyes(
+    surface: pygame.Surface, rect: pygame.Rect, colour: tuple[int, int, int], gap: int = 2
+) -> None:
+    """Two pixels, so the front of a sprite is obvious at 1x."""
+    surface.set_at((rect.centerx - gap, rect.centery), colour)
+    surface.set_at((rect.centerx + gap, rect.centery), colour)
 
 
+# --- the roster --------------------------------------------------------------
+# Five bodies that have to be told apart instantly on a character select screen
+# *and* at 1x in a crowded arena. Colour does most of that work, so each class
+# owns a hue nothing else in the game uses: the enemies are green, red and
+# purple, and the classes take blue, teal, tan, violet and white.
+def paint_knight(surface: pygame.Surface) -> None:
+    # The old hero's blue, kept deliberately -- the Knight is the reference
+    # class and the campaign's recorded numbers were measured on this body.
+    rect = _body(surface, (86, 148, 202), (38, 74, 112), (150, 200, 236), 11, 13)
+    # A helmet band across the eyes: the widest, most armoured silhouette.
+    pygame.draw.rect(surface, (208, 216, 228), (rect.x, rect.centery - 2, rect.width, 4))
+    _eyes(surface, rect, (38, 60, 88))
+
+
+def paint_rogue(surface: pygame.Surface) -> None:
+    # Narrowest body in the game. Reads as quick before anything moves.
+    rect = _body(surface, (72, 176, 154), (28, 84, 74), (132, 216, 198), 8, 11)
+    # A low hood, drawn down over the brow.
+    pygame.draw.rect(surface, (34, 96, 86), (rect.x, rect.y - 1, rect.width, 3))
+    _eyes(surface, rect, (240, 250, 246), gap=1)
+
+
+def paint_archer(surface: pygame.Surface) -> None:
+    rect = _body(surface, (198, 166, 106), (104, 84, 46), (232, 210, 158), 9, 12)
+    # The bow itself, down one side -- the only class whose weapon is visible on
+    # the sprite, because "this one shoots" is the thing worth saying at a glance.
+    pygame.draw.rect(surface, (120, 88, 52), (rect.right, rect.y + 1, 1, rect.height - 2))
+    surface.set_at((rect.right + 1, rect.y + 2), (120, 88, 52))
+    surface.set_at((rect.right + 1, rect.bottom - 3), (120, 88, 52))
+    _eyes(surface, rect, (48, 38, 24))
+
+
+def paint_magician(surface: pygame.Surface) -> None:
+    rect = _body(surface, (138, 118, 216), (62, 52, 116), (186, 172, 240), 9, 11)
+    # A pointed hat, two tiers, so the tallest silhouette belongs to the
+    # squishiest thing on the screen.
+    pygame.draw.rect(surface, (86, 72, 156), (rect.x + 1, rect.y - 2, rect.width - 2, 2))
+    pygame.draw.rect(surface, (86, 72, 156), (rect.centerx - 1, rect.y - 4, 2, 2))
+    _eyes(surface, rect, (250, 246, 200), gap=1)
+
+
+def paint_priest(surface: pygame.Surface) -> None:
+    rect = _body(surface, (226, 224, 214), (128, 124, 116), (248, 248, 242), 10, 12)
+    # A gold band and a chest mark. Bright, because the Priest is the class you
+    # pick to still be alive in twenty stages and it may as well look like it.
+    pygame.draw.rect(surface, (216, 168, 74), (rect.x, rect.y + 2, rect.width, 2))
+    pygame.draw.rect(surface, (216, 168, 74), (rect.centerx - 1, rect.centery + 2, 2, 3))
+    _eyes(surface, rect, (96, 92, 84))
+
+
+# --- what it fights ----------------------------------------------------------
 def paint_grunt(surface: pygame.Surface) -> None:
     rect = _body(surface, (126, 168, 96), (58, 84, 44), (168, 204, 136), 9, 11)
-    surface.set_at((rect.centerx - 2, rect.centery), (28, 32, 26))
-    surface.set_at((rect.centerx + 2, rect.centery), (28, 32, 26))
+    _eyes(surface, rect, (28, 32, 26))
+
+
+def paint_rat(surface: pygame.Surface) -> None:
+    # The smallest body in the game, and it has to read as small -- a rat that
+    # looks like a grunt is a grunt that dies in one hit, which teaches the
+    # player the wrong thing about both.
+    rect = _body(surface, (132, 120, 112), (64, 58, 54), (172, 160, 150), 6, 7)
+    # Ears.
+    surface.set_at((rect.x, rect.y - 1), (172, 160, 150))
+    surface.set_at((rect.right - 1, rect.y - 1), (172, 160, 150))
+    _eyes(surface, rect, (232, 108, 100), gap=1)
 
 
 def paint_charger(surface: pygame.Surface) -> None:
@@ -102,18 +164,42 @@ def paint_charger(surface: pygame.Surface) -> None:
     surface.set_at((rect.centerx + 3, rect.centery + 1), (250, 240, 120))
 
 
-def paint_archer(surface: pygame.Surface) -> None:
+def paint_brute(surface: pygame.Surface) -> None:
+    # Fills the cell like a boss does, without the boss's 2x scale -- the
+    # biggest ordinary enemy in the game and the one you cannot afford to stand
+    # next to. Dark and muddy so it does not read as the bright red charger.
+    rect = _body(surface, (146, 82, 62), (72, 38, 28), (186, 118, 90), 14, 13)
+    # Heavy shoulders.
+    pygame.draw.rect(surface, (72, 38, 28), (rect.x - 1, rect.y + 2, 2, 4))
+    pygame.draw.rect(surface, (72, 38, 28), (rect.right - 1, rect.y + 2, 2, 4))
+    _eyes(surface, rect, (250, 214, 120), gap=3)
+
+
+def paint_bowman(surface: pygame.Surface) -> None:
+    # Was 'archer' until the player got a class by that name. Same sprite -- the
+    # enemy did not change, only what it is called.
     rect = _body(surface, (156, 118, 196), (78, 56, 104), (198, 168, 226), 8, 11)
     # A hood, to separate it from the grunt at a glance.
     pygame.draw.rect(surface, (98, 72, 132), (rect.x, rect.y - 1, rect.width, 4))
-    surface.set_at((rect.centerx - 1, rect.centery + 1), (250, 244, 200))
-    surface.set_at((rect.centerx + 1, rect.centery + 1), (250, 244, 200))
+    _eyes(surface, rect, (250, 244, 200), gap=1)
 
 
+def paint_mage(surface: pygame.Surface) -> None:
+    # A bowman that stands further back, so: the same purple, darker and colder,
+    # with the hex it is about to throw held in front of it.
+    rect = _body(surface, (108, 84, 164), (52, 40, 84), (150, 126, 208), 8, 11)
+    pygame.draw.rect(surface, (52, 40, 84), (rect.x, rect.y - 1, rect.width, 4))
+    pygame.draw.rect(surface, (168, 244, 232), (rect.centerx - 1, rect.bottom - 2, 2, 2))
+    _eyes(surface, rect, (168, 244, 232), gap=1)
+
+
+# --- one at the end of each act ----------------------------------------------
+# All four fill their cell: the renderer draws them at 2x, and anything with a
+# margin would float inside a 32px footprint. Each is a different temperature
+# from the ordinary enemies and from each other, so no boss ever reads as a
+# large version of something already on the screen.
 def paint_boss(surface: pygame.Surface) -> None:
-    # Fills its cell, because the renderer draws it at 2x and anything with a
-    # margin would float inside a 32px footprint. Pale and cold against the warm
-    # red charger, so the two never read as the same threat.
+    # The Warden. Pale and cold against the warm red charger.
     rect = _body(surface, (188, 178, 214), (78, 72, 104), (232, 226, 244), 14, 14)
 
     # A crown of spikes along the top.
@@ -124,6 +210,50 @@ def paint_boss(surface: pygame.Surface) -> None:
     # another grunt even at a glance.
     pygame.draw.rect(surface, (250, 96, 88), (rect.centerx - 4, rect.centery + 1, 2, 2))
     pygame.draw.rect(surface, (250, 96, 88), (rect.centerx + 2, rect.centery + 1, 2, 2))
+
+
+def paint_houndmaster(surface: pygame.Surface) -> None:
+    # The fast one. Hot orange, and the only boss with a narrow waist -- it
+    # should look like it can move, because it can.
+    rect = _body(surface, (222, 138, 62), (112, 62, 24), (250, 190, 118), 13, 14)
+
+    # Two forward-swept horns rather than a crown: aggressive, not regal.
+    pygame.draw.rect(surface, (250, 226, 190), (rect.x + 1, rect.y - 3, 2, 4))
+    pygame.draw.rect(surface, (250, 226, 190), (rect.right - 3, rect.y - 3, 2, 4))
+    pygame.draw.rect(surface, (112, 62, 24), (rect.x + 3, rect.bottom - 4, rect.width - 6, 2))
+
+    pygame.draw.rect(surface, (255, 244, 120), (rect.centerx - 4, rect.centery, 3, 2))
+    pygame.draw.rect(surface, (255, 244, 120), (rect.centerx + 1, rect.centery, 3, 2))
+
+
+def paint_effigy(surface: pygame.Surface) -> None:
+    # The slow one, and the largest. Dead wood and cold green -- nothing else in
+    # the game is that colour, and it should look like it was built rather than
+    # born.
+    rect = _body(surface, (104, 116, 82), (46, 54, 38), (146, 160, 118), 15, 15)
+
+    # A lattice of grain across the body, which is what stops a shape this big
+    # from reading as a flat block at 2x.
+    for y in range(rect.y + 2, rect.bottom - 2, 3):
+        pygame.draw.rect(surface, (72, 82, 58), (rect.x + 1, y, rect.width - 2, 1))
+
+    pygame.draw.rect(surface, (248, 174, 72), (rect.centerx - 5, rect.centery, 3, 3))
+    pygame.draw.rect(surface, (248, 174, 72), (rect.centerx + 2, rect.centery, 3, 3))
+
+
+def paint_sovereign(surface: pygame.Surface) -> None:
+    # The last thing in the game. Gold on white, the brightest sprite in the
+    # atlas, and the only one that uses the accent colour the HUD is drawn in.
+    rect = _body(surface, (238, 232, 214), (146, 128, 78), (252, 250, 240), 15, 15)
+
+    # A full crown, taller in the middle.
+    pygame.draw.rect(surface, (216, 168, 74), (rect.x + 1, rect.y - 2, rect.width - 2, 2))
+    for x in (rect.x + 2, rect.centerx - 1, rect.right - 4):
+        pygame.draw.rect(surface, (216, 168, 74), (x, rect.y - 4, 2, 3))
+
+    pygame.draw.rect(surface, (146, 128, 78), (rect.x + 2, rect.bottom - 4, rect.width - 4, 2))
+    pygame.draw.rect(surface, (198, 60, 54), (rect.centerx - 5, rect.centery, 3, 3))
+    pygame.draw.rect(surface, (198, 60, 54), (rect.centerx + 2, rect.centery, 3, 3))
 
 
 def paint_arrow(surface: pygame.Surface) -> None:
@@ -143,11 +273,21 @@ def paint_shadow(surface: pygame.Surface) -> None:
 PAINTERS = {
     "floor": paint_floor,
     "wall": paint_wall,
-    "hero": paint_hero,
-    "grunt": paint_grunt,
-    "charger": paint_charger,
+    "knight": paint_knight,
+    "rogue": paint_rogue,
     "archer": paint_archer,
+    "magician": paint_magician,
+    "priest": paint_priest,
+    "grunt": paint_grunt,
+    "rat": paint_rat,
+    "charger": paint_charger,
+    "brute": paint_brute,
+    "bowman": paint_bowman,
+    "mage": paint_mage,
     "boss": paint_boss,
+    "houndmaster": paint_houndmaster,
+    "effigy": paint_effigy,
+    "sovereign": paint_sovereign,
     "arrow": paint_arrow,
     "shadow": paint_shadow,
 }

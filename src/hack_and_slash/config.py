@@ -84,14 +84,33 @@ def window_to_internal(px: int, py: int, win_w: int, win_h: int) -> tuple[int, i
 # actually exists without pulling pygame into the logic suite.
 #
 # Adding a sprite means appending here and painting it in tools/gen_art.py.
+#
+# Grouped by what the thing is -- terrain, the five playable classes, the
+# ordinary enemies, the four act bosses, then the two things that are not
+# bodies. The grouping is for whoever reads the PNG; only the order matters to
+# the code, and only because a cell is found by index.
 SPRITE_ORDER = (
     "floor",
     "wall",
-    "hero",
-    "grunt",
-    "charger",
+    # the roster
+    "knight",
+    "rogue",
     "archer",
+    "magician",
+    "priest",
+    # what it fights
+    "grunt",
+    "rat",
+    "charger",
+    "brute",
+    "bowman",
+    "mage",
+    # one at the end of each act
     "boss",
+    "houndmaster",
+    "effigy",
+    "sovereign",
+    # neither of these is a creature
     "arrow",
     "shadow",
 )

@@ -12,18 +12,134 @@
     "means 50 degrees either side of where you are facing."
   ],
 
-  "sword": {
-    "name": "Sword",
-    "damage": 7,
-    "variance": 2,
-    "arc_degrees": 100,
-    "reach": 27,
-    "windup": 5,
-    "active": 4,
-    "recovery": 9,
-    "knockback": 3.4,
-    "hitstop": 4
+  "_hero_comment": [
+    "The five classes' attacks. One rule holds across all of them and is tested:",
+    "every hero windup is shorter than every enemy windup. The player reacts to",
+    "enemies; enemies do not react to the player. That puts a ceiling of 15 ticks",
+    "on anything here, because the quickest enemy tell in the game is the grunt's",
+    "claw at 20.",
+    "",
+    "Within that ceiling the classes are separated by the shape of the swing, not",
+    "by a damage-per-second number: how long you are committed, how much ground",
+    "the swing covers, and whether you have to be next to the thing at all."
+  ],
+
+  "greatsword": {
+    "name": "Greatsword",
+    "damage": 12,
+    "variance": 3,
+    "arc_degrees": 120,
+    "reach": 32,
+    "windup": 9,
+    "active": 5,
+    "recovery": 16,
+    "knockback": 5.2,
+    "hitstop": 6,
+    "_comment": [
+      "The Knight. Longest reach and widest arc of any hero weapon, and the only",
+      "one that reliably hits two things at once -- but a 30-tick cycle means a",
+      "whiff is half a second of standing still, which is a long time with three",
+      "grunts on you. Slow enough to be a decision, fast enough to still be a",
+      "hero weapon."
+    ]
   },
+
+  "dagger": {
+    "name": "Dagger",
+    "damage": 5,
+    "variance": 1,
+    "arc_degrees": 75,
+    "reach": 20,
+    "windup": 4,
+    "active": 3,
+    "recovery": 5,
+    "knockback": 1.8,
+    "hitstop": 3,
+    "_comment": [
+      "The Rogue. A twelve-tick cycle -- the fastest thing in the game by a wide",
+      "margin. Almost no commitment, so a whiff costs nothing, but the narrow arc",
+      "and short reach mean you have to be genuinely in the right place, and the",
+      "low knockback does not buy you the space back afterwards."
+    ]
+  },
+
+  "shortbow": {
+    "name": "Shortbow",
+    "damage": 9,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 8,
+    "active": 1,
+    "recovery": 12,
+    "knockback": 2.0,
+    "hitstop": 3,
+    "projectile": true,
+    "projectile_speed": 4.2,
+    "projectile_radius": 2.5,
+    "projectile_lifetime": 150,
+    "_comment": [
+      "The Archer. Faster in the air than the enemy archer's arrow (2.7), which",
+      "is the whole difference between shooting and being shot at: yours lands",
+      "where you aimed it, theirs can be walked out of.",
+      "",
+      "Note what a projectile costs. reach is 0, so nothing about being next to",
+      "an enemy helps, and a shot spends itself on the first body or wall it",
+      "meets -- a pillared arena that protects you from archers protects them",
+      "from you too."
+    ]
+  },
+
+  "arcane_bolt": {
+    "name": "Arcane Bolt",
+    "damage": 15,
+    "variance": 4,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 12,
+    "active": 1,
+    "recovery": 16,
+    "knockback": 3.6,
+    "hitstop": 5,
+    "projectile": true,
+    "projectile_speed": 3.4,
+    "projectile_radius": 3.5,
+    "projectile_lifetime": 170,
+    "_comment": [
+      "The Magician. The hardest single hit any class has, on the longest hero",
+      "commitment -- 35 ticks, and 14 of them before the bolt exists. Standing",
+      "still for that long is the cost of the damage.",
+      "",
+      "The 14-tick windup is the ceiling for a hero weapon and deliberately sits",
+      "right against it: any slower and a grunt's claw would be the faster tell,",
+      "which would invert the rule the whole fight rests on."
+    ]
+  },
+
+  "censer": {
+    "name": "Censer",
+    "damage": 10,
+    "variance": 2,
+    "arc_degrees": 150,
+    "reach": 26,
+    "windup": 7,
+    "active": 4,
+    "recovery": 12,
+    "knockback": 4.4,
+    "hitstop": 4,
+    "_comment": [
+      "The Priest. Swung on a chain, so the arc is nearly a half-circle -- the",
+      "answer to being surrounded, which is the situation the Priest's middling",
+      "speed keeps walking into. Heavy knockback for the damage: it buys space",
+      "rather than killing things, which is the class in one number."
+    ]
+  },
+
+  "_enemy_comment": [
+    "Enemy attacks. Every windup here is longer than every hero windup, and a",
+    "test enforces it. An enemy that strikes faster than you can start a swing",
+    "is not difficult, it is unfair."
+  ],
 
   "claw": {
     "name": "Claws",
@@ -36,6 +152,26 @@
     "recovery": 22,
     "knockback": 2.2,
     "hitstop": 2
+  },
+
+  "bite": {
+    "name": "Bite",
+    "damage": 4,
+    "variance": 1,
+    "arc_degrees": 70,
+    "reach": 15,
+    "windup": 16,
+    "active": 2,
+    "recovery": 13,
+    "knockback": 1.4,
+    "hitstop": 1,
+    "_comment": [
+      "The rat. The shortest tell in the game and the smallest hit -- one is",
+      "barely worth reacting to, which is the point: they arrive in numbers, and",
+      "the threat is arithmetic rather than any single bite. Still 16 ticks, so",
+      "the rule that enemies are slower to start than the hero survives even",
+      "against the Magician's 14."
+    ]
   },
 
   "gore": {
@@ -57,6 +193,25 @@
     ]
   },
 
+  "maul": {
+    "name": "Maul",
+    "damage": 16,
+    "variance": 3,
+    "arc_degrees": 130,
+    "reach": 26,
+    "windup": 34,
+    "active": 4,
+    "recovery": 30,
+    "knockback": 6.2,
+    "hitstop": 6,
+    "_comment": [
+      "The brute. Hits harder than anything short of a boss and telegraphs for",
+      "over half a second, so it is only ever a threat when something else has",
+      "already taken your attention. A brute alone is free damage; a brute behind",
+      "a wall of rats is what the second act is about."
+    ]
+  },
+
   "arrow": {
     "name": "Bow",
     "damage": 8,
@@ -74,15 +229,43 @@
     "projectile_lifetime": 180
   },
 
+  "hex_bolt": {
+    "name": "Hex",
+    "damage": 11,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 30,
+    "active": 1,
+    "recovery": 28,
+    "knockback": 2.0,
+    "hitstop": 3,
+    "projectile": true,
+    "projectile_speed": 2.2,
+    "projectile_radius": 3.0,
+    "projectile_lifetime": 200,
+    "_comment": [
+      "The mage. Slower and fatter than an arrow, and it hurts more. Slow enough",
+      "to walk out of once you have seen it, which makes it a punishment for",
+      "standing still rather than for being at range -- the same question the",
+      "archer asks, at a volume you cannot ignore."
+    ]
+  },
+
   "_boss_comment": [
-    "The boss's three attacks. Each answers a different position, so the fight",
-    "is about where you stand rather than how fast you click:",
+    "Boss attacks, three per boss and positional: the brain in game/ai.py reads",
+    "weapons[0] as the sweep, weapons[1] as the charge and weapons[2] as the",
+    "ranged attack. Declare them in any other order and the boss will telegraph",
+    "one attack and land another. A test enforces the ordering.",
+    "",
+    "Each answers a different position, so a boss fight is about where you stand",
+    "rather than how fast you click:",
     "  sweep  -- punishes standing next to it",
     "  crush  -- punishes standing in a line with it",
     "  volley -- punishes standing still at range",
-    "All three telegraph longer than anything else in the game. A boss that is",
-    "hard because it is fast is just an unfair grunt; this one should be hard",
-    "because it is always asking you to be somewhere else."
+    "All of them telegraph longer than anything else in the game. A boss that is",
+    "hard because it is fast is just an unfair grunt; these should be hard",
+    "because they are always asking you to be somewhere else."
   ],
 
   "boss_sweep": {
@@ -111,7 +294,7 @@
     "knockback": 7.0,
     "hitstop": 7,
     "charge_speed": 3.9,
-    "_comment": "The longest tell in the game, and the hardest hit. Sidestep it."
+    "_comment": "The longest tell in the first act, and the hardest hit. Sidestep it."
   },
 
   "boss_volley": {
@@ -132,5 +315,187 @@
     "projectile_count": 5,
     "spread_degrees": 44,
     "_comment": "A fan, not a bullet -- you go around it rather than sidestep it."
+  },
+
+  "_houndmaster_comment": [
+    "Act II. The Warden taught you to read a long tell; this one asks whether",
+    "you can still do it in a hurry. Every timing is shorter and every number is",
+    "smaller -- the same three questions, asked faster."
+  ],
+
+  "hound_lash": {
+    "name": "Lash",
+    "damage": 12,
+    "variance": 3,
+    "arc_degrees": 170,
+    "reach": 34,
+    "windup": 24,
+    "active": 5,
+    "recovery": 24,
+    "knockback": 5.0,
+    "hitstop": 5
+  },
+
+  "hound_lunge": {
+    "name": "Lunge",
+    "damage": 15,
+    "variance": 3,
+    "arc_degrees": 110,
+    "reach": 26,
+    "windup": 30,
+    "active": 24,
+    "recovery": 26,
+    "knockback": 6.0,
+    "hitstop": 6,
+    "charge_speed": 4.3,
+    "_comment": "Faster than the Warden's crush and shorter to read. Commit early."
+  },
+
+  "hound_spray": {
+    "name": "Spray",
+    "damage": 7,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 26,
+    "active": 1,
+    "recovery": 22,
+    "knockback": 1.8,
+    "hitstop": 3,
+    "projectile": true,
+    "projectile_speed": 3.2,
+    "projectile_radius": 2.5,
+    "projectile_lifetime": 170,
+    "projectile_count": 3,
+    "spread_degrees": 22,
+    "_comment": [
+      "Tight and fast rather than wide and slow. The Warden's volley is walked",
+      "around; this one is put a pillar in front of."
+    ]
+  },
+
+  "_effigy_comment": [
+    "Act III. The opposite reading of the same fight: everything is slower than",
+    "the Warden and everything is bigger. Nothing here is hard to see coming and",
+    "nothing here is survivable twice."
+  ],
+
+  "effigy_swing": {
+    "name": "Swing",
+    "damage": 13,
+    "variance": 4,
+    "arc_degrees": 230,
+    "reach": 46,
+    "windup": 36,
+    "active": 7,
+    "recovery": 34,
+    "knockback": 7.0,
+    "hitstop": 7,
+    "_comment": "Past a half-circle and longer than a pillar is wide. Leave."
+  },
+
+  "effigy_topple": {
+    "name": "Topple",
+    "damage": 15,
+    "variance": 4,
+    "arc_degrees": 140,
+    "reach": 32,
+    "windup": 44,
+    "active": 30,
+    "recovery": 38,
+    "knockback": 8.0,
+    "hitstop": 8,
+    "charge_speed": 3.4,
+    "_comment": [
+      "The longest tell in the game -- three quarters of a second of warning --",
+      "and the hardest hit outside the final fight. Being caught by this is not",
+      "a reaction failure, it is a positioning one."
+    ]
+  },
+
+  "effigy_embers": {
+    "name": "Embers",
+    "damage": 6,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 34,
+    "active": 1,
+    "recovery": 28,
+    "knockback": 1.8,
+    "hitstop": 3,
+    "projectile": true,
+    "projectile_speed": 2.3,
+    "projectile_radius": 3.0,
+    "projectile_lifetime": 210,
+    "projectile_count": 7,
+    "spread_degrees": 70,
+    "_comment": "Slow and everywhere. Cover, not footwork."
+  },
+
+  "_sovereign_comment": [
+    "Act IV. Nothing new to learn -- the same three questions the Warden asked",
+    "on stage five, with none of the room. It is the last fight in the game and",
+    "it is allowed to be the hardest."
+  ],
+
+  "sovereign_arc": {
+    "name": "Arc",
+    "damage": 13,
+    "variance": 3,
+    "arc_degrees": 210,
+    "reach": 44,
+    "windup": 28,
+    "active": 6,
+    "recovery": 28,
+    "knockback": 6.5,
+    "hitstop": 7
+  },
+
+  "sovereign_lance": {
+    "name": "Lance",
+    "damage": 16,
+    "variance": 4,
+    "arc_degrees": 120,
+    "reach": 34,
+    "windup": 36,
+    "active": 28,
+    "recovery": 32,
+    "knockback": 8.0,
+    "hitstop": 8,
+    "charge_speed": 4.1,
+    "_comment": [
+      "Slightly lighter than the Warden's crush, fifteen stages later, on a",
+      "body that moves faster and has more health behind it. The Sovereign is",
+      "not the hardest-hitting thing in the game and was never meant to be:",
+      "its rain is nine shots to the Warden's five, which is half again the",
+      "damage at range, and its reach and speed are greater everywhere else.",
+      "Measured: at 17 it took the final stage to 22 wins in 24, which is a",
+      "capstone that sometimes just kills you."
+    ]
+  },
+
+  "sovereign_rain": {
+    "name": "Rain",
+    "damage": 7,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 30,
+    "active": 1,
+    "recovery": 24,
+    "knockback": 2.0,
+    "hitstop": 3,
+    "projectile": true,
+    "projectile_speed": 2.8,
+    "projectile_radius": 3.0,
+    "projectile_lifetime": 210,
+    "projectile_count": 9,
+    "spread_degrees": 110,
+    "_comment": [
+      "Nine shots across most of a half-circle. There is no standing at range",
+      "against this one -- the answer is a pillar or being close enough that the",
+      "fan has not opened yet, and being close is what the arc is for."
+    ]
   }
 }

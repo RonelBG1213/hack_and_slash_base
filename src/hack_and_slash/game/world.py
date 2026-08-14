@@ -19,7 +19,7 @@ from enum import Enum
 from ..core.level import Level
 from ..core.spatial import SpatialHash
 from ..core.vec2 import Vec2
-from .entities import Bestiary, Entity, Faction, spawn
+from .entities import DEFAULT_HERO, Bestiary, Entity, Faction, spawn
 from .events import Event
 
 
@@ -49,6 +49,7 @@ class World:
         bestiary: Bestiary,
         seed: int = 0,
         carry_hp: int | None = None,
+        hero_type_id: str = DEFAULT_HERO,
     ) -> None:
         """One stage in progress.
 
@@ -56,12 +57,17 @@ class World:
         mechanism between stages. None means a fresh hero at full health, which
         is what a standalone fight and every test that predates the run layer
         expect.
+
+        `hero_type_id` is which class is being played. It defaults, so a world
+        built without an opinion is still a real fight -- which is what keeps
+        every test and tool that predates classes working unchanged.
         """
         self.level = level
         self.bestiary = bestiary
         self.rng = random.Random(seed)
         self.seed = seed
         self.carry_hp = carry_hp
+        self.hero_type_id = hero_type_id
 
         self.tick = 0
         self.outcome = Outcome.RUNNING
@@ -89,7 +95,7 @@ class World:
         return self._next_id
 
     def _populate(self) -> None:
-        hero_type = self.bestiary["hero"]
+        hero_type = self.bestiary[self.hero_type_id]
         hero = spawn(self._take_id(), hero_type, self.level.tile_center(*self.level.hero_spawn))
 
         if self.carry_hp is not None:

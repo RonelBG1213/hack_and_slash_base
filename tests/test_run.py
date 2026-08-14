@@ -13,9 +13,7 @@ from hack_and_slash.game.run import Run, RunOutcome
 from hack_and_slash.game.sim import step
 from hack_and_slash.game.world import Outcome, World
 
-from .helpers import BESTIARY, open_room
-
-HERO = BESTIARY["hero"]
+from .helpers import BESTIARY, HERO, open_room
 
 
 def stage(name: str, enemies=(("grunt", (12, 10)),)) -> Level:

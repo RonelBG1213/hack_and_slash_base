@@ -13,6 +13,8 @@ because the *game* stopped being winnable, which is the thing worth knowing.
 
 from __future__ import annotations
 
+import pytest
+
 from hack_and_slash import config
 from hack_and_slash.core import campaign_io
 from hack_and_slash.core.vec2 import Vec2
@@ -28,52 +30,78 @@ from hack_and_slash.game.run import Run, RunOutcome
 from hack_and_slash.game.sim import step
 from hack_and_slash.game.world import Outcome, World
 
-from .helpers import BESTIARY, open_room
+from hack_and_slash.game.entities import DEFAULT_HERO
+
+from .helpers import BESTIARY, HERO, open_room
 
 #: Generous. A competent hero clears a stage in well under this; the ceiling is
 #: here so one that can no longer reach anything fails the test instead of
 #: hanging the suite.
 TICK_LIMIT = 9000
 
-#: A whole run is four stages, so it needs headroom the single-stage limit does
-#: not. Still a guard, not a target.
-RUN_TICK_LIMIT = 40000
+#: A whole run is twenty stages, so it needs headroom the single-stage limit
+#: does not. Still a guard, not a target -- a healthy run finishes in well under
+#: half of it, and the value exists so a run that has stopped being winnable
+#: fails the suite instead of hanging it.
+RUN_TICK_LIMIT = 120000
 
 #: Enough seeds that a bracket assertion is about the balance rather than about
 #: one lucky fight. The sim is deterministic, so each is a fixed outcome.
 SEEDS = range(6)
 
+#: Fewer, for the four classes that are not the reference. The per-stage sweep
+#: costs twenty stages times the seed count times a class, and the full matrix
+#: is a minute of wall time that nobody wants on every save. Three seeds still
+#: catches a class that is broken; `tools/balance.py --class all` is where the
+#: full matrix lives when the question is tuning rather than regression.
+CLASS_SEEDS = range(3)
+
 #: The stage the game was originally tuned around, and the only one whose
-#: numbers are on record. Index 2 -- "The Gauntlet".
+#: numbers are on record. Index 2 -- "The Gauntlet". Deliberately unmoved by the
+#: expansion to twenty stages: it is the single fixed point the balance harness
+#: can be checked against, and it is only worth anything if it stays put.
 RECORDED_STAGE = 2
+
+#: Bosses close acts. Zero-based indices, so stages 5, 10, 15 and 20.
+BOSS_STAGES = (4, 9, 14, 19)
+
+
+#: Read once. Twenty stages off the disk, on every one of several hundred calls,
+#: was the slowest thing in the suite by a wide margin -- and the campaign is
+#: immutable, so there is nothing to be gained by rereading it.
+_CAMPAIGN = campaign_io.load(config.LEVELS_DIR / "campaign.json")
 
 
 def campaign():
-    return campaign_io.load(config.LEVELS_DIR / "campaign.json")
+    return _CAMPAIGN
 
 
-def stage_world(index: int = RECORDED_STAGE, seed: int = 7) -> World:
+def stage_world(
+    index: int = RECORDED_STAGE, seed: int = 7, hero: str = DEFAULT_HERO
+) -> World:
     """One stage in isolation, entered at full health."""
-    return World(campaign()[index], BESTIARY, seed=seed)
+    return World(campaign()[index], BESTIARY, seed=seed, hero_type_id=hero)
 
 
 def play(world: World, policy, limit: int = TICK_LIMIT) -> int:
     return play_out(world, policy, limit)
 
 
-def wins_across_seeds(policy, index: int = RECORDED_STAGE) -> int:
-    """How many of the standard seeds this policy clears one stage on."""
+def wins_across_seeds(
+    policy, index: int = RECORDED_STAGE, hero: str = DEFAULT_HERO, seeds=SEEDS
+) -> int:
+    """How many of the given seeds this policy clears one stage on."""
     won = 0
-    for seed in SEEDS:
-        world = stage_world(index, seed)
+    for seed in seeds:
+        world = stage_world(index, seed, hero)
         play(world, policy)
         won += world.outcome is Outcome.WON
     return won
 
 
-def play_run(policy, seed: int) -> Run:
+def play_run(policy, seed: int, hero: str = DEFAULT_HERO) -> Run:
     """A whole run, stage one to the end, with health carrying between."""
-    run = Run.start(campaign(), BESTIARY, seed=seed)
+    run = Run.start(campaign(), BESTIARY, seed=seed, hero_type_id=hero)
     for _ in range(RUN_TICK_LIMIT):
         if run.is_over:
             break
@@ -82,8 +110,10 @@ def play_run(policy, seed: int) -> Run:
     return run
 
 
-def runs_won(policy) -> int:
-    return sum(play_run(policy, seed).outcome is RunOutcome.WON for seed in SEEDS)
+def runs_won(policy, hero: str = DEFAULT_HERO, seeds=SEEDS) -> int:
+    return sum(
+        play_run(policy, seed, hero).outcome is RunOutcome.WON for seed in seeds
+    )
 
 
 # --- the run -----------------------------------------------------------------
@@ -182,10 +212,10 @@ def test_twitchiness_is_not_skill() -> None:
 
 
 # --- the same bracket, one level up ------------------------------------------
-# A run is not four independent fights: health carries between stages, so it can
-# be unwinnable while every stage is fine on its own, and every stage can be fine
-# while stage 2 is a wall. Both levels are checked, because neither implies the
-# other.
+# A run is not twenty independent fights: health carries between stages, so it
+# can be unwinnable while every stage is fine on its own, and every stage can be
+# fine while stage 12 is a wall. Both levels are checked, because neither
+# implies the other.
 def test_the_floor_a_skilled_hero_finishes_the_whole_run() -> None:
     won = runs_won(autoplay)
     assert won == len(SEEDS), (
@@ -214,6 +244,76 @@ def test_every_stage_is_clearable_on_its_own() -> None:
         )
 
 
+# --- and again, for everyone who is not the reference class ------------------
+# The reference class is checked exhaustively above. These run the same two
+# questions over the other four at a reduced seed count: enough to catch a class
+# that cannot finish the game, cheap enough to keep in the regression suite.
+# `tools/balance.py --class all` is the exhaustive version.
+OTHER_CLASSES = [c.id for c in BESTIARY.hero_classes if c.id != DEFAULT_HERO]
+
+
+@pytest.mark.parametrize("hero", OTHER_CLASSES)
+def test_every_class_can_finish_the_campaign(hero: str) -> None:
+    """A class that cannot complete a run is not a choice, it is a trap.
+
+    This is the test the whole roster hangs on: five classes are five separate
+    balance problems, and the four that are not the Knight get no coverage at
+    all from anything above.
+    """
+    won = runs_won(autoplay, hero, CLASS_SEEDS)
+    assert won == len(CLASS_SEEDS), (
+        f"the {hero} completes only {won}/{len(CLASS_SEEDS)} runs -- either its "
+        "numbers or its heal_between_stages is wrong; run tools/balance.py "
+        f"--class {hero} for the per-stage rows"
+    )
+
+
+@pytest.mark.parametrize("hero", OTHER_CLASSES)
+def test_no_class_walks_the_campaign(hero: str) -> None:
+    """The ceiling, per class. A class that wins while refusing to disengage is
+    not a strong class, it is one the arena stopped applying to."""
+    assert runs_won(reckless, hero, CLASS_SEEDS) == 0, (
+        f"the {hero} finishes runs while walking in swinging"
+    )
+
+
+@pytest.mark.parametrize("hero", ["archer", "magician"])
+def test_a_ranged_class_fights_from_range(hero: str) -> None:
+    """The measuring instrument, not the game.
+
+    `autoplay` engages at `weapon.reach`, which is zero for a projectile -- so
+    before it learned about ranged weapons it walked a bow hero to a pixel from
+    a grunt before firing, and every number it reported about these two classes
+    was a number about how badly they melee.
+
+    Asserting on the *distance* rather than on the win, because winning is what
+    the balance tests already cover and it would pass either way.
+    """
+    from hack_and_slash.game.autoplay import RANGED_TOO_CLOSE
+
+    world = World(open_room(50, 20), BESTIARY, seed=1, hero_type_id=hero)
+    enemy = _add(world, "grunt", world.hero.pos + Vec2(200, 0))
+
+    closest = float("inf")
+    for _ in range(600):
+        if world.outcome is not Outcome.RUNNING or not enemy.is_alive:
+            break
+        step(world, autoplay(world))
+        closest = min(closest, world.hero.pos.distance_to(enemy.pos))
+
+    assert not enemy.is_alive, f"the {hero} never killed a lone grunt"
+    assert closest > RANGED_TOO_CLOSE * 0.5, (
+        f"the {hero} closed to {closest:.0f}px -- it is being played as a melee "
+        "class, so any balance number measured for it is meaningless"
+    )
+
+
+def _add(world: World, type_id: str, pos: Vec2):
+    from .helpers import add_enemy
+
+    return add_enemy(world, type_id, pos)
+
+
 def test_a_run_carries_damage_forward() -> None:
     """The mechanism the run-level bracket is actually testing.
 
@@ -222,28 +322,89 @@ def test_a_run_carries_damage_forward() -> None:
     """
     run = play_run(autoplay, seed=3)
     assert run.outcome is RunOutcome.WON
-    # Finishing a four-stage run on full health would mean nothing ever stuck.
-    assert run.world.hero.hp < BESTIARY["hero"].hp
+    # Finishing a twenty-stage run on full health would mean nothing ever stuck.
+    assert run.world.hero.hp < HERO.hp
 
 
-def test_the_difficulty_curve_rises() -> None:
+def test_the_heal_between_stages_is_the_class_s_own() -> None:
+    """The Priest is a run-level class, so this is the Priest working.
+
+    It looks like a detail and it is the whole reason that class exists: with a
+    shared heal there would be no mechanical difference between picking the
+    Priest and picking anyone else with 95 health.
+    """
+    priest, knight = BESTIARY["priest"], BESTIARY["knight"]
+    assert priest.heal_between_stages > knight.heal_between_stages
+
+    healed = {}
+    for hero in ("priest", "knight"):
+        run = Run.start(campaign(), BESTIARY, seed=5, hero_type_id=hero)
+        # Take the hero down so the heal has room to show, then clear the stage.
+        run.world.hero.hp = 20
+        for _ in range(TICK_LIMIT):
+            step(run.world, autoplay(run.world))
+            run.settle()
+            if run.just_advanced:
+                break
+        healed[hero] = run.healed
+
+    assert healed["priest"] > healed["knight"], (
+        f"the Priest recovered {healed['priest']} and the Knight "
+        f"{healed['knight']} -- the heal is not being read off the class"
+    )
+
+
+def test_the_difficulty_curve_rises_within_each_act() -> None:
     """A crude proxy, and labelled as one.
 
-    Enemy count is a poor measure of difficulty -- a boss is one enemy. It is
-    checked only across the first three stages, where the mix is comparable, and
-    the real measure is the per-stage rows in `tools/balance.py`.
+    Enemy count is a poor measure of difficulty -- a boss is one enemy, and the
+    real measure is the per-stage rows in `tools/balance.py`. What it does catch
+    is a stage accidentally emptier than the one before it.
+
+    Checked *per act* rather than across the campaign. An act opens on a new
+    enemy and deserves room to introduce it, so stage 6 having fewer bodies than
+    stage 4 is the design working rather than the curve sagging. Boss stages are
+    excluded entirely: they are deliberately the sparsest in the game.
     """
-    counts = [len(stage.enemy_spawns) for stage in campaign().stages[:3]]
-    assert counts == sorted(counts), f"enemy counts do not rise: {counts}"
-    assert counts[0] < counts[-1]
+    stages = campaign().stages
+    for act, start in enumerate((0, 5, 10, 15), start=1):
+        build = stages[start : start + 4]
+        counts = [len(stage.enemy_spawns) for stage in build]
+        assert counts == sorted(counts), f"act {act} enemy counts do not rise: {counts}"
+        assert counts[0] < counts[-1], f"act {act} does not build: {counts}"
 
 
-def test_the_final_stage_has_the_boss() -> None:
-    final = campaign().stages[-1]
-    assert any(spawn.type_id == "boss" for spawn in final.enemy_spawns)
-    # And nothing before it does -- the capstone should not turn up early.
-    for stage in campaign().stages[:-1]:
-        assert not any(spawn.type_id == "boss" for spawn in stage.enemy_spawns)
+def test_every_act_ends_on_a_boss_and_nothing_else_does() -> None:
+    """Four acts of five, and the shape has to be real rather than intended.
+
+    A boss turning up mid-act is the loud failure; the quiet one is an act
+    ending on an ordinary stage because a `Stage` entry was inserted rather than
+    replaced, which shifts every boss one place and is invisible in a diff.
+    """
+    bosses = {t.id for t in BESTIARY.types.values() if t.brain == "boss"}
+    stages = campaign().stages
+
+    assert len(stages) == 20, f"the campaign is {len(stages)} stages, not 20"
+
+    for index, stage in enumerate(stages):
+        has_boss = any(spawn.type_id in bosses for spawn in stage.enemy_spawns)
+        if index in BOSS_STAGES:
+            assert has_boss, f"stage {index + 1} ({stage.name}) ends an act with no boss"
+        else:
+            assert not has_boss, f"stage {index + 1} ({stage.name}) has a boss mid-act"
+
+
+def test_no_boss_is_used_twice() -> None:
+    """Four acts, four bosses. Reusing one would make an act's ending a repeat
+    of an earlier one, which is the single thing a boss stage cannot be."""
+    bosses = {t.id for t in BESTIARY.types.values() if t.brain == "boss"}
+    used = [
+        spawn.type_id
+        for stage in campaign().stages
+        for spawn in stage.enemy_spawns
+        if spawn.type_id in bosses
+    ]
+    assert len(used) == len(set(used)) == 4, f"bosses used: {used}"
 
 
 def test_standing_still_gets_you_killed() -> None:

@@ -20,7 +20,7 @@ import pygame
 from .. import config
 from ..core.campaign import Campaign
 from ..core.vec2 import ZERO, Vec2
-from ..game.entities import Bestiary
+from ..game.entities import DEFAULT_HERO, Bestiary
 from ..game.intent import Intent
 from ..game.run import Run, RunOutcome
 from ..game.sim import Accumulator, step
@@ -59,6 +59,7 @@ class PlayScene(Scene):
         seed: int = 0,
         on_exit=None,
         start_stage: int = 0,
+        hero_type_id: str = DEFAULT_HERO,
     ) -> None:
         self.campaign = campaign
         self.bestiary = bestiary
@@ -66,13 +67,20 @@ class PlayScene(Scene):
         self.seed = seed
         self.on_exit = on_exit
         self.start_stage = start_stage
+        self.hero_type_id = hero_type_id
 
         self.renderer = Renderer(atlas)
         self.hud = Hud()
         self.accumulator = Accumulator()
         self.effects = Effects()
 
-        self.run = Run.start(campaign, bestiary, seed=seed, at_stage=start_stage)
+        self.run = Run.start(
+            campaign,
+            bestiary,
+            seed=seed,
+            at_stage=start_stage,
+            hero_type_id=hero_type_id,
+        )
 
         # Replaced immediately by _enter_stage, which needs the stage's real
         # size. A placeholder rather than an Optional so nothing downstream has
@@ -118,9 +126,13 @@ class PlayScene(Scene):
         return None
 
     def restarted(self) -> "PlayScene":
-        """A fresh run from stage one. Restarting a stage would let a player
-        grind the run's hardest fight at full health, which is the tension the
-        carry-over exists to create."""
+        """A fresh run from stage one, as the same class.
+
+        Restarting a *stage* would let a player grind the run's hardest fight at
+        full health, which is the tension the carry-over exists to create. The
+        class is kept because R is "try that again" -- going back to the
+        character select is what Esc is for.
+        """
         return PlayScene(
             self.campaign,
             self.bestiary,
@@ -128,6 +140,7 @@ class PlayScene(Scene):
             seed=self.seed,
             on_exit=self.on_exit,
             start_stage=self.start_stage,
+            hero_type_id=self.hero_type_id,
         )
 
     def _read_intent(self) -> Intent:

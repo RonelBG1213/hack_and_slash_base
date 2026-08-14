@@ -9,11 +9,44 @@ import pytest
 from hack_and_slash import config
 from hack_and_slash.game.entities import Faction, load_bestiary
 
-from .helpers import BESTIARY
+from .helpers import BESTIARY, HERO
+
+
+CLASSES = BESTIARY.hero_classes
+ENEMIES = tuple(t for t in BESTIARY.types.values() if t.faction is Faction.ENEMY)
 
 
 def test_every_shipped_type_loads() -> None:
-    assert set(BESTIARY.types) == {"hero", "grunt", "charger", "archer", "boss"}
+    assert set(BESTIARY.types) == {
+        # the roster
+        "knight", "rogue", "archer", "magician", "priest",
+        # what it fights
+        "grunt", "rat", "charger", "brute", "bowman", "mage",
+        # one at the end of each act
+        "boss", "houndmaster", "effigy", "sovereign",
+    }
+
+
+def test_the_roster_is_the_five_classes_in_file_order() -> None:
+    """The character select reads this, so the order is content, not incidental.
+
+    Faction is the only thing that makes something playable -- there is no
+    second list to keep in step -- which is what this is really checking.
+    """
+    assert [c.id for c in CLASSES] == ["knight", "rogue", "archer", "magician", "priest"]
+
+
+def test_every_class_is_actually_playable() -> None:
+    """The three things a class needs that an enemy does not.
+
+    A class missing any of them loads fine and then fails in a way that looks
+    like a sim bug: no brain means the player's input is ignored, no dodge means
+    the roll key does nothing, no heal means the run cannot be sustained.
+    """
+    for cls in CLASSES:
+        assert cls.brain == "player", f"{cls.id} is not driven by the player"
+        assert cls.can_dodge, f"{cls.id} cannot roll"
+        assert cls.heal_between_stages > 0, f"{cls.id} recovers nothing between stages"
 
 
 def test_comment_keys_are_not_loaded_as_content() -> None:
@@ -24,9 +57,9 @@ def test_comment_keys_are_not_loaded_as_content() -> None:
 
 
 def test_arc_is_converted_from_degrees_to_radians() -> None:
-    # The data says 100 degrees because that is what a person can picture.
-    assert BESTIARY.weapons["sword"].arc == pytest.approx(math.radians(100))
-    assert BESTIARY["hero"].weapon.arc == pytest.approx(math.radians(100))
+    # The data says 120 degrees because that is what a person can picture.
+    assert BESTIARY.weapons["greatsword"].arc == pytest.approx(math.radians(120))
+    assert HERO.weapon.arc == pytest.approx(math.radians(120))
 
 
 def test_an_unknown_type_names_what_is_available() -> None:
@@ -46,17 +79,24 @@ def test_a_type_wanting_a_missing_weapon_fails_loudly(tmp_path) -> None:
 
 
 # --- balance the design depends on -------------------------------------------
-def test_the_hero_is_faster_than_everything_it_fights() -> None:
-    """The deal the whole fight rests on.
+def test_every_class_is_faster_than_everything_it_fights() -> None:
+    """The deal the whole fight rests on, and it has to hold for all five.
 
     You can always disengage, so taking a hit is a decision you made rather than
-    something the arena did to you. If an enemy ever out-runs the hero, kiting
-    stops working and the design changes underneath the level.
+    something the arena did to you. If an enemy ever out-runs a class, kiting
+    stops working *for that class* and the design changes underneath the level
+    for whoever picked it.
+
+    Measured against the slowest class rather than an average or the default:
+    an enemy that only outpaces the Knight is still an enemy that broke the
+    game, for the third of players who picked the Knight.
     """
-    hero_speed = BESTIARY["hero"].speed
-    for type_id, entity_type in BESTIARY.types.items():
-        if entity_type.faction is Faction.ENEMY:
-            assert entity_type.speed < hero_speed, f"{type_id} can outrun the hero"
+    slowest = min(CLASSES, key=lambda c: c.speed)
+    for entity_type in ENEMIES:
+        assert entity_type.speed < slowest.speed, (
+            f"{entity_type.id} at {entity_type.speed} can outrun the "
+            f"{slowest.name} at {slowest.speed}"
+        )
 
 
 def test_the_charger_is_faster_than_the_hero_only_while_charging() -> None:
@@ -66,27 +106,37 @@ def test_the_charger_is_faster_than_the_hero_only_while_charging() -> None:
     several attacks must only dash on the one that is actually a charge.
     """
     charger = BESTIARY["charger"]
-    assert charger.speed < BESTIARY["hero"].speed
-    assert charger.weapon.charge_speed > BESTIARY["hero"].speed
+    fastest = max(c.speed for c in CLASSES)
+    assert charger.speed < min(c.speed for c in CLASSES)
+    # Faster than *anyone* once committed, or the charge is not a threat to the
+    # class that most needs to respect it.
+    assert charger.weapon.charge_speed > fastest
     assert charger.weapon.is_charge
 
 
 def test_only_charging_attacks_carry_a_dash() -> None:
-    # The bug this forbids: a boss drifting forward during its ranged attack
-    # because the dash was a property of the creature rather than the attack.
-    boss = BESTIARY["boss"]
-    charging = [w.id for w in boss.weapons if w.is_charge]
-    assert charging == ["boss_crush"], f"unexpected charging attacks: {charging}"
-    assert not BESTIARY.weapons["sword"].is_charge
+    """The bug this forbids: a boss drifting forward during its ranged attack
+    because the dash was a property of the creature rather than the attack.
+
+    Checked across every boss, since each one declares its own three weapons and
+    the mistake is exactly as easy to make the fourth time as the first."""
+    for boss in (t for t in BESTIARY.types.values() if t.brain == "boss"):
+        charging = [w.id for w in boss.weapons if w.is_charge]
+        assert charging == [boss.weapons[1].id], (
+            f"{boss.id} has charging attacks {charging}, but the brain only "
+            "dashes on weapons[1]"
+        )
+
+    assert not BESTIARY.weapons["greatsword"].is_charge
     assert not BESTIARY.weapons["claw"].is_charge
 
 
-def test_only_the_hero_can_dodge() -> None:
+def test_only_the_classes_can_dodge() -> None:
     # Expressed as data, not as a branch in the sim.
-    assert BESTIARY["hero"].can_dodge
-    for type_id, entity_type in BESTIARY.types.items():
-        if entity_type.faction is Faction.ENEMY:
-            assert not entity_type.can_dodge, f"{type_id} can dodge"
+    for cls in CLASSES:
+        assert cls.can_dodge, f"{cls.id} cannot roll"
+    for entity_type in ENEMIES:
+        assert not entity_type.can_dodge, f"{entity_type.id} can dodge"
 
 
 def test_every_attack_has_a_readable_telegraph() -> None:
@@ -96,19 +146,59 @@ def test_every_attack_has_a_readable_telegraph() -> None:
         assert weapon.recovery > 0, f"{weapon_id} is free to whiff"
 
 
-def test_enemy_attacks_are_slower_to_start_than_the_hero_s() -> None:
-    # The player reacts to enemies; enemies do not react to the player.
-    hero_windup = BESTIARY["hero"].weapon.windup
-    for type_id, entity_type in BESTIARY.types.items():
-        if entity_type.faction is Faction.ENEMY:
-            assert entity_type.weapon.windup > hero_windup, f"{type_id} strikes too fast"
+def test_enemy_attacks_are_slower_to_start_than_any_class_s() -> None:
+    """The player reacts to enemies; enemies do not react to the player.
+
+    Compared against the *slowest* hero attack, which is the strong form: every
+    enemy tell in the game is longer than every hero tell, so the rule holds
+    whichever class was picked. The Magician's 14-tick bolt is the binding
+    number and the rat's 16-tick bite is what it binds against -- there is only
+    two ticks of room here, and it is deliberate rather than lucky.
+    """
+    slowest_class_attack = max(c.weapon.windup for c in CLASSES)
+    for entity_type in ENEMIES:
+        for weapon in entity_type.weapons:
+            assert weapon.windup > slowest_class_attack, (
+                f"{entity_type.id}'s {weapon.id} winds up in {weapon.windup} ticks, "
+                f"faster than the slowest class attack at {slowest_class_attack}"
+            )
 
 
-def test_the_hero_iframes_do_not_outlast_the_roll() -> None:
+def test_no_class_s_iframes_outlast_its_roll() -> None:
     """Invulnerability must end before the roll does.
 
     Otherwise the last frames of a dodge are free, and the correct way to play
-    becomes rolling constantly rather than rolling at the right moment.
+    becomes rolling constantly rather than rolling at the right moment. Five
+    classes means five chances to get this wrong, and the symptom -- "this class
+    feels weirdly unkillable" -- is a long way from the two numbers causing it.
     """
-    hero = BESTIARY["hero"]
-    assert 0 < hero.iframe_ticks < hero.dodge_ticks
+    for cls in CLASSES:
+        assert 0 < cls.iframe_ticks < cls.dodge_ticks, (
+            f"{cls.id} is invulnerable for {cls.iframe_ticks} of a "
+            f"{cls.dodge_ticks}-tick roll"
+        )
+
+
+def test_every_boss_declares_its_three_attacks_in_the_order_the_brain_expects() -> None:
+    """The one assumption in this game that is positional rather than named.
+
+    `ai.py` reads weapons[0] as the sweep it uses up close, weapons[1] as the
+    charge it uses at mid range, and weapons[2] as what it shoots from far away.
+    Nothing in the loader checks that, so a boss whose JSON lists them in any
+    other order loads perfectly and then telegraphs one attack while landing
+    another -- which reads as a physics bug, not as a typo in a content file.
+    """
+    for boss in (t for t in BESTIARY.types.values() if t.brain == "boss"):
+        sweep, crush, volley = None, None, None
+        assert len(boss.weapons) == 3, (
+            f"{boss.id} has {len(boss.weapons)} attacks; the boss brain needs "
+            "exactly three"
+        )
+        sweep, crush, volley = boss.weapons
+
+        assert sweep.reach > 0 and not sweep.projectile, f"{boss.id}: weapons[0] is not a sweep"
+        assert crush.is_charge, f"{boss.id}: weapons[1] does not charge"
+        assert volley.projectile, f"{boss.id}: weapons[2] does not shoot"
+        assert boss.charge_range > 0, f"{boss.id} can never reach its charge"
+        # And the bar the HUD draws is keyed off the scale, not off the brain.
+        assert boss.sprite_scale > 1, f"{boss.id} would fight without a boss bar"

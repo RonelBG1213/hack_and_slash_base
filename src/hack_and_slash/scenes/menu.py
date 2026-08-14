@@ -14,7 +14,7 @@ from ..core.campaign import Campaign
 from ..game.entities import Bestiary
 from ..render.atlas import Atlas
 from .base import Scene
-from .play import PlayScene
+from .select import CharacterSelectScene
 
 CONTROLS = [
     ("WASD / arrows", "move"),
@@ -50,11 +50,17 @@ class MenuScene(Scene):
             return self._start()
         return None
 
-    def _start(self) -> PlayScene:
+    def _start(self) -> CharacterSelectScene:
         return self._start_at(0)
 
-    def _start_at(self, stage_index: int) -> PlayScene:
-        return PlayScene(
+    def _start_at(self, stage_index: int) -> CharacterSelectScene:
+        """Hand over to the character select, which hands over to the run.
+
+        This screen still knows nothing about how a run works -- it just has one
+        more step to hand off to than it used to. `--stage` passes straight
+        through, so jumping to a stage still asks which class to jump there as.
+        """
+        return CharacterSelectScene(
             self.campaign,
             self.bestiary,
             self.atlas,

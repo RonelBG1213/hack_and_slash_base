@@ -55,9 +55,9 @@ def test_an_unknown_sprite_lists_what_is_available(atlas: Atlas) -> None:
 
 def test_tinting_keeps_the_sprite_s_shape(atlas: Atlas) -> None:
     # The hit flash must flood the body, not paint a white square over it.
-    flashed = atlas.tinted("hero", (255, 255, 255))
-    assert flashed.get_size() == atlas["hero"].get_size()
-    assert flashed.get_at((0, 0))[3] == atlas["hero"].get_at((0, 0))[3]
+    flashed = atlas.tinted("knight", (255, 255, 255))
+    assert flashed.get_size() == atlas["knight"].get_size()
+    assert flashed.get_at((0, 0))[3] == atlas["knight"].get_at((0, 0))[3]
 
 
 def test_a_missing_atlas_says_which_command_builds_it(tmp_path) -> None:

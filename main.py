@@ -39,6 +39,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="start at this stage (1-based). For tuning -- you arrive at full "
         "health, so it is not the same fight as reaching it through a run",
     )
+    parser.add_argument(
+        "--class",
+        dest="hero",
+        default=None,
+        help="skip the character select and play this class. For tuning; the "
+        "normal way in is to pick one on the screen that exists for it",
+    )
     return parser.parse_args(argv)
 
 
@@ -84,6 +91,14 @@ def main(argv: list[str] | None = None) -> int:
 
     bestiary = load_bestiary(config.ENTITIES_DATA, config.WEAPONS_DATA)
 
+    roster = [c.id for c in bestiary.hero_classes]
+    if args.hero is not None and args.hero not in roster:
+        print(
+            f"--class must be one of: {', '.join(roster)}",
+            file=sys.stderr,
+        )
+        return 1
+
     # The display has to exist before the atlas, so surfaces can be converted to
     # the window's pixel format -- an unconverted blit costs more every frame.
     pygame.init()
@@ -97,9 +112,27 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     menu = MenuScene(campaign, bestiary, atlas, seed=args.seed)
-    if args.stage > 1:
+
+    if args.hero is not None:
+        # Naming a class means skipping the screen whose only job is to ask for
+        # one. Straight into the fight, which is the point of the flag.
+        from hack_and_slash.scenes.play import PlayScene
+
+        App(
+            PlayScene(
+                campaign,
+                bestiary,
+                atlas,
+                seed=args.seed,
+                start_stage=args.stage - 1,
+                hero_type_id=args.hero,
+                on_exit=lambda: MenuScene(campaign, bestiary, atlas, seed=args.seed),
+            )
+        ).run()
+    elif args.stage > 1:
         # Skip the title screen when jumping to a stage -- the only reason to
-        # pass --stage is to look at that stage.
+        # pass --stage is to look at that stage. The character select still
+        # happens: the stage is chosen, the class is not.
         App(menu._start_at(args.stage - 1)).run()
     else:
         App(menu).run()

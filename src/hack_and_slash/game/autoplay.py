@@ -39,6 +39,19 @@ DANGER_RADIUS = 46.0
 #: range rather than at the exact edge, where any drift is a whiff.
 REACH_MARGIN = 4.0
 
+#: Where a ranged class wants to stand, and how close it lets something get
+#: before giving ground. A projectile weapon has `reach: 0` -- the number the
+#: melee branch engages at -- so without these a bow hero would walk to a pixel
+#: from a grunt before firing, and every measurement of the Archer and the
+#: Magician would be a measurement of how badly they melee.
+#:
+#: 120 sits inside the enemy bowman's preferred 140, so the bot wins that trade
+#: by standing where it can shoot and be shot at rather than by out-ranging
+#: anything. Deliberately not the maximum range: a policy that snipes from the
+#: far corner would measure the arena's sightlines instead of the class.
+RANGED_PREFERRED = 120.0
+RANGED_TOO_CLOSE = 70.0
+
 #: Rough human reference points, in ticks at 60/sec. Used by tools/balance.py.
 #: These are anchors for comparison, not claims about any particular person --
 #: what matters is that the fight gets harder as the number rises.
@@ -50,6 +63,10 @@ REACTION_SLOPPY = 24  # ~400ms, distracted or reading the wrong enemy
 @dataclass(frozen=True)
 class Autoplay:
     """Close in, swing when in range, roll away from anything about to land.
+
+    Or, for a class that shoots: hold a distance, need a clear line, give ground
+    when closed down. Which of the two it plays is read off the weapon, not
+    configured -- `see _ranged`.
 
     `reaction_ticks` is how long after an attack *begins* this hero notices it.
     Modelled as elapsed time since the telegraph opened rather than as a delayed
@@ -81,16 +98,122 @@ class Autoplay:
         target = min(enemies, key=lambda e: e.pos.distance_sq_to(hero.pos))
         toward = (target.pos - hero.pos).normalized()
         distance = hero.pos.distance_to(target.pos)
+
+        if hero.weapon.projectile:
+            # Strictly separate from the melee branch below, which is left
+            # exactly as it was. The recorded numbers for the melee classes must
+            # not move because a ranged class was added.
+            return self._ranged(world, hero, target, toward, distance)
+
         strike_range = hero.weapon.reach + target.radius - REACH_MARGIN
 
-        if hero.health_fraction < CAUTIOUS_BELOW and distance < strike_range * 1.6:
+        if self._should_give_ground(hero, distance < strike_range * 1.6):
             # Hurt: back off and let the dodge come off cooldown rather than trade.
-            return Intent(move=-toward, aim=toward)
+            return Intent(move=self._away_from(world, hero, toward), aim=toward)
 
         if distance <= strike_range:
             return Intent(aim=toward, attack=True)
 
         return Intent(move=self._approach(world, hero, target), aim=toward)
+
+    def _should_give_ground(self, hero: Entity, too_close: bool) -> bool:
+        """Whether a hurt hero should be backing away instead of trading.
+
+        The health check alone is not enough, and the bug it hid took a
+        twenty-stage campaign to expose. Backing away from something that
+        follows you keeps you inside its range forever, so the condition stayed
+        true, so the hero retreated again -- for the rest of the fight. Against
+        four short stages nothing lived long enough for that to matter. Against
+        a boss with 175 health it is a death spiral: the measured runs ended with
+        the hero pinned in a corner at 20hp having not swung in four hundred
+        ticks, and the boss still on two thirds of its bar.
+
+        The dodge cooldown is what ends it, which is what the comment at the
+        call site always claimed this was for -- *let the dodge come off
+        cooldown* is a thing that finishes, and "retreat while hurt" is not. Once
+        the roll is available the hero re-engages, which is both what a person
+        does and what makes the retreat a tactic rather than a surrender.
+        """
+        return (
+            hero.health_fraction < CAUTIOUS_BELOW
+            and hero.dodge_cooldown > 0
+            and too_close
+        )
+
+    def _away_from(self, world, hero: Entity, toward: Vec2) -> Vec2:
+        """A retreat that does not end in a corner.
+
+        The counterpart to `_approach`, and needed for the same reason: this
+        policy has no idea walls exist. Backing straight away from something
+        that follows you works in the open and is suicide in a room -- and every
+        boss in the game pushes you backwards, so every boss fight ended with
+        the hero flattened against the far wall taking free hits.
+
+        It is not pathfinding, and like `_approach` it is not trying to be. Probe
+        straight back; if that is wall, slide along it. A player would do the
+        same thing without thinking about it, which is rather the point -- what
+        was being measured before was the bot's inability to do it, not the
+        arena's difficulty.
+        """
+        away = -toward
+        tile = world.level.tile
+        reach = tile * 1.5
+
+        if path_is_clear(hero.pos, hero.pos + away * reach, world.is_solid, tile):
+            return away
+
+        sideways = away.perpendicular()
+        for side in (1.0, -1.0):
+            candidate = sideways * side
+            if path_is_clear(
+                hero.pos, hero.pos + candidate * reach, world.is_solid, tile
+            ):
+                return candidate
+
+        # Boxed in on three sides. Keep pushing back rather than standing still:
+        # something is about to land either way, and the wall does not hit back.
+        return away
+
+    def _ranged(
+        self, world, hero: Entity, target: Entity, toward: Vec2, distance: float
+    ) -> Intent:
+        """The same policy, for a class whose damage does not need to touch.
+
+        Structurally this is the enemy archer brain in `ai.py` played from the
+        other side: hold a distance, need a clear line, give ground when closed
+        down. The differences are both deliberate.
+
+        It keeps shooting while retreating. A projectile spawns on the body, so
+        a bow works perfectly well point blank -- being close is a bad *place*
+        for the class, not a broken one. Holding fire while backing away would
+        invent a weakness the game does not have, and worse, it would stall: a
+        hero reversing into a corner with a rat on it would never fire again and
+        the stage would end on the tick limit rather than on the balance.
+
+        It requires `path_is_clear` before committing. A shot spends itself on
+        the first wall it meets, so firing through a pillar is not a wasted
+        opportunity, it is no attack at all -- and a policy that cannot tell the
+        difference would report a pillared arena as unclearable for the Archer
+        while a player walks two steps and shoots.
+        """
+        clear = path_is_clear(hero.pos, target.pos, world.is_solid, world.level.tile)
+
+        if distance < RANGED_TOO_CLOSE:
+            return Intent(
+                move=self._away_from(world, hero, toward), aim=toward, attack=clear
+            )
+
+        if self._should_give_ground(hero, distance < RANGED_PREFERRED):
+            # Hurt and inside its own comfortable range: give ground rather than
+            # stand and trade, which is the melee branch's rule as well.
+            return Intent(
+                move=self._away_from(world, hero, toward), aim=toward, attack=clear
+            )
+
+        if distance > RANGED_PREFERRED or not clear:
+            return Intent(move=self._approach(world, hero, target), aim=toward)
+
+        return Intent(aim=toward, attack=True)
 
     def _approach(self, world, hero: Entity, target: Entity) -> Vec2:
         """A direction that actually gets closer, pillars included.

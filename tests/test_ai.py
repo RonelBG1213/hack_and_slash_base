@@ -18,7 +18,7 @@ from .helpers import BESTIARY, add_enemy, make_world, open_room, run
 
 GRUNT = BESTIARY["grunt"]
 CHARGER = BESTIARY["charger"]
-ARCHER = BESTIARY["archer"]
+ARCHER = BESTIARY["bowman"]
 GORE = BESTIARY.weapons["gore"]
 BOW = BESTIARY.weapons["arrow"]
 
@@ -148,7 +148,7 @@ def test_sidestepping_a_charge_avoids_it() -> None:
 def test_an_archer_looses_an_arrow_after_its_windup() -> None:
     world = make_world(big_room())
     hero = world.hero
-    add_enemy(world, "archer", hero.pos + Vec2(ARCHER.preferred_range - 10, 0))
+    add_enemy(world, "bowman", hero.pos + Vec2(ARCHER.preferred_range - 10, 0))
 
     run(world, BOW.windup + 2)
     assert world.projectiles, "wound up and never fired"
@@ -157,7 +157,7 @@ def test_an_archer_looses_an_arrow_after_its_windup() -> None:
 def test_an_arrow_flies_toward_the_hero_and_deals_damage() -> None:
     world = make_world(big_room())
     hero = world.hero
-    add_enemy(world, "archer", hero.pos + Vec2(ARCHER.preferred_range - 10, 0))
+    add_enemy(world, "bowman", hero.pos + Vec2(ARCHER.preferred_range - 10, 0))
 
     for _ in range(400):
         step(world)
@@ -169,7 +169,7 @@ def test_an_arrow_flies_toward_the_hero_and_deals_damage() -> None:
 def test_an_arrow_stops_at_a_wall_instead_of_passing_through() -> None:
     world = make_world(big_room())
     hero = world.hero
-    archer = add_enemy(world, "archer", hero.pos + Vec2(60, 0))
+    archer = add_enemy(world, "bowman", hero.pos + Vec2(60, 0))
     archer.facing = 0.0
 
     from hack_and_slash.game import actions
@@ -241,7 +241,7 @@ def test_an_arrow_expires_rather_than_flying_forever() -> None:
     """A lifetime, not just a wall, ends an arrow -- otherwise a shot down a long
     empty corridor is a projectile the sim carries for the rest of the run."""
     world = make_world(open_room(60, 20))
-    archer = add_enemy(world, "archer", world.hero.pos + Vec2(40, 0))
+    archer = add_enemy(world, "bowman", world.hero.pos + Vec2(40, 0))
     archer.facing = 0.0
 
     from hack_and_slash.game import actions
@@ -258,7 +258,7 @@ def test_an_arrow_expires_rather_than_flying_forever() -> None:
 def test_an_archer_backs_away_when_the_hero_closes() -> None:
     world = make_world(big_room())
     hero = world.hero
-    archer = add_enemy(world, "archer", hero.pos + Vec2(ARCHER.retreat_range - 20, 0))
+    archer = add_enemy(world, "bowman", hero.pos + Vec2(ARCHER.retreat_range - 20, 0))
     before = archer.pos.x
 
     run(world, 20)
@@ -278,7 +278,7 @@ def test_an_archer_will_not_shoot_through_a_pillar() -> None:
         name="cover", rows=tuple(rows), hero_spawn=(5, 5), enemy_spawns=(), tile=16
     )
     world = make_world(level)
-    archer = add_enemy(world, "archer", level.tile_center(22, 5))
+    archer = add_enemy(world, "bowman", level.tile_center(22, 5))
     archer.facing = 3.14159  # pointed straight at the hero
 
     fired = 0

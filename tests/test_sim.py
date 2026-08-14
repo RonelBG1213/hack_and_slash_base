@@ -12,7 +12,7 @@ from hack_and_slash.game import intent as intents
 from hack_and_slash.game.sim import Accumulator, step
 from hack_and_slash.game.world import Outcome
 
-from .helpers import BESTIARY, add_enemy, make_world, open_room, run
+from .helpers import BESTIARY, HERO, add_enemy, make_world, open_room, run
 
 RIGHT = Vec2(1, 0)
 DOWN = Vec2(0, 1)
@@ -26,7 +26,7 @@ def test_walking_covers_exactly_speed_pixels_per_tick() -> None:
 
     run(world, 60, intents.walk(RIGHT))
 
-    expected = BESTIARY["hero"].speed * 60
+    expected = HERO.speed * 60
     assert hero.pos.x - start.x == pytest.approx(expected)
     assert hero.pos.y == pytest.approx(start.y)
 
@@ -49,7 +49,7 @@ def test_a_half_pushed_direction_walks_at_half_speed() -> None:
     world = make_world()
     start = world.hero.pos
     run(world, 10, intents.walk(Vec2(0.5, 0)))
-    assert world.hero.pos.x - start.x == pytest.approx(BESTIARY["hero"].speed * 0.5 * 10)
+    assert world.hero.pos.x - start.x == pytest.approx(HERO.speed * 0.5 * 10)
 
 
 def test_no_input_means_no_movement() -> None:
