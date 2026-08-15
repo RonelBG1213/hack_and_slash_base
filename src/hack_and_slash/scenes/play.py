@@ -386,16 +386,23 @@ class PlayScene(Scene):
         self.renderer.draw(viewport, self.world, self.camera, self.effects)
         self.hud.draw(surface, self.world, self.run, self.world.tick)
 
-        if self.shopping:
-            self.shop_panel.draw(surface, self.run)
-        if self.promoting:
-            # Over the shop, not instead of it. Both are open on this
-            # transition, and the choice of class is the one being asked for.
-            self.job_panel.draw(surface, self.run, self.atlas)
+        if self.shopping or self.promoting:
+            # A panel, or the banner -- never both. Both at once puts the stage
+            # name through the panel's title, and the banner is still counting
+            # down underneath, so it gets its remaining frames once the panel is
+            # dismissed.
+            #
+            # Written as one branch on "is any panel up" rather than as a chain.
+            # An `elif` here would attach to whichever `if` happened to be last,
+            # which is exactly how the banner started drawing over the shop when
+            # the promotion panel was added between them.
+            if self.shopping:
+                self.shop_panel.draw(surface, self.run)
+            if self.promoting:
+                # Over the shop, not instead of it. Both are open on the final
+                # transition, and the class is the choice being asked for.
+                self.job_panel.draw(surface, self.run, self.atlas)
         elif self.banner > 0:
-            # One or the other. Both at once puts the stage name behind the
-            # shop's title, and the banner is still counting down underneath --
-            # so it gets its remaining frames once the panel is dismissed.
             self._draw_banner(surface)
 
         if self.run.is_over:

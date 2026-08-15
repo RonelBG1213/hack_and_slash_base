@@ -619,3 +619,39 @@ def test_the_job_panel_clears_the_portrait_and_the_hud(atlas) -> None:
     last_stat = panel.STAT_Y + 2 * panel.STAT_LINE_H
     assert last_stat < panel.HINT_Y, "the hint overlaps the stat lines"
     assert panel.HINT_Y + 13 <= config.VIEWPORT_H, "the hint is drawn under the HUD"
+
+
+def test_the_stage_banner_never_draws_over_a_panel(atlas, monkeypatch) -> None:
+    """Clearing a stage sets the banner *and* opens the shop, so both want the
+    same pixels. The banner has to lose and keep its remaining frames for after.
+
+    This is a regression test with a real regression behind it: when the
+    promotion panel was inserted between the shop's `if` and the banner's
+    `elif`, the `elif` re-attached to the new `if` and the banner started
+    drawing straight through the shop's title on eighteen of a run's nineteen
+    transitions. Asserted by watching whether `_draw_banner` is called rather
+    than by reading pixels, so it fails for the right reason.
+    """
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    assert scene.shopping and scene.banner > 0, "the trap needs both live at once"
+
+    drawn = []
+    monkeypatch.setattr(scene, "_draw_banner", lambda surface: drawn.append("banner"))
+
+    scene.draw(surface)
+    assert not drawn, "the stage banner drew over the shop"
+
+    # And over the promotion panel, which sits on top of the shop.
+    scene.promoting = True
+    scene.draw(surface)
+    assert not drawn, "the stage banner drew over the promotion panel"
+
+    # Dismiss both and the banner gets the frames it still has left.
+    scene.promoting = False
+    scene.shopping = False
+    scene.draw(surface)
+    assert drawn == ["banner"], "the banner lost its remaining frames to the panel"
