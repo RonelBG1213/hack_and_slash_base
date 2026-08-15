@@ -67,6 +67,13 @@ class Weapon:
     recovery: int
     knockback: float
     hitstop: int
+
+    #: Ticks before this attack may be used again, counted from the swing
+    #: starting. Zero means "as often as the state machine allows", which is
+    #: every enemy attack and every class's light attack -- so a body whose
+    #: attacks all read zero behaves exactly as it did before skills existed.
+    cooldown: int = 0
+
     #: Speed of the dash this attack carries the body forward at, for the whole
     #: of its active window. A property of the *attack*, not the creature: a boss
     #: that charges on one attack must not drift forward on the other two.
@@ -105,6 +112,7 @@ class Weapon:
             recovery=int(payload["recovery"]),
             knockback=float(payload.get("knockback", 0.0)),
             hitstop=int(payload.get("hitstop", 0)),
+            cooldown=int(payload.get("cooldown", 0)),
             charge_speed=float(payload.get("charge_speed", 0.0)),
             projectile=bool(payload.get("projectile", False)),
             projectile_speed=float(payload.get("projectile_speed", 0.0)),
@@ -293,6 +301,13 @@ class Entity:
 
     iframes: int = 0  # ticks of invulnerability left
     dodge_cooldown: int = 0
+
+    #: Ticks left before each attack may be used again, keyed by weapon index.
+    #: A dict rather than a list sized to the type: an attack with no cooldown
+    #: never writes an entry, so every enemy in the game carries an empty one
+    #: and nothing has to know which bodies have skills and which do not.
+    skill_cooldowns: dict[int, int] = field(default_factory=dict)
+
     stagger: int = 0  # ticks unable to act, from being hit
     attack_cooldown: int = 0  # AI pacing between swings
 
@@ -310,6 +325,15 @@ class Entity:
         behaves correctly without any of that code knowing bosses exist.
         """
         return self.type.weapons[self.weapon_index]
+
+    def cooldown_on(self, weapon_index: int) -> int:
+        """Ticks left before that attack may be used again.
+
+        Zero for an attack that has never been used, and for every attack that
+        has no cooldown at all -- which is why callers can ask about any index
+        without first checking whether the body has skills.
+        """
+        return self.skill_cooldowns.get(weapon_index, 0)
 
     @property
     def is_alive(self) -> bool:

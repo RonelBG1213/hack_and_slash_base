@@ -13,11 +13,21 @@
   ],
 
   "_hero_comment": [
-    "The five classes' attacks. One rule holds across all of them and is tested:",
-    "every hero windup is shorter than every enemy windup. The player reacts to",
-    "enemies; enemies do not react to the player. That puts a ceiling of 15 ticks",
-    "on anything here, because the quickest enemy tell in the game is the grunt's",
-    "claw at 20.",
+    "Every class has four attacks, in slot order: light, neutral, heavy,",
+    "ultimate (see game/skills.py). The five below are the light attacks -- the",
+    "ones each class has always had, on no cooldown, and the only ones the",
+    "reference bot ever presses. Leaving them untouched is what keeps every",
+    "measured balance number in this project measuring the same thing.",
+    "",
+    "One rule holds across all five and is tested: every *light* attack winds up",
+    "faster than every enemy attack. The player reacts to enemies; enemies do",
+    "not react to the player. That puts a ceiling of 15 ticks on the five below,",
+    "because the quickest enemy tell in the game is the rat's bite at 16.",
+    "",
+    "The rule stops at the light slot on purpose. A heavy or an ultimate that",
+    "telegraphs for half a second is not unfair the way an enemy doing it would",
+    "be -- it is a commitment the player chose to spend, with a cooldown behind",
+    "it, and the length of the tell is what makes it weigh anything.",
     "",
     "Within that ceiling the classes are separated by the shape of the swing, not",
     "by a damage-per-second number: how long you are committed, how much ground",
@@ -106,13 +116,14 @@
     "projectile_radius": 3.5,
     "projectile_lifetime": 170,
     "_comment": [
-      "The Magician. The hardest single hit any class has, on the longest hero",
-      "commitment -- 35 ticks, and 14 of them before the bolt exists. Standing",
-      "still for that long is the cost of the damage.",
+      "The Magician. The hardest single hit of any light attack, on the longest",
+      "light commitment -- 29 ticks, and 12 of them before the bolt exists.",
+      "Standing still for that long is the cost of the damage.",
       "",
-      "The 14-tick windup is the ceiling for a hero weapon and deliberately sits",
-      "right against it: any slower and a grunt's claw would be the faster tell,",
-      "which would invert the rule the whole fight rests on."
+      "The 12-tick windup is the binding number for the whole rule above: the",
+      "rat's bite is 16, so there are four ticks of room and no more. Any slower",
+      "and a rat would be the faster tell, which would invert the rule the whole",
+      "fight rests on."
     ]
   },
 
@@ -135,10 +146,341 @@
     ]
   },
 
+  "_skill_comment": [
+    "The other three slots, five classes' worth. cooldown is in ticks and is",
+    "counted from the swing starting, so it is the gap between one use and the",
+    "next rather than a pause tacked onto the end of the recovery.",
+    "",
+    "What each slot is for:",
+    "  neutral   -- answers the situation the class's light attack is worst in.",
+    "               Always does less damage than the light attack; what it buys",
+    "               is position, or reach, or a crowd off you. ~3 seconds.",
+    "  heavy     -- roughly double the light attack in damage and in commitment.",
+    "               ~5 seconds.",
+    "  ultimate  -- the largest payoff the class has, once or twice a stage.",
+    "               25-30 seconds.",
+    "",
+    "**These are a first pass and they have not been measured.** Every other",
+    "number in this project was arrived at by running the campaign and reading",
+    "the result, and several were reverted when measurement contradicted them.",
+    "These were not, because the reference bot plays light-only by design and",
+    "therefore cannot see them. What is pinned by test is the *relationships*",
+    "-- neutral below light, heavy above it, cooldowns ascending -- not the",
+    "values. Treat them as a starting shape.",
+    "",
+    "None of them dashes. charge_speed works perfectly well on a hero attack",
+    "and is left for later rather than ruled out: a lunging skill and the dodge",
+    "would want designing against each other, which is more than this pass is."
+  ],
+
+  "knight_bash": {
+    "name": "Shield Bash",
+    "damage": 5,
+    "variance": 1,
+    "arc_degrees": 100,
+    "reach": 20,
+    "windup": 7,
+    "active": 3,
+    "recovery": 12,
+    "knockback": 9.5,
+    "hitstop": 5,
+    "cooldown": 180,
+    "_comment": [
+      "The Knight's problem is that a 30-tick greatsword cycle is a long time",
+      "with three things on you, and the class is too slow to walk out of it.",
+      "This does almost no damage and shoves everything in front of you nearly",
+      "twice as far as the greatsword does, in a third of the commitment."
+    ]
+  },
+
+  "knight_cleave": {
+    "name": "Cleave",
+    "damage": 24,
+    "variance": 5,
+    "arc_degrees": 150,
+    "reach": 38,
+    "windup": 22,
+    "active": 7,
+    "recovery": 28,
+    "knockback": 7.5,
+    "hitstop": 8,
+    "cooldown": 300
+  },
+
+  "knight_onslaught": {
+    "name": "Onslaught",
+    "damage": 34,
+    "variance": 6,
+    "arc_degrees": 360,
+    "reach": 46,
+    "windup": 30,
+    "active": 10,
+    "recovery": 34,
+    "knockback": 12.0,
+    "hitstop": 10,
+    "cooldown": 1800,
+    "_comment": [
+      "The whole circle, further than the Effigy's swing, and the hardest",
+      "knockback in the game. Seventy-four ticks of commitment for it -- longer",
+      "than any enemy attack -- so it is thrown into a crowd that has already",
+      "committed, not into one that is still deciding."
+    ]
+  },
+
+  "rogue_knife": {
+    "name": "Thrown Knife",
+    "damage": 4,
+    "variance": 1,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 5,
+    "active": 1,
+    "recovery": 9,
+    "knockback": 2.2,
+    "hitstop": 3,
+    "cooldown": 150,
+    "projectile": true,
+    "projectile_speed": 5.0,
+    "projectile_radius": 2.0,
+    "projectile_lifetime": 120,
+    "_comment": [
+      "The one thing a 20-pixel dagger cannot do is touch something that is not",
+      "already next to you. The fastest projectile in the game and the smallest,",
+      "on the shortest cooldown -- it is a way to start a fight or finish a rat,",
+      "not a way to fight at range."
+    ]
+  },
+
+  "rogue_impale": {
+    "name": "Impale",
+    "damage": 13,
+    "variance": 3,
+    "arc_degrees": 40,
+    "reach": 30,
+    "windup": 14,
+    "active": 3,
+    "recovery": 14,
+    "knockback": 5.0,
+    "hitstop": 6,
+    "cooldown": 270,
+    "_comment": [
+      "A 40-degree arc, the narrowest attack in the game. The Rogue's heavy is",
+      "the only one that can miss a body standing right in front of you, which",
+      "is the class: everything it does asks whether you are in exactly the",
+      "right place."
+    ]
+  },
+
+  "rogue_flurry": {
+    "name": "Flurry",
+    "damage": 16,
+    "variance": 4,
+    "arc_degrees": 220,
+    "reach": 28,
+    "windup": 12,
+    "active": 14,
+    "recovery": 22,
+    "knockback": 4.0,
+    "hitstop": 7,
+    "cooldown": 1500,
+    "_comment": [
+      "Fourteen ticks of open hitbox across most of a circle. A swing hits each",
+      "body once, so the long active window is not extra damage -- it is a net",
+      "that catches whatever walks into it while it is out."
+    ]
+  },
+
+  "archer_kick": {
+    "name": "Kick",
+    "damage": 4,
+    "variance": 1,
+    "arc_degrees": 90,
+    "reach": 22,
+    "windup": 6,
+    "active": 3,
+    "recovery": 10,
+    "knockback": 9.0,
+    "hitstop": 5,
+    "cooldown": 165,
+    "_comment": [
+      "The Archer's stated weakness, answered directly: a shortbow has reach 0,",
+      "so a rat standing on you is a class that has stopped working. This is the",
+      "only melee attack a ranged class has and it is not there to kill anything",
+      "-- it is there to buy back the distance the whole class depends on."
+    ]
+  },
+
+  "archer_piercer": {
+    "name": "Piercer",
+    "damage": 20,
+    "variance": 4,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 18,
+    "active": 1,
+    "recovery": 22,
+    "knockback": 4.0,
+    "hitstop": 6,
+    "cooldown": 300,
+    "projectile": true,
+    "projectile_speed": 5.4,
+    "projectile_radius": 3.0,
+    "projectile_lifetime": 200,
+    "_comment": "The fastest thing in the air in the game, and it still stops on the first body."
+  },
+
+  "archer_rain": {
+    "name": "Rain",
+    "damage": 11,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 20,
+    "active": 1,
+    "recovery": 26,
+    "knockback": 2.4,
+    "hitstop": 4,
+    "cooldown": 1500,
+    "projectile": true,
+    "projectile_speed": 4.0,
+    "projectile_radius": 2.5,
+    "projectile_lifetime": 180,
+    "projectile_count": 5,
+    "spread_degrees": 50,
+    "_comment": [
+      "The Warden's volley, pointed the other way. Five shots at 11 is more than",
+      "any single hit a class has, but only against a line of things -- against",
+      "one enemy four of the arrows are gone."
+    ]
+  },
+
+  "magician_ward": {
+    "name": "Ward",
+    "damage": 3,
+    "variance": 1,
+    "arc_degrees": 360,
+    "reach": 28,
+    "windup": 8,
+    "active": 4,
+    "recovery": 14,
+    "knockback": 10.5,
+    "hitstop": 5,
+    "cooldown": 200,
+    "_comment": [
+      "Three damage and the second-hardest shove in the game, all the way round,",
+      "in 26 ticks. The Magician's bolt is a 29-tick commitment on a body that",
+      "cannot afford to be interrupted, so what the class actually needs is not",
+      "more damage -- it is the room to spend that commitment."
+    ]
+  },
+
+  "magician_lance": {
+    "name": "Arcane Lance",
+    "damage": 28,
+    "variance": 6,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 26,
+    "active": 1,
+    "recovery": 26,
+    "knockback": 5.5,
+    "hitstop": 7,
+    "cooldown": 330,
+    "projectile": true,
+    "projectile_speed": 3.0,
+    "projectile_radius": 5.0,
+    "projectile_lifetime": 200,
+    "_comment": [
+      "The hardest single hit in the game and the largest projectile, moving",
+      "slower than the bolt it is a bigger version of. Fifty-three ticks of",
+      "commitment: this is the shot you take at something that has already",
+      "started its own attack."
+    ]
+  },
+
+  "magician_nova": {
+    "name": "Nova",
+    "damage": 12,
+    "variance": 3,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 28,
+    "active": 1,
+    "recovery": 30,
+    "knockback": 3.0,
+    "hitstop": 5,
+    "cooldown": 1700,
+    "projectile": true,
+    "projectile_speed": 3.2,
+    "projectile_radius": 3.0,
+    "projectile_lifetime": 190,
+    "projectile_count": 7,
+    "spread_degrees": 80,
+    "_comment": "Seven bolts across eighty degrees. A room-clearer, aimed at a room."
+  },
+
+  "priest_brand": {
+    "name": "Brand",
+    "damage": 6,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 8,
+    "active": 1,
+    "recovery": 13,
+    "knockback": 3.0,
+    "hitstop": 3,
+    "cooldown": 180,
+    "projectile": true,
+    "projectile_speed": 3.6,
+    "projectile_radius": 3.0,
+    "projectile_lifetime": 150,
+    "_comment": [
+      "The Priest is the only class with no answer at all to something across",
+      "the room -- a censer reaches 26 pixels and that is the whole kit. This is",
+      "a poke, not a bow: six damage every three seconds."
+    ]
+  },
+
+  "priest_smite": {
+    "name": "Smite",
+    "damage": 22,
+    "variance": 4,
+    "arc_degrees": 100,
+    "reach": 30,
+    "windup": 20,
+    "active": 5,
+    "recovery": 24,
+    "knockback": 6.5,
+    "hitstop": 7,
+    "cooldown": 300
+  },
+
+  "priest_consecrate": {
+    "name": "Consecrate",
+    "damage": 26,
+    "variance": 5,
+    "arc_degrees": 330,
+    "reach": 40,
+    "windup": 26,
+    "active": 9,
+    "recovery": 30,
+    "knockback": 11.0,
+    "hitstop": 9,
+    "cooldown": 1600,
+    "_comment": [
+      "Nearly the whole circle at 26 damage, with knockback second only to the",
+      "Knight's ultimate. The Priest's answer to being surrounded is the censer",
+      "at a small scale and this at a large one -- the class is defined by not",
+      "having to leave."
+    ]
+  },
+
   "_enemy_comment": [
-    "Enemy attacks. Every windup here is longer than every hero windup, and a",
-    "test enforces it. An enemy that strikes faster than you can start a swing",
-    "is not difficult, it is unfair."
+    "Enemy attacks. Every windup here is longer than every hero *light* attack,",
+    "and a test enforces it. An enemy that strikes faster than you can start a",
+    "swing is not difficult, it is unfair. Hero heavies and ultimates are exempt",
+    "-- see the note in _hero_comment."
   ],
 
   "claw": {

@@ -20,6 +20,7 @@ import pygame
 from .. import config
 from ..core.campaign import Campaign
 from ..core.vec2 import ZERO, Vec2
+from ..game import skills
 from ..game.entities import DEFAULT_HERO, Bestiary
 from ..game.intent import Intent
 from ..game.run import Run, RunOutcome
@@ -43,6 +44,21 @@ MOVE_KEYS = {
 }
 
 DODGE_KEYS = (pygame.K_SPACE, pygame.K_LSHIFT, pygame.K_RSHIFT)
+
+#: The three attacks that are not the light one, on the keys the left hand can
+#: reach without leaving WASD -- the right hand is on the mouse and aiming, so
+#: it has nothing spare. R is not among them: it is already "restart the run",
+#: and quietly rebinding it would cost somebody a run.
+#:
+#: There is deliberately no second set of alternates. Light has one (J) because
+#: it predates this and someone may be playing keyboard-only, but inventing a
+#: parallel binding for every slot is three more things to document and three
+#: more chances for two of them to disagree.
+SKILL_KEYS = {
+    pygame.K_q: skills.NEUTRAL,
+    pygame.K_e: skills.HEAVY,
+    pygame.K_f: skills.ULTIMATE,
+}
 
 #: How long the between-stage banner stays up, in frames. Long enough to read
 #: what you recovered, short enough that it never feels like a loading screen --
@@ -95,6 +111,13 @@ class PlayScene(Scene):
         #: press and release can both land inside one frame.
         self._dodge_pressed = False
 
+        #: Which skill slot was pressed since the last tick, or None. Edge
+        #: triggered for the same reason dodge is, and for one more: a held key
+        #: read from the key state would re-fire the skill on the exact tick its
+        #: cooldown expired, forever. The decision of *when* to spend a skill is
+        #: most of what makes it one, and leaning on a key is not a decision.
+        self._skill_pressed: Optional[int] = None
+
     @property
     def world(self):
         return self.run.world
@@ -121,6 +144,13 @@ class PlayScene(Scene):
                 return self.restarted()
             if event.key in DODGE_KEYS:
                 self._dodge_pressed = True
+            if event.key in SKILL_KEYS:
+                # Highest slot wins when two arrive in one frame, and the slots
+                # ascend by commitment -- so mashing resolves toward the thing
+                # you least want swallowed rather than toward the cheapest.
+                slot = SKILL_KEYS[event.key]
+                if self._skill_pressed is None or slot > self._skill_pressed:
+                    self._skill_pressed = slot
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             self._dodge_pressed = True
         return None
@@ -152,15 +182,22 @@ class PlayScene(Scene):
                 move = move + direction
 
         aim = self._aim_direction()
-        attacking = pygame.mouse.get_pressed()[0] or keys[pygame.K_j]
+
+        # A pressed skill wins over the light attack rather than queueing behind
+        # it. Holding the mouse down is the normal state of playing this game,
+        # so a skill that waited its turn would never come out.
+        slot = self._skill_pressed
+        attacking = slot is not None or pygame.mouse.get_pressed()[0] or keys[pygame.K_j]
 
         intent = Intent(
             move=move.clamped(1.0),
             aim=aim,
             attack=attacking,
             dodge=self._dodge_pressed,
+            weapon=slot if slot is not None else skills.LIGHT,
         )
         self._dodge_pressed = False
+        self._skill_pressed = None
         return intent
 
     def _aim_direction(self) -> Vec2:

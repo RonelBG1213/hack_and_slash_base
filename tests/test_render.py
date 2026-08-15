@@ -14,6 +14,7 @@ import pytest
 from hack_and_slash import config
 from hack_and_slash.core import campaign_io
 from hack_and_slash.core.vec2 import Vec2
+from hack_and_slash.game import skills
 from hack_and_slash.game.intent import Intent
 from hack_and_slash.game.sim import step
 from hack_and_slash.render.atlas import load as load_atlas
@@ -216,3 +217,60 @@ def test_the_hud_draws_the_danger_state(atlas) -> None:
     for tick in (0, 12):
         Hud().draw(surface, world, tick=tick)
     assert not is_blank(surface)
+
+
+def test_the_hud_draws_the_skill_pips_for_every_class(atlas) -> None:
+    """Four cooldowns in a 384px strip that already holds a health bar, its
+    readout and a stage counter. Drawn for all five classes and in both states,
+    because the pip is a different shape when it is filling."""
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    for cls in BESTIARY.hero_classes:
+        world = make_world()
+        world.hero.type = cls
+        Hud().draw(surface, world, tick=0)
+
+        # Part-way through two of the three, which is the state the row spends
+        # most of a fight in.
+        world.hero.skill_cooldowns = {
+            skills.NEUTRAL: cls.weapons[skills.NEUTRAL].cooldown // 2,
+            skills.ULTIMATE: cls.weapons[skills.ULTIMATE].cooldown - 1,
+        }
+        world.hero.dodge_cooldown = cls.dodge_cooldown // 2
+        Hud().draw(surface, world, tick=0)
+    assert not is_blank(surface)
+
+
+def test_the_hud_draws_for_a_body_with_no_skills(atlas) -> None:
+    """A `World` can be built around any entity type -- the tools and half the
+    tests do it -- so the pip row has to cope with a hero that has one attack
+    rather than four. An IndexError here would break everything downstream of
+    it, and only in the drawing layer, which is the last place anyone looks."""
+    world = make_world()
+    world.hero.type = BESTIARY["grunt"]
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    Hud().draw(surface, world, tick=0)
+
+
+# --- input -------------------------------------------------------------------
+def test_a_skill_key_selects_its_slot_and_fires_once(atlas) -> None:
+    """The input path, which nothing covered before: a keypress becomes an
+    `Intent` naming a slot, and the flag is cleared so it does not fire again on
+    the next frame. Held-to-repeat is right for the light attack and wrong for a
+    skill -- a leant-on key would spend every cooldown the instant it expired,
+    forever, which is the opposite of a decision."""
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_e))
+    intent = scene._read_intent()
+    assert intent.attack and intent.weapon == skills.HEAVY
+
+    assert scene._read_intent().weapon == skills.LIGHT, "the press fired twice"
+
+
+def test_the_highest_slot_wins_when_two_keys_land_in_one_frame(atlas) -> None:
+    # The slots ascend by commitment, so mashing resolves toward the thing you
+    # least want swallowed rather than toward the cheapest.
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    for key in (pygame.K_f, pygame.K_q):
+        scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=key))
+    assert scene._read_intent().weapon == skills.ULTIMATE

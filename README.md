@@ -1,9 +1,10 @@
 # Hack and Slash
 
 A top-down twin-stick arena brawler. Move with WASD, aim with the mouse, click
-to swing, roll to survive. Pick one of five classes, then twenty stages in four
-acts, each ending on a boss. Your wounds come with you from one stage to the
-next, so how well you clear stage one is still with you at the end of the act.
+to swing, roll to survive. Four attacks per class — light, neutral, heavy,
+ultimate — on ascending cooldowns. Pick one of five classes, then twenty stages
+in four acts, each ending on a boss. Your wounds come with you from one stage to
+the next, so how well you clear stage one is still with you at the end of the act.
 
 Python 3.14 + pygame-ce. No engine, no build step.
 
@@ -76,6 +77,35 @@ You pick one before the run and it is the whole of character building.
 | **Magician** | Can you find the gap? The hardest single hit in the game, behind the longest commitment. |
 | **Priest** | Can you last? Unremarkable in any one fight, and recovers two thirds of its health between stages. |
 
+### The four slots
+
+Every class has four attacks, on ascending commitment and ascending cooldown.
+
+| Slot | Key | What it is |
+| --- | --- | --- |
+| **Light** | click / `J` | No cooldown. The attack in the table above — the one the class *is*. |
+| **Neutral** | `Q` | ~3s. Answers the situation the light attack is worst in, and always hits for less. The Archer's kick, the Magician's ward, the Rogue's thrown knife. |
+| **Heavy** | `E` | ~5s. Roughly double the light attack in damage and in commitment. |
+| **Ultimate** | `F` | ~25-30s. The largest payoff the class has. Once or twice a stage. |
+
+A neutral buys position rather than kills things — that is the point of it, and
+it is why every one of them does less damage than the attack it sits beside. The
+Knight's Shield Bash shoves a crowd nearly twice as far as a greatsword swing for
+five damage, because a 30-tick greatsword cycle with three grunts on you is the
+Knight's actual problem and more damage was never the answer to it.
+
+**These fifteen attacks are the one part of this game that has not been
+measured.** Everything else in the balance section below came from running the
+campaign and reading the result. The reference bot plays light-only by design —
+which is what keeps every recorded number still meaning what it meant — so it
+cannot see the other three slots. What the suite pins is the *relationships*
+between slots, not the values. Treat the numbers as a first pass.
+
+Only the light attack has to obey the rule that a hero starts a swing faster than
+any enemy does. A heavy telegraphing for half a second is a commitment you chose
+to spend with a cooldown behind it, which is not the same thing as an enemy
+striking before you can answer.
+
 ### The run
 
 Twenty stages in four acts. An act introduces one enemy, spends three stages
@@ -132,10 +162,17 @@ The art and the stages are both generated, not committed. Build them once:
 | --- | --- |
 | WASD / arrows | Move |
 | Mouse | Aim |
-| Left click (or `J`) | Swing — hold to keep swinging |
+| Left click (or `J`) | Light attack — hold to keep swinging |
+| `Q` | Neutral skill |
+| `E` | Heavy skill |
+| `F` | Ultimate |
 | Space / Shift / right click | Dodge roll |
 | `R` | Restart the run |
 | Esc | Back to the menu |
+
+The light attack repeats while held. The three skills do not — each is one press,
+because deciding *when* to spend one is most of what makes it a skill, and a
+leant-on key would spend every cooldown the instant it expired.
 
 You keep a fraction of your speed mid-swing, not none of it — committing to an
 attack should cost position, not responsiveness.
@@ -300,6 +337,13 @@ python tools/screenshot.py play out.png --stage 20 --class priest --ticks 240
   go and fetch a grunt that spent the fight pushing into a wall. An early draft
   of stage 1 did exactly that. Real pathing means A* over the tile grid, in
   `core/`.
+
+  It also quietly contaminates measurement. Running the skill-using bot over the
+  twenty stages, two of the eight cells that moved were not losses at all --
+  both hit the tick limit with the hero healthy and every surviving enemy at
+  full health, behind a wall and outside its own aggro radius. Nothing had gone
+  wrong with the balance; the fight had simply ended up somewhere neither side
+  could route out of.
 - **Enemies do not dodge.** Expressed as data: they have no `dodge_ticks`. The
   roll is the player's verb alone.
 - **No sound.** Nothing here would have to change to add it; hits already emit

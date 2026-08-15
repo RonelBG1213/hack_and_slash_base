@@ -43,26 +43,55 @@ def can_dodge(entity: Entity) -> bool:
     return can_act(entity) and entity.type.can_dodge and entity.dodge_cooldown <= 0
 
 
+def can_use(entity: Entity, weapon_index: int = 0) -> bool:
+    """Free to start *that particular* attack.
+
+    The counterpart to `can_dodge`, and deliberately the same shape: being free
+    to act is not the same as that attack being available, and conflating the
+    two is how a cooldown turns into "the button does nothing and you cannot
+    tell why".
+
+    Anything whose attack has no cooldown -- every enemy, every class's light
+    attack -- collapses to `can_act`, so this is safe to ask about any body.
+    """
+    if not can_act(entity):
+        return False
+    return entity.cooldown_on(weapon_index % len(entity.type.weapons)) <= 0
+
+
 def begin_attack(
     entity: Entity, facing: float | None = None, weapon_index: int = 0
 ) -> bool:
     """Start a swing. Returns False when the body was not free to.
 
     Callers get a bool rather than an exception because "the player mashed
-    attack during recovery" is the normal case, not an error.
+    attack during recovery" is the normal case, not an error. An attack still
+    cooling down refuses the same way, and costs nothing -- the check happens
+    before facing is committed, so a refused skill does not quietly turn the
+    hero to face something.
 
     `weapon_index` is chosen once, here, and holds for the whole attack. That is
     what keeps a multi-attack body honest: it winds up, hits and recovers on the
     same weapon, so the tell a player read is the attack that lands.
     """
-    if not can_act(entity):
+    # Out-of-range would otherwise surface much later as an IndexError from
+    # inside the state machine, with nothing pointing back at the brain. Wrapped
+    # here rather than at the assignment below, because the cooldown has to be
+    # read against the index actually used.
+    index = weapon_index % len(entity.type.weapons)
+    if not can_use(entity, index):
         return False
     if facing is not None:
         entity.facing = facing
 
-    # Out-of-range would otherwise surface much later as an IndexError from
-    # inside the state machine, with nothing pointing back at the brain.
-    entity.weapon_index = weapon_index % len(entity.type.weapons)
+    entity.weapon_index = index
+    # Stamped at the start of the swing, so the number in the data is the gap
+    # between one attack beginning and the next -- which is what a player counts
+    # -- rather than a pause that starts once the recovery has already run.
+    cooldown = entity.weapon.cooldown
+    if cooldown > 0:
+        entity.skill_cooldowns[index] = cooldown
+
     entity.state = ActionState.WINDUP
     entity.state_ticks = 0
     # A fresh swing forgets what the last one hit, which is what stops a
@@ -190,3 +219,11 @@ def tick_timers(entity: Entity) -> None:
         entity.attack_cooldown -= 1
     if entity.flash > 0:
         entity.flash -= 1
+
+    # Empty for anything without skills, so this costs nothing on the hundreds
+    # of enemy bodies a run steps through. Entries are left at zero rather than
+    # removed: the HUD reads them every frame, and a key that vanishes is one
+    # more thing for the drawing code to have an opinion about.
+    for index, remaining in entity.skill_cooldowns.items():
+        if remaining > 0:
+            entity.skill_cooldowns[index] = remaining - 1

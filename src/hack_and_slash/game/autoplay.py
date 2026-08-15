@@ -19,11 +19,11 @@ headless.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 
 from ..core.collision import path_is_clear
 from ..core.vec2 import Vec2
-from . import actions
+from . import actions, skills
 from .entities import ActionState, Entity
 from .intent import NOTHING, Intent
 from .sim import step
@@ -344,6 +344,84 @@ class Reckless:
         return Intent(move=toward, aim=toward, attack=True)
 
 
+@dataclass(frozen=True)
+class Skilful:
+    """`Autoplay`, plus it spends every skill the moment one is available.
+
+    A separate instrument rather than a change to `Autoplay`, and that is the
+    whole point of it. The reference policy presses one button, which is why
+    every recorded number in this project still means what it meant before the
+    other three slots existed. Teaching it to use them would move all hundred
+    cells of the class-by-stage grid at once, and there would be no way to tell
+    which of the two changes did it.
+
+    So this measures the *ceiling* instead: how much easier the game gets for a
+    hero that never once holds a skill back. It is not how a person plays -- a
+    person saves an ultimate for the boss -- and it is not meant to be. It is
+    the upper bound, and the question it answers is whether four buttons broke
+    the difficulty curve, not whether they are fun.
+
+    The one piece of judgement in it is refusing a melee skill that cannot
+    reach. Otherwise the ranged classes would spend the run kicking at things
+    forty pixels away, and the measurement would be of that rather than of the
+    skills.
+
+    **Read its losses carefully -- some of them are not about skills.** Measured
+    over the twenty stages against all five classes, eight of a hundred cells
+    moved when the skills were switched on and every one moved downward. Six are
+    real deaths, and the reason is worth having: a heavy commits for 41-57 ticks
+    and an ultimate for 46-74, and the hero cannot dodge during any of them, so
+    spending one at the wrong moment is most of a second of standing still with
+    the room still moving.
+
+    The other two -- the Knight and the Archer on stage 9 -- are not deaths at
+    all. Both hit the tick limit with the hero on most of its health and every
+    remaining enemy at full health, three hundred pixels away, behind a wall and
+    outside its own aggro radius. Nothing in this game paths around walls, and
+    this policy's `_approach` is two probes and a shrug; the skills simply moved
+    the fight somewhere that limitation bites. That is a measurement of the
+    missing pathfinding, not of a skill, and reading it as balance would be
+    reading it wrong.
+    """
+
+    base: Autoplay = field(default_factory=lambda: Autoplay(reaction_ticks=REACTION_SHARP))
+
+    def __call__(self, world) -> Intent:
+        intent = self.base(world)
+        if not intent.attack:
+            return intent
+
+        hero = world.hero
+        enemies = world.enemies()
+        if hero is None or not enemies:
+            return intent
+
+        target = min(enemies, key=lambda e: e.pos.distance_sq_to(hero.pos))
+        slot = self._best_available(hero, hero.pos.distance_to(target.pos), target.radius)
+        return intent if slot == intent.weapon else replace(intent, weapon=slot)
+
+    def _best_available(self, hero: Entity, distance: float, target_radius: float) -> int:
+        """The most expensive attack that is off cooldown and can connect.
+
+        Highest first, so an ultimate is never passed over for a heavy. Falls
+        through to light, which has no cooldown and is always available -- the
+        method therefore always returns something, and the caller never has to
+        cope with "no attack".
+        """
+        for slot in reversed(skills.SLOTS):
+            if slot >= len(hero.type.weapons):
+                continue
+            weapon = hero.type.weapons[slot]
+            if hero.cooldown_on(slot) > 0:
+                continue
+            # A projectile carries its own distance; a swing has to be next to
+            # the thing. Reach 0 on a non-projectile is not a real attack.
+            if not weapon.projectile and distance > weapon.reach + target_radius:
+                continue
+            return slot
+        return skills.LIGHT
+
+
 #: The reference for "a competent player", and deliberately *not* the
 #: zero-latency one.
 #:
@@ -363,6 +441,11 @@ twitchy = Autoplay(reaction_ticks=REACTION_PERFECT)
 
 #: The other end of the bracket.
 reckless = Reckless()
+
+#: The same competent player with all four buttons. Not the reference and never
+#: the default -- it exists to be compared against `autoplay`, so that "how much
+#: did skills change the game" is a question with a number attached.
+skilful = Skilful()
 
 
 def play_out(world, policy=autoplay, limit: int = 9000) -> int:

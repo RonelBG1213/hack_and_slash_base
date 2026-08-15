@@ -1,8 +1,13 @@
-"""The bottom strip: health, the dodge pip, and how many are left.
+"""The bottom strip: health, the cooldown pips, and how many are left.
 
-Three numbers, because those are the three a player acts on. Health decides
-whether to press or disengage, the dodge pip decides whether the next telegraph
-is survivable, and the count is the only sense of progress a single arena gives.
+Everything here is something a player acts on. Health decides whether to press
+or disengage, the pips decide what is available to press *with*, and the count is
+the only sense of progress a single arena gives.
+
+Every cooldown is drawn the same way -- a small square that empties and refills.
+Four of them in a row is a lot of pips, which is exactly why none of them is a
+number: a row of shapes is read at a glance in peripheral vision, and four
+numbers is a thing you stop to parse in the middle of a fight.
 """
 
 from __future__ import annotations
@@ -10,6 +15,7 @@ from __future__ import annotations
 import pygame
 
 from .. import config
+from ..game import skills
 from ..game.entities import Entity
 from ..game.world import World
 
@@ -21,6 +27,26 @@ BAR_H = 8
 #: Below this fraction the bar turns and starts pulsing. A number you have to
 #: read is a number you read too late.
 DANGER = 0.3
+
+#: Where the pip row starts, and how far apart the skill pips sit. The strip is
+#: 384px wide with health, its readout and the stage counter already in it, so
+#: this row lives in the gap between them and the spacing is what it can afford.
+PIP_X = BAR_X + BAR_W + 52
+SKILL_PIP_X = PIP_X + 50
+SKILL_PIP_SPACING = 26
+
+#: One letter per skill pip, and it is the key you press. A pip labelled with
+#: the attack's name would be a pip you have to read; this one answers the only
+#: question being asked of it, which is "can I press that yet".
+SKILL_PIP_LABELS = {
+    skills.NEUTRAL: "Q",
+    skills.HEAVY: "E",
+    skills.ULTIMATE: "F",
+}
+
+PIP_READY = (150, 214, 236)
+PIP_EMPTY = (40, 46, 58)
+PIP_FILLING = (78, 118, 140)
 
 
 class Hud:
@@ -41,6 +67,7 @@ class Hud:
         if hero is not None:
             self._draw_health(surface, hero, top, tick)
             self._draw_dodge(surface, hero, top)
+            self._draw_skills(surface, hero, top)
 
         self._draw_remaining(surface, world, top, run)
         self._draw_boss_bar(surface, world)
@@ -70,31 +97,73 @@ class Hud:
         label = self.small.render(f"{hero.hp}/{hero.type.hp}", False, config.WHITE)
         surface.blit(label, (BAR_X + BAR_W + 6, y - 1))
 
-    # --- dodge ---------------------------------------------------------------
-    def _draw_dodge(self, surface: pygame.Surface, hero: Entity, top: int) -> None:
-        """A pip that empties while the roll is on cooldown and fills when ready.
+    # --- cooldowns -----------------------------------------------------------
+    def _draw_pip(
+        self,
+        surface: pygame.Surface,
+        x: int,
+        y: int,
+        remaining: int,
+        total: int,
+        label: str,
+    ) -> None:
+        """One cooldown, as a square that refills from the bottom.
 
-        The one piece of state a player checks mid-fight without wanting to
-        think about it, so it is drawn as a shape rather than a number.
+        The shape a player checks mid-fight without wanting to think about it,
+        which is why it is a shape. Filling upward rather than draining means
+        "full" and "ready" are the same picture, so the row is read by how much
+        of it is lit rather than by comparing four part-empty boxes.
         """
-        x = BAR_X + BAR_W + 52
-        y = top + BAR_Y_OFFSET - BAR_H
         size = BAR_H
+        ready = remaining <= 0
 
-        ready = hero.dodge_cooldown <= 0
         pygame.draw.rect(surface, (14, 15, 20), (x - 1, y - 1, size + 2, size + 2))
-
         if ready:
-            pygame.draw.rect(surface, (150, 214, 236), (x, y, size, size))
+            pygame.draw.rect(surface, PIP_READY, (x, y, size, size))
         else:
-            remaining = hero.dodge_cooldown / max(1, hero.type.dodge_cooldown)
-            filled = int(size * (1.0 - remaining))
-            pygame.draw.rect(surface, (40, 46, 58), (x, y, size, size))
+            filled = int(size * (1.0 - remaining / max(1, total)))
+            pygame.draw.rect(surface, PIP_EMPTY, (x, y, size, size))
             if filled > 0:
-                pygame.draw.rect(surface, (78, 118, 140), (x, y + size - filled, size, filled))
+                pygame.draw.rect(surface, PIP_FILLING, (x, y + size - filled, size, filled))
 
-        label = self.small.render("DODGE", False, config.WHITE if ready else config.GREY)
-        surface.blit(label, (x + size + 4, y - 1))
+        text = self.small.render(label, False, config.WHITE if ready else config.GREY)
+        surface.blit(text, (x + size + 3, y - 1))
+
+    def _draw_dodge(self, surface: pygame.Surface, hero: Entity, top: int) -> None:
+        self._draw_pip(
+            surface,
+            PIP_X,
+            top + BAR_Y_OFFSET - BAR_H,
+            hero.dodge_cooldown,
+            hero.type.dodge_cooldown,
+            "DODGE",
+        )
+
+    def _draw_skills(self, surface: pygame.Surface, hero: Entity, top: int) -> None:
+        """One pip per skill slot, in slot order, labelled with its key.
+
+        Light is not drawn: it has no cooldown, so its pip would be permanently
+        full, which is three pixels of information repeated sixty times a second.
+
+        Anything with fewer attacks than the four slots simply draws fewer pips.
+        A `World` can be built around any entity type -- the tools and half the
+        tests do it -- and a HUD that raised an IndexError on a body without an
+        ultimate would break them all.
+        """
+        y = top + BAR_Y_OFFSET - BAR_H
+        drawn = 0
+        for slot in skills.COOLDOWN_SLOTS:
+            if slot >= len(hero.type.weapons):
+                continue
+            self._draw_pip(
+                surface,
+                SKILL_PIP_X + drawn * SKILL_PIP_SPACING,
+                y,
+                hero.cooldown_on(slot),
+                hero.type.weapons[slot].cooldown,
+                SKILL_PIP_LABELS[slot],
+            )
+            drawn += 1
 
     # --- progress ------------------------------------------------------------
     def _draw_remaining(

@@ -7,6 +7,7 @@ import math
 import pytest
 
 from hack_and_slash import config
+from hack_and_slash.game import skills
 from hack_and_slash.game.entities import Faction, load_bestiary
 
 from .helpers import BESTIARY, HERO
@@ -146,22 +147,108 @@ def test_every_attack_has_a_readable_telegraph() -> None:
         assert weapon.recovery > 0, f"{weapon_id} is free to whiff"
 
 
-def test_enemy_attacks_are_slower_to_start_than_any_class_s() -> None:
+def test_enemy_attacks_are_slower_to_start_than_any_class_s_light_attack() -> None:
     """The player reacts to enemies; enemies do not react to the player.
 
-    Compared against the *slowest* hero attack, which is the strong form: every
-    enemy tell in the game is longer than every hero tell, so the rule holds
-    whichever class was picked. The Magician's 14-tick bolt is the binding
-    number and the rat's 16-tick bite is what it binds against -- there is only
-    two ticks of room here, and it is deliberate rather than lucky.
+    Compared against the *slowest light* attack, which is the strong form of the
+    rule for the attack it applies to: every enemy tell in the game is longer
+    than every class's default swing, so the rule holds whichever class was
+    picked. The Magician's 12-tick bolt is the binding number and the rat's
+    16-tick bite is what it binds against -- four ticks of room, deliberate
+    rather than lucky.
+
+    **Why the light slot and not all four.** This used to read `c.weapon`, which
+    was the same thing when a class had one attack. It is stated as the light
+    slot now because a heavy or an ultimate is allowed to telegraph for longer
+    than anything an enemy does, and several of them do -- the Knight's
+    Onslaught winds up for 30 ticks, longer than a brute's maul.
+
+    That is not the rule failing, it is the rule not applying. An enemy's tell
+    is imposed on you and the whole fight rests on being able to answer it with
+    a swing of your own; a heavy's tell is one you chose to spend, from a slot
+    that then goes on cooldown for five seconds. The attack you answer a
+    telegraph *with* is the light one, and it is still faster than every tell in
+    the game.
     """
-    slowest_class_attack = max(c.weapon.windup for c in CLASSES)
+    slowest_light = max(c.weapons[skills.LIGHT].windup for c in CLASSES)
     for entity_type in ENEMIES:
         for weapon in entity_type.weapons:
-            assert weapon.windup > slowest_class_attack, (
+            assert weapon.windup > slowest_light, (
                 f"{entity_type.id}'s {weapon.id} winds up in {weapon.windup} ticks, "
-                f"faster than the slowest class attack at {slowest_class_attack}"
+                f"faster than the slowest class light attack at {slowest_light}"
             )
+
+
+# --- the four slots ----------------------------------------------------------
+def test_every_class_declares_its_four_slots_in_the_order_the_game_expects() -> None:
+    """The hero-side counterpart to the boss ordering test below, and it exists
+    for exactly the same reason: the slot is an *index*, so a class that lists
+    its attacks in another order loads perfectly and then binds the ultimate to
+    the light-attack button.
+
+    Only the relationships are pinned, not the values. The numbers in these
+    fifteen attacks are a first pass that the reference bot cannot measure --
+    it plays light-only by design -- so asserting any of them would be pinning
+    a guess. What is pinned is what makes a slot that slot.
+    """
+    for cls in CLASSES:
+        assert len(cls.weapons) == len(skills.SLOTS), (
+            f"{cls.id} has {len(cls.weapons)} attacks; every class needs "
+            f"{len(skills.SLOTS)}"
+        )
+        light, neutral, heavy, ultimate = cls.weapons
+
+        # Light is index 0 and free. Everything that predates skills reads
+        # `type.weapon`, which is weapons[0], so this is what keeps the whole
+        # recorded balance of the game measuring what it measured before.
+        assert light.cooldown == 0, f"{cls.id}'s light attack is on a cooldown"
+
+        cooldowns = [w.cooldown for w in (neutral, heavy, ultimate)]
+        assert cooldowns == sorted(cooldowns) and len(set(cooldowns)) == 3, (
+            f"{cls.id}'s cooldowns are {cooldowns}; they must ascend with the slot"
+        )
+        assert ultimate.cooldown >= 1200, (
+            f"{cls.id}'s ultimate comes back every {ultimate.cooldown} ticks, "
+            "which is not an ultimate"
+        )
+
+        # Neutral buys position; heavy buys damage. A neutral that out-damages
+        # the light attack is just a better light attack on a cooldown.
+        assert neutral.damage < light.damage, (
+            f"{cls.id}'s {neutral.id} hits for {neutral.damage} against the "
+            f"light attack's {light.damage}"
+        )
+        assert heavy.damage > light.damage, f"{cls.id}'s heavy does not hit harder"
+        assert heavy.total_ticks > light.total_ticks, (
+            f"{cls.id}'s heavy commits for no longer than its light attack"
+        )
+
+        # The ultimate is the largest payoff the class has. Measured as total
+        # damage on the table rather than per hit, because two of the five are
+        # fans -- a single Rain arrow hits for less than a Piercer and there are
+        # five of them.
+        assert _payload(ultimate) > _payload(heavy), (
+            f"{cls.id}'s ultimate offers {_payload(ultimate)} damage against "
+            f"its heavy's {_payload(heavy)}"
+        )
+
+
+def _payload(weapon) -> int:
+    """Everything one use of an attack can deal, fans included."""
+    return weapon.damage * max(1, weapon.projectile_count if weapon.projectile else 1)
+
+
+def test_no_hero_skill_dashes() -> None:
+    """`charge_speed` works on a hero attack and is deliberately unused.
+
+    A lunging skill and the dodge would want designing against each other --
+    both are "commit to a direction and cover ground" -- and that is a bigger
+    question than adding four buttons. Recorded as a test so the absence reads
+    as a decision rather than as something nobody got round to.
+    """
+    for cls in CLASSES:
+        for weapon in cls.weapons:
+            assert not weapon.is_charge, f"{cls.id}'s {weapon.id} dashes"
 
 
 def test_no_class_s_iframes_outlast_its_roll() -> None:
