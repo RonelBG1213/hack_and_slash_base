@@ -84,6 +84,15 @@ class Run:
     #: moment anything else moved one of them.
     purchases: dict[str, int] = field(default_factory=dict)
 
+    #: The advanced class promoted into, or empty. Kept *beside* `hero_type_id`
+    #: rather than overwriting it, and that separation does real work: both
+    #: `restart()` here and `PlayScene.restarted()` read `hero_type_id`, so a
+    #: restart returns to the class the run was begun as without either of them
+    #: knowing promotion exists. Overwriting would silently make R start a fresh
+    #: run at stage one as a Dark Knight -- a class the character select cannot
+    #: offer and the balance grid has never seen.
+    job_id: str = ""
+
     # --- lifecycle -----------------------------------------------------------
     @classmethod
     def start(
@@ -135,12 +144,20 @@ class Run:
 
     @property
     def hero_type(self) -> EntityType:
-        """The class being played, whether or not its body is still alive.
+        """The class being played *now*, whether or not its body is still alive.
 
         Read from the bestiary rather than off `world.hero`, which is None once
         the hero has been culled -- the run still needs to know what it was.
+
+        Promotion wins where it has happened, which matters for the one caller
+        that reads a number off this: `_advance` uses `heal_between_stages` and
+        the maximum health to work out what carries into the next stage. At the
+        trigger as it ships there is never a next stage after a promotion, so
+        today this changes nothing -- it is written this way so that moving the
+        trigger earlier is the one-line change it looks like, rather than a
+        silent bug where a promoted hero heals as the class it used to be.
         """
-        return self.bestiary[self.hero_type_id]
+        return self.bestiary[self.job_id or self.hero_type_id]
 
     @staticmethod
     def _stage_seed(seed: int, index: int) -> int:

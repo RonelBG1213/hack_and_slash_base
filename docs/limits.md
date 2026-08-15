@@ -8,20 +8,31 @@ with the same information.
 
 ## Deliberate
 
-### No progression that makes you hit harder
+### Almost no progression that makes you hit harder
 
-There is loot and there is a shop, but the three things it sells are health now,
-health per stage, and gold find — nothing touches damage, speed or maximum health.
+For nineteen of the twenty stages, none at all. The shop sells health now, health
+per stage, and gold find; nothing it stocks touches damage, speed or maximum
+health.
 
-That is load-bearing rather than squeamish. Because the hero's **output** never
-grows, health on a later boss buys fight *length* and nothing else — so the act
-bosses are not much tougher than the first and take their difficulty from reach,
-cadence and arena instead. Both later bosses were drafted far tankier and were
-unwinnable on every seed.
+That is load-bearing rather than squeamish. Because the hero's **output** does not
+grow across a run, health on a later boss buys fight *length* and nothing else —
+so the act bosses are not much tougher than the first and take their difficulty
+from reach, cadence and arena instead. Both later bosses were drafted far tankier
+and were unwinnable on every seed.
 
-Selling a damage upgrade would need a per-`Entity` stat layer that every lookup in
-the game went through, and would invalidate the whole recorded balance grid on the
-day it shipped.
+**The one exception is [promotion](design.md#promotion), and it is confined to the
+last stage on purpose.** An advanced class changes maximum health and replaces two
+attacks, which is exactly the kind of change the paragraph above says the game
+cannot absorb. It is survivable here only because there is no stage after it: no
+later fight has to be re-tuned around a hero that hits harder, because there is no
+later fight. Moving the trigger earlier is one condition in `play.py` and a
+re-tune of everything after it.
+
+What still has no answer is equipment. Selling a damage upgrade would need a
+per-`Entity` stat layer that every lookup in the game went through, and would
+invalidate the whole recorded balance grid on the day it shipped. Promotion sits
+in `EntityType`, which is frozen content — it swaps which type a body points at
+rather than adding a layer under it.
 
 ### The bosses have one phase change and no second moveset
 
@@ -66,6 +77,20 @@ pass and [`data/loot.json`](../data/loot.json) says so at the top.
 The reference bot plays light-only by design, so it cannot see the neutral, heavy
 or ultimate slots. The suite pins the relationships between slots, not the values.
 See [Balance](balance.md#what-is-not-measured).
+
+### The ten advanced classes, and the twenty attacks they bring
+
+The largest unmeasured surface in the project. `autoplay` plays light-only *and*
+never promotes, so it cannot see any of this — not the classes, not their heavies,
+not their ultimates. Every number was reasoned about and none was measured.
+
+That is also what keeps the balance grid honest: promotion is offered by the
+scene, never by the bot, so the recorded 5×20 grid measures the same game it
+measured before any of this existed. The two facts are the same fact.
+
+One further hole specific to the trigger: because promotion happens on the way
+into the last stage, a branch can only ever be judged against the Sovereign. No
+data exists on whether any of them would be sane for fifteen stages.
 
 ### The dodge's worth is measured, not settled
 

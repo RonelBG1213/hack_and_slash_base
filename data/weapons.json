@@ -839,5 +839,433 @@
       "against this one -- the answer is a pillar or being close enough that the",
       "fan has not opened yet, and being close is what the arc is for."
     ]
+  },
+
+  "_advanced_comment": [
+    "The promoted classes' heavy and ultimate slots -- two attacks each, ten",
+    "classes, twenty weapons. An advanced class inherits its base's light and",
+    "neutral by id, so those two slots are unchanged and the class still opens a",
+    "fight the way the one it grew out of did.",
+    "",
+    "**These are a first pass and nothing measures them**, exactly as with the",
+    "fifteen above and for a worse reason: the reference bot plays light-only",
+    "*and* never promotes, so it cannot see these attacks at all. What is pinned",
+    "by test is the same set of relationships every class obeys -- heavy above",
+    "light, ultimate payload above heavy, cooldowns ascending. Treat every number",
+    "here as a starting shape.",
+    "",
+    "They are also aimed at one specific fight. Promotion happens on reaching the",
+    "final stage, so the only enemy any of these will ever be used against is the",
+    "Sovereign: a 210-degree arc up close, a committed lance at mid range, and",
+    "nine shots across a half-circle from far. Each pair is one branch that kills",
+    "it faster and one that survives it longer.",
+    "",
+    "None of them dashes, for the same reason none of the base skills do."
+  ],
+
+  "dark_knight_ruin": {
+    "name": "Ruin",
+    "damage": 30,
+    "variance": 6,
+    "arc_degrees": 140,
+    "reach": 40,
+    "windup": 26,
+    "active": 7,
+    "recovery": 30,
+    "knockback": 7.0,
+    "hitstop": 9,
+    "cooldown": 320,
+    "_comment": "Cleave with the guard dropped: six more damage for six more ticks."
+  },
+
+  "dark_knight_black_tide": {
+    "name": "Black Tide",
+    "damage": 42,
+    "variance": 8,
+    "arc_degrees": 360,
+    "reach": 48,
+    "windup": 34,
+    "active": 10,
+    "recovery": 38,
+    "knockback": 11.0,
+    "hitstop": 11,
+    "cooldown": 1800,
+    "_comment": [
+      "The hardest hit in the game, behind the longest commitment in the game --",
+      "82 ticks, nearly a second and a half. Thrown at something already swinging,",
+      "never at something deciding."
+    ]
+  },
+
+  "holy_knight_bulwark": {
+    "name": "Bulwark",
+    "damage": 18,
+    "variance": 4,
+    "arc_degrees": 200,
+    "reach": 36,
+    "windup": 20,
+    "active": 6,
+    "recovery": 24,
+    "knockback": 11.0,
+    "hitstop": 8,
+    "cooldown": 290,
+    "_comment": [
+      "Six less damage than the Cleave it replaces and half again the shove,",
+      "across an arc wide enough that backing off beats circling -- the Sovereign's",
+      "own Arc, answered in kind."
+    ]
+  },
+
+  "holy_knight_sanctuary": {
+    "name": "Sanctuary",
+    "damage": 22,
+    "variance": 4,
+    "arc_degrees": 360,
+    "reach": 46,
+    "windup": 26,
+    "active": 12,
+    "recovery": 30,
+    "knockback": 14.0,
+    "hitstop": 10,
+    "cooldown": 1700,
+    "_comment": [
+      "The hardest knockback in the game and twelve ticks of open hitbox. Not a",
+      "kill -- a reset. Everything touching you is somewhere else afterwards."
+    ]
+  },
+
+  "assassin_eviscerate": {
+    "name": "Eviscerate",
+    "damage": 22,
+    "variance": 5,
+    "arc_degrees": 35,
+    "reach": 32,
+    "windup": 16,
+    "active": 3,
+    "recovery": 16,
+    "knockback": 5.0,
+    "hitstop": 7,
+    "cooldown": 280,
+    "_comment": [
+      "The narrowest attack in the game, narrower than the Impale it replaces.",
+      "Nine more damage for four more ticks, and it will miss a body standing",
+      "slightly to one side of where you are looking."
+    ]
+  },
+
+  "assassin_deathmark": {
+    "name": "Deathmark",
+    "damage": 30,
+    "variance": 6,
+    "arc_degrees": 50,
+    "reach": 34,
+    "windup": 20,
+    "active": 4,
+    "recovery": 24,
+    "knockback": 6.0,
+    "hitstop": 9,
+    "cooldown": 1500,
+    "_comment": [
+      "Nearly twice the Flurry's damage into a fiftieth of its arc. The Rogue's",
+      "ultimate stops being a net and becomes a single answer to a single body,",
+      "which is the whole difference between the two branches."
+    ]
+  },
+
+  "shadow_rogue_shadowstep": {
+    "name": "Shadowstep",
+    "damage": 14,
+    "variance": 3,
+    "arc_degrees": 180,
+    "reach": 28,
+    "windup": 10,
+    "active": 4,
+    "recovery": 12,
+    "knockback": 6.0,
+    "hitstop": 5,
+    "cooldown": 270,
+    "_comment": [
+      "Twenty-six ticks: the fastest heavy in the game, across a half-circle. One",
+      "more damage than the Impale for half the commitment and four times the arc",
+      "-- the Rogue's answer to being surrounded rather than to being precise."
+    ]
+  },
+
+  "shadow_rogue_umbral_veil": {
+    "name": "Umbral Veil",
+    "damage": 18,
+    "variance": 4,
+    "arc_degrees": 260,
+    "reach": 30,
+    "windup": 12,
+    "active": 16,
+    "recovery": 22,
+    "knockback": 5.0,
+    "hitstop": 7,
+    "cooldown": 1500,
+    "_comment": [
+      "Sixteen ticks of open hitbox, the longest in the game. A swing hits each",
+      "body once, so that window is not extra damage -- it is a wider net than",
+      "the Flurry's, held open longer."
+    ]
+  },
+
+  "hunter_deadeye": {
+    "name": "Deadeye",
+    "damage": 26,
+    "variance": 5,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 16,
+    "active": 1,
+    "recovery": 20,
+    "knockback": 4.5,
+    "hitstop": 7,
+    "cooldown": 300,
+    "projectile": true,
+    "projectile_speed": 6.0,
+    "projectile_radius": 2.5,
+    "projectile_lifetime": 220,
+    "_comment": [
+      "The fastest thing in the air in the game at 6.0, and the longest-lived.",
+      "Six more damage than the Piercer on a shorter windup -- and it still stops",
+      "on the first body, because nothing in this game pierces."
+    ]
+  },
+
+  "hunter_hunt": {
+    "name": "Hunt",
+    "damage": 14,
+    "variance": 3,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 18,
+    "active": 1,
+    "recovery": 24,
+    "knockback": 2.6,
+    "hitstop": 5,
+    "cooldown": 1500,
+    "projectile": true,
+    "projectile_speed": 4.6,
+    "projectile_radius": 2.5,
+    "projectile_lifetime": 190,
+    "projectile_count": 5,
+    "spread_degrees": 30,
+    "_comment": [
+      "The Rain, tightened. Five shots across thirty degrees instead of fifty, so",
+      "against one large body most of them land -- which is the difference between",
+      "an ultimate for a crowd and an ultimate for a boss."
+    ]
+  },
+
+  "magic_archer_runeshot": {
+    "name": "Runeshot",
+    "damage": 18,
+    "variance": 4,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 18,
+    "active": 1,
+    "recovery": 22,
+    "knockback": 5.0,
+    "hitstop": 6,
+    "cooldown": 300,
+    "projectile": true,
+    "projectile_speed": 4.0,
+    "projectile_radius": 5.5,
+    "projectile_lifetime": 200,
+    "_comment": [
+      "The fattest projectile in the game -- wider than the Magician's Lance --",
+      "and slower than the Piercer it replaces. Two damage less, and much harder",
+      "to miss with."
+    ]
+  },
+
+  "magic_archer_starfall": {
+    "name": "Starfall",
+    "damage": 10,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 22,
+    "active": 1,
+    "recovery": 28,
+    "knockback": 2.2,
+    "hitstop": 4,
+    "cooldown": 1600,
+    "projectile": true,
+    "projectile_speed": 3.8,
+    "projectile_radius": 2.5,
+    "projectile_lifetime": 200,
+    "projectile_count": 9,
+    "spread_degrees": 100,
+    "_comment": [
+      "Nine shots across a hundred degrees: the Sovereign's own Rain, pointed the",
+      "other way, and the largest total payload of any hero attack. Against one",
+      "body most of it misses -- this is aimed at a room."
+    ]
+  },
+
+  "sage_aegis": {
+    "name": "Aegis",
+    "damage": 20,
+    "variance": 4,
+    "arc_degrees": 360,
+    "reach": 34,
+    "windup": 16,
+    "active": 6,
+    "recovery": 20,
+    "knockback": 10.0,
+    "hitstop": 7,
+    "cooldown": 280,
+    "_comment": [
+      "The whole circle, hard enough to matter and heavy enough to clear a path.",
+      "The Magician's real problem is that a 29-tick bolt is a long time to be",
+      "uninterrupted; the Lance answers it with more damage and this answers it",
+      "with room.",
+      "",
+      "Drafted at 8 damage as a pure control tool and rejected by test: a heavy",
+      "must out-damage its class's light attack, and the Magician's is the",
+      "hardest in the game at 15. The rule was right -- at 8 this was a slower",
+      "Ward, which the Sage already has in the neutral slot."
+    ]
+  },
+
+  "sage_convergence": {
+    "name": "Convergence",
+    "damage": 14,
+    "variance": 3,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 24,
+    "active": 1,
+    "recovery": 28,
+    "knockback": 4.0,
+    "hitstop": 6,
+    "cooldown": 1600,
+    "projectile": true,
+    "projectile_speed": 2.8,
+    "projectile_radius": 3.5,
+    "projectile_lifetime": 210,
+    "projectile_count": 7,
+    "spread_degrees": 40,
+    "_comment": [
+      "The Nova, narrowed from eighty degrees to forty. Same seven bolts, half",
+      "the spread, so it is a wall walked into rather than a spray walked around."
+    ]
+  },
+
+  "wizard_annihilate": {
+    "name": "Annihilate",
+    "damage": 36,
+    "variance": 8,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 30,
+    "active": 1,
+    "recovery": 30,
+    "knockback": 6.0,
+    "hitstop": 9,
+    "cooldown": 340,
+    "projectile": true,
+    "projectile_speed": 2.6,
+    "projectile_radius": 6.0,
+    "projectile_lifetime": 210,
+    "_comment": [
+      "The hardest single projectile in the game and the slowest, on a 61-tick",
+      "commitment. Eight more damage than the Lance for eight more ticks, and it",
+      "travels slowly enough that a moving target will not be there."
+    ]
+  },
+
+  "wizard_cataclysm": {
+    "name": "Cataclysm",
+    "damage": 16,
+    "variance": 4,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 30,
+    "active": 1,
+    "recovery": 32,
+    "knockback": 3.5,
+    "hitstop": 6,
+    "cooldown": 1800,
+    "projectile": true,
+    "projectile_speed": 3.2,
+    "projectile_radius": 3.5,
+    "projectile_lifetime": 200,
+    "projectile_count": 7,
+    "spread_degrees": 70,
+    "_comment": "The Nova with four more damage a bolt, on the longest cooldown in the game."
+  },
+
+  "battle_priest_crusade": {
+    "name": "Crusade",
+    "damage": 26,
+    "variance": 5,
+    "arc_degrees": 120,
+    "reach": 32,
+    "windup": 18,
+    "active": 5,
+    "recovery": 22,
+    "knockback": 7.0,
+    "hitstop": 8,
+    "cooldown": 300,
+    "_comment": [
+      "Four more damage than the Smite and four ticks quicker, over a narrower",
+      "arc. The Priest stops buying space and starts spending it."
+    ]
+  },
+
+  "battle_priest_zealot": {
+    "name": "Zealot",
+    "damage": 30,
+    "variance": 6,
+    "arc_degrees": 200,
+    "reach": 38,
+    "windup": 24,
+    "active": 8,
+    "recovery": 28,
+    "knockback": 9.0,
+    "hitstop": 10,
+    "cooldown": 1600,
+    "_comment": "Four more damage than Consecrate across two thirds of its arc. Closer in, harder."
+  },
+
+  "holy_priest_benediction": {
+    "name": "Benediction",
+    "damage": 18,
+    "variance": 4,
+    "arc_degrees": 200,
+    "reach": 34,
+    "windup": 18,
+    "active": 6,
+    "recovery": 22,
+    "knockback": 8.0,
+    "hitstop": 7,
+    "cooldown": 290,
+    "_comment": [
+      "Four less damage than the Smite, a much wider arc and half again the",
+      "shove. The censer at a larger scale, which is what the class already was."
+    ]
+  },
+
+  "holy_priest_absolution": {
+    "name": "Absolution",
+    "damage": 22,
+    "variance": 4,
+    "arc_degrees": 360,
+    "reach": 44,
+    "windup": 24,
+    "active": 10,
+    "recovery": 30,
+    "knockback": 13.0,
+    "hitstop": 9,
+    "cooldown": 1600,
+    "_comment": [
+      "The full circle where Consecrate stops thirty degrees short, and knockback",
+      "second only to the Holy Knight's. Nothing is standing next to you when it",
+      "ends."
+    ]
   }
 }

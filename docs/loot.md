@@ -78,7 +78,8 @@ is a strategy the shop should not have.
 
 **None of the three touches what a class is** — no damage, no speed, no maximum
 health. That is load-bearing rather than squeamish; see
-[Limits](limits.md#no-progression-that-makes-you-hit-harder) for why.
+[Limits](limits.md#almost-no-progression-that-makes-you-hit-harder) for why —
+and for the single exception, which is confined to the last stage.
 
 Keys `1` `2` `3` buy; Enter, Space or Esc leaves. The shop swallows every other
 control while it is open, including Esc, which is "back to the menu" everywhere

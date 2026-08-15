@@ -136,6 +136,97 @@ def paint_priest(surface: pygame.Surface) -> None:
     _eyes(surface, rect, (96, 92, 84))
 
 
+# --- the promoted classes ----------------------------------------------------
+# Each keeps its base's body dimensions exactly, so the silhouette is unchanged
+# and a promoted hero still reads as what it was at 1x. Only the palette moves,
+# plus one mark that says which of the two branches it is. That is the whole
+# budget: a 16px cell has room for a shape or a story, not both, and the shape
+# is already spoken for.
+def paint_dark_knight(surface: pygame.Surface) -> None:
+    rect = _body(surface, (78, 72, 116), (32, 28, 54), (122, 114, 164), 11, 13)
+    # The Knight's helmet band, gone dark, and the only red eyes on a hero.
+    pygame.draw.rect(surface, (44, 40, 70), (rect.x, rect.centery - 2, rect.width, 4))
+    _eyes(surface, rect, (214, 84, 74))
+
+
+def paint_holy_knight(surface: pygame.Surface) -> None:
+    rect = _body(surface, (222, 220, 208), (138, 132, 118), (250, 248, 240), 11, 13)
+    # The same band in gold, and a cross on the chest -- the widest, brightest
+    # thing the player can be.
+    pygame.draw.rect(surface, (216, 168, 74), (rect.x, rect.centery - 2, rect.width, 4))
+    pygame.draw.rect(surface, (216, 168, 74), (rect.centerx - 1, rect.centery + 2, 2, 4))
+    _eyes(surface, rect, (86, 82, 74))
+
+
+def paint_assassin(surface: pygame.Surface) -> None:
+    rect = _body(surface, (162, 58, 68), (70, 22, 30), (208, 106, 114), 8, 11)
+    # The Rogue's hood, in blood. Narrow body, so the colour does all the work.
+    pygame.draw.rect(surface, (94, 28, 38), (rect.x, rect.y - 1, rect.width, 3))
+    _eyes(surface, rect, (252, 226, 220), gap=1)
+
+
+def paint_shadow_rogue(surface: pygame.Surface) -> None:
+    rect = _body(surface, (66, 58, 100), (24, 20, 42), (112, 100, 154), 8, 11)
+    pygame.draw.rect(surface, (34, 28, 58), (rect.x, rect.y - 1, rect.width, 3))
+    # Pale violet eyes: the darkest hero in the game needs its front edge to
+    # still be findable against a dark floor.
+    _eyes(surface, rect, (198, 178, 250), gap=1)
+
+
+def paint_hunter(surface: pygame.Surface) -> None:
+    rect = _body(surface, (110, 152, 88), (48, 74, 38), (156, 196, 130), 9, 12)
+    # The Archer's bow, kept -- it is still the thing worth saying at a glance.
+    pygame.draw.rect(surface, (74, 96, 56), (rect.right, rect.y + 1, 1, rect.height - 2))
+    surface.set_at((rect.right + 1, rect.y + 2), (74, 96, 56))
+    surface.set_at((rect.right + 1, rect.bottom - 3), (74, 96, 56))
+    _eyes(surface, rect, (30, 44, 26))
+
+
+def paint_magic_archer(surface: pygame.Surface) -> None:
+    rect = _body(surface, (94, 164, 190), (38, 78, 96), (148, 210, 232), 9, 12)
+    pygame.draw.rect(surface, (48, 92, 112), (rect.right, rect.y + 1, 1, rect.height - 2))
+    surface.set_at((rect.right + 1, rect.y + 2), (48, 92, 112))
+    surface.set_at((rect.right + 1, rect.bottom - 3), (48, 92, 112))
+    # One lit pixel on the bow: the arrow that is not an arrow.
+    surface.set_at((rect.right + 1, rect.centery), (226, 246, 255))
+    _eyes(surface, rect, (24, 54, 68))
+
+
+def paint_sage(surface: pygame.Surface) -> None:
+    rect = _body(surface, (206, 190, 232), (114, 100, 142), (238, 228, 250), 9, 11)
+    # The Magician's two-tier hat, kept: it is the tallest silhouette in the
+    # game and both branches have earned it.
+    pygame.draw.rect(surface, (146, 128, 184), (rect.x + 1, rect.y - 2, rect.width - 2, 2))
+    pygame.draw.rect(surface, (146, 128, 184), (rect.centerx - 1, rect.y - 4, 2, 2))
+    _eyes(surface, rect, (86, 70, 118), gap=1)
+
+
+def paint_wizard(surface: pygame.Surface) -> None:
+    rect = _body(surface, (74, 62, 158), (30, 24, 78), (124, 108, 208), 9, 11)
+    pygame.draw.rect(surface, (44, 34, 106), (rect.x + 1, rect.y - 2, rect.width - 2, 2))
+    pygame.draw.rect(surface, (44, 34, 106), (rect.centerx - 1, rect.y - 4, 2, 2))
+    # A lit tip: the hardest single hit in the game is worth one bright pixel.
+    surface.set_at((rect.centerx, rect.y - 5), (236, 220, 255))
+    _eyes(surface, rect, (250, 240, 190), gap=1)
+
+
+def paint_battle_priest(surface: pygame.Surface) -> None:
+    rect = _body(surface, (176, 178, 186), (94, 96, 104), (216, 218, 226), 10, 12)
+    # Steel where the Priest had cloth, and the gold band kept but narrowed.
+    pygame.draw.rect(surface, (198, 152, 66), (rect.x, rect.y + 2, rect.width, 1))
+    pygame.draw.rect(surface, (198, 152, 66), (rect.centerx - 1, rect.centery + 2, 2, 3))
+    _eyes(surface, rect, (52, 54, 60))
+
+
+def paint_holy_priest(surface: pygame.Surface) -> None:
+    rect = _body(surface, (244, 242, 232), (150, 146, 136), (254, 254, 250), 10, 12)
+    # A halo above the head rather than a band across it -- the one hero mark
+    # that sits outside the body, for the class that is never surrounded.
+    pygame.draw.rect(surface, (240, 208, 120), (rect.x + 2, rect.y - 2, rect.width - 4, 1))
+    pygame.draw.rect(surface, (240, 208, 120), (rect.centerx - 1, rect.centery + 2, 2, 3))
+    _eyes(surface, rect, (128, 122, 110))
+
+
 # --- what it fights ----------------------------------------------------------
 def paint_grunt(surface: pygame.Surface) -> None:
     rect = _body(surface, (126, 168, 96), (58, 84, 44), (168, 204, 136), 9, 11)
@@ -299,6 +390,16 @@ PAINTERS = {
     "archer": paint_archer,
     "magician": paint_magician,
     "priest": paint_priest,
+    "dark_knight": paint_dark_knight,
+    "holy_knight": paint_holy_knight,
+    "assassin": paint_assassin,
+    "shadow_rogue": paint_shadow_rogue,
+    "hunter": paint_hunter,
+    "magic_archer": paint_magic_archer,
+    "sage": paint_sage,
+    "wizard": paint_wizard,
+    "battle_priest": paint_battle_priest,
+    "holy_priest": paint_holy_priest,
     "grunt": paint_grunt,
     "rat": paint_rat,
     "charger": paint_charger,

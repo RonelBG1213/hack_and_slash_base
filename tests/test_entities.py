@@ -16,6 +16,17 @@ from .helpers import BESTIARY, HERO
 CLASSES = BESTIARY.hero_classes
 ENEMIES = tuple(t for t in BESTIARY.types.values() if t.faction is Faction.ENEMY)
 
+#: The ten promoted classes, which `hero_classes` deliberately excludes.
+ADVANCED = BESTIARY.advanced_classes
+
+#: Everything the player can end up controlling. Every structural rule below --
+#: four slots, the windup ceiling, iframes shorter than the roll, no dashing --
+#: applies to a body the player drives, not to a body the character select
+#: offers. Iterating `CLASSES` for those would have quietly narrowed each rule
+#: from "every hero" to "the five starting ones" on the day promotion shipped,
+#: and nothing would have failed to say so.
+PLAYABLE = CLASSES + ADVANCED
+
 
 def test_every_shipped_type_loads() -> None:
     assert set(BESTIARY.types) == {
@@ -25,6 +36,12 @@ def test_every_shipped_type_loads() -> None:
         "grunt", "rat", "charger", "brute", "bowman", "mage",
         # one at the end of each act
         "boss", "houndmaster", "effigy", "sovereign",
+        # promoted on reaching the final stage, two per starting class
+        "dark_knight", "holy_knight",
+        "assassin", "shadow_rogue",
+        "hunter", "magic_archer",
+        "sage", "wizard",
+        "battle_priest", "holy_priest",
     }
 
 
@@ -44,7 +61,7 @@ def test_every_class_is_actually_playable() -> None:
     like a sim bug: no brain means the player's input is ignored, no dodge means
     the roll key does nothing, no heal means the run cannot be sustained.
     """
-    for cls in CLASSES:
+    for cls in PLAYABLE:
         assert cls.brain == "player", f"{cls.id} is not driven by the player"
         assert cls.can_dodge, f"{cls.id} cannot roll"
         assert cls.heal_between_stages > 0, f"{cls.id} recovers nothing between stages"
@@ -92,7 +109,7 @@ def test_every_class_is_faster_than_everything_it_fights() -> None:
     an enemy that only outpaces the Knight is still an enemy that broke the
     game, for the third of players who picked the Knight.
     """
-    slowest = min(CLASSES, key=lambda c: c.speed)
+    slowest = min(PLAYABLE, key=lambda c: c.speed)
     for entity_type in ENEMIES:
         assert entity_type.speed < slowest.speed, (
             f"{entity_type.id} at {entity_type.speed} can outrun the "
@@ -107,8 +124,8 @@ def test_the_charger_is_faster_than_the_hero_only_while_charging() -> None:
     several attacks must only dash on the one that is actually a charge.
     """
     charger = BESTIARY["charger"]
-    fastest = max(c.speed for c in CLASSES)
-    assert charger.speed < min(c.speed for c in CLASSES)
+    fastest = max(c.speed for c in PLAYABLE)
+    assert charger.speed < min(c.speed for c in PLAYABLE)
     # Faster than *anyone* once committed, or the charge is not a threat to the
     # class that most needs to respect it.
     assert charger.weapon.charge_speed > fastest
@@ -134,7 +151,7 @@ def test_only_charging_attacks_carry_a_dash() -> None:
 
 def test_only_the_classes_can_dodge() -> None:
     # Expressed as data, not as a branch in the sim.
-    for cls in CLASSES:
+    for cls in PLAYABLE:
         assert cls.can_dodge, f"{cls.id} cannot roll"
     for entity_type in ENEMIES:
         assert not entity_type.can_dodge, f"{entity_type.id} can dodge"
@@ -170,7 +187,7 @@ def test_enemy_attacks_are_slower_to_start_than_any_class_s_light_attack() -> No
     telegraph *with* is the light one, and it is still faster than every tell in
     the game.
     """
-    slowest_light = max(c.weapons[skills.LIGHT].windup for c in CLASSES)
+    slowest_light = max(c.weapons[skills.LIGHT].windup for c in PLAYABLE)
     for entity_type in ENEMIES:
         for weapon in entity_type.weapons:
             assert weapon.windup > slowest_light, (
@@ -191,7 +208,7 @@ def test_every_class_declares_its_four_slots_in_the_order_the_game_expects() -> 
     it plays light-only by design -- so asserting any of them would be pinning
     a guess. What is pinned is what makes a slot that slot.
     """
-    for cls in CLASSES:
+    for cls in PLAYABLE:
         assert len(cls.weapons) == len(skills.SLOTS), (
             f"{cls.id} has {len(cls.weapons)} attacks; every class needs "
             f"{len(skills.SLOTS)}"
@@ -246,7 +263,7 @@ def test_no_hero_skill_dashes() -> None:
     question than adding four buttons. Recorded as a test so the absence reads
     as a decision rather than as something nobody got round to.
     """
-    for cls in CLASSES:
+    for cls in PLAYABLE:
         for weapon in cls.weapons:
             assert not weapon.is_charge, f"{cls.id}'s {weapon.id} dashes"
 
@@ -259,7 +276,7 @@ def test_no_class_s_iframes_outlast_its_roll() -> None:
     classes means five chances to get this wrong, and the symptom -- "this class
     feels weirdly unkillable" -- is a long way from the two numbers causing it.
     """
-    for cls in CLASSES:
+    for cls in PLAYABLE:
         assert 0 < cls.iframe_ticks < cls.dodge_ticks, (
             f"{cls.id} is invulnerable for {cls.iframe_ticks} of a "
             f"{cls.dodge_ticks}-tick roll"
@@ -313,7 +330,7 @@ def test_no_class_is_worth_anything_to_kill() -> None:
     loot roll is handed whatever just died. A class carrying a level would put a
     price on the player's own head the day something friendly-fires.
     """
-    for cls in CLASSES:
+    for cls in PLAYABLE:
         assert cls.level == 1, f"{cls.id} declares a level; only enemies should"
 
 
@@ -342,3 +359,98 @@ def test_level_is_not_just_health_wearing_a_hat() -> None:
     by_level = sorted(ENEMIES, key=lambda t: t.level)
     by_hp = sorted(ENEMIES, key=lambda t: t.hp)
     assert [t.id for t in by_level] != [t.id for t in by_hp]
+
+
+# --- promotion ---------------------------------------------------------------
+def test_the_roster_excludes_promoted_classes() -> None:
+    """The one filter this whole feature's safety rests on.
+
+    Eight places read `hero_classes` -- the character select, both tools, and
+    five test modules including the class x stage balance grid. A promoted class
+    arriving in it would put fifteen columns on a screen laid out for five and
+    take the grid from 80 cells to 280, every new one untuned and failing.
+
+    So the two properties are asserted as a partition rather than individually:
+    every hero is in exactly one of them, and nothing is in both.
+    """
+    assert all(not c.promotes_from for c in CLASSES)
+    assert all(c.promotes_from for c in ADVANCED)
+
+    heroes = {t.id for t in BESTIARY.types.values() if t.faction is Faction.HERO}
+    assert {c.id for c in CLASSES} | {c.id for c in ADVANCED} == heroes
+    assert not {c.id for c in CLASSES} & {c.id for c in ADVANCED}
+
+
+def test_every_starting_class_promotes_into_exactly_two() -> None:
+    """A fork, not a menu and not a rename.
+
+    One promotion would be a free upgrade with nothing to weigh; three would not
+    fit the panel, which puts them on keys 1 and 2.
+    """
+    for cls in CLASSES:
+        offers = BESTIARY.promotions_for(cls.id)
+        assert len(offers) == 2, (
+            f"{cls.id} promotes into {[o.id for o in offers]}; every class needs two"
+        )
+
+
+def test_every_promotion_descends_from_a_class_that_exists() -> None:
+    """A typo in `promotes_from` is otherwise invisible: the class loads, and it
+    is simply never offered to anybody."""
+    roster = {c.id for c in CLASSES}
+    for cls in ADVANCED:
+        assert cls.promotes_from in roster, (
+            f"{cls.id} promotes from '{cls.promotes_from}', which is not a class"
+        )
+
+
+def test_a_promoted_class_inherits_its_base_s_light_and_neutral() -> None:
+    """Promotion changes the top two slots and nothing else about the kit.
+
+    The light attack in particular: it is `weapons[0]`, which everything that
+    predates skills reads through `type.weapon`, and it is the attack the whole
+    recorded balance of the game was measured on. A promotion that replaced it
+    would make a promoted class a different game rather than a specialisation of
+    the one being played.
+    """
+    for cls in ADVANCED:
+        base = BESTIARY[cls.promotes_from]
+        assert cls.weapons[skills.LIGHT].id == base.weapons[skills.LIGHT].id, (
+            f"{cls.id} does not swing what a {base.id} swings"
+        )
+        assert cls.weapons[skills.NEUTRAL].id == base.weapons[skills.NEUTRAL].id
+        # And the other two must actually be new, or the branch is a stat patch.
+        assert cls.weapons[skills.HEAVY].id != base.weapons[skills.HEAVY].id
+        assert cls.weapons[skills.ULTIMATE].id != base.weapons[skills.ULTIMATE].id
+
+
+def test_a_promotion_never_changes_the_size_of_the_body() -> None:
+    """`Entity.radius` reads through to the type, and promotion swaps the type on
+    a body that is already standing somewhere.
+
+    A wider radius would take effect on the next tick with the hero possibly
+    already overlapping the wall it was standing beside -- a collision resolved
+    by shoving it somewhere it could not have walked.
+    """
+    for cls in ADVANCED:
+        base = BESTIARY[cls.promotes_from]
+        assert cls.radius == base.radius, (
+            f"{cls.id} is {cls.radius} wide against the {base.id}'s {base.radius}"
+        )
+
+
+def test_no_promotion_differentiates_on_the_between_stage_heal() -> None:
+    """The dial that does nothing at this trigger, recorded so it stays that way.
+
+    Promotion happens on the way into the final stage and there is no stage
+    after it, so `heal_between_stages` can never pay out again. It is inherited
+    unchanged to keep the number true to the class -- but a branch sold on
+    healing more would be a branch sold on nothing, and 'the healing one' is the
+    obvious and wrong design for half of these.
+    """
+    for cls in ADVANCED:
+        base = BESTIARY[cls.promotes_from]
+        assert cls.heal_between_stages == base.heal_between_stages, (
+            f"{cls.id} changes the between-stage heal, which cannot pay out "
+            "after the stage it is chosen for"
+        )

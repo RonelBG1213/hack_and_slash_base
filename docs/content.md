@@ -67,6 +67,44 @@ ultimate, ascending in commitment and cooldown. `game/skills.py` names the
 indices, and a test fails if a class lists them in another order — otherwise it
 loads perfectly and then binds the ultimate to the light-attack button.
 
+## Adding an advanced class
+
+Same as a class, plus one field:
+
+```json
+"dark_knight": {
+  "name": "Dark Knight", "faction": "hero", "sprite": "dark_knight",
+  "promotes_from": "knight",
+  "hp": 115, "speed": 1.45, "radius": 5.5,
+  "weapons": ["greatsword", "knight_bash", "dark_knight_ruin", "dark_knight_black_tide"],
+  "brain": "player",
+  "dodge_speed": 3.6, "dodge_ticks": 12, "iframe_ticks": 8, "dodge_cooldown": 38,
+  "heal_between_stages": 56
+}
+```
+
+`promotes_from` does two jobs and that is deliberate. It says *this is advanced*,
+which keeps the class out of `bestiary.hero_classes` — and therefore off the
+character select and out of the balance grid — and it says *which base offers it*,
+which is what the promotion panel is built from. A separate `advanced: bool`
+beside it could disagree with it; one field cannot disagree with itself.
+
+Four rules, each enforced by `tests/test_entities.py`:
+
+| Rule | Why |
+| --- | --- |
+| Inherit the base's **light and neutral** by weapon id | The light attack is what every recorded balance number was measured on; replacing it makes a different game rather than a specialisation |
+| Keep the base's **radius** | `Entity.radius` reads through to the type, and promotion swaps the type on a body already standing somewhere — a wider one could end up inside a wall |
+| Keep the base's **`heal_between_stages`** | It cannot pay out after the stage promotion is offered on, so a branch sold on healing is sold on nothing |
+| Exactly **two** per base class | One is a free upgrade with nothing to weigh; three does not fit the panel's two keys |
+
+Then a sprite in `SPRITE_ORDER`, a painter, and regenerate. Keep the base's body
+dimensions in the painter — a promoted hero should still read as what it was at
+1× in a crowded arena, so colour and one mark carry the difference.
+
+To remove the whole feature, delete the advanced entries. `promotions_for` returns
+empty, the panel never opens, and no code needs touching.
+
 ## Adding a boss
 
 One trap worth knowing. The boss brain is **positional**:

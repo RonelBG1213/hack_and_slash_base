@@ -25,7 +25,7 @@ import pygame
 from .. import config
 from ..core.campaign import Campaign
 from ..core.vec2 import ZERO, Vec2
-from ..game import shop, skills
+from ..game import jobs, shop, skills
 from ..game.entities import DEFAULT_HERO, Bestiary
 from ..game.intent import Intent
 from ..game.run import Run, RunOutcome
@@ -34,6 +34,7 @@ from ..render.atlas import Atlas
 from ..render.camera import Camera
 from ..render.effects import Effects
 from ..render.hud import Hud
+from ..render.job_panel import CHOICE_KEYS, JobPanel
 from ..render.renderer import Renderer
 from ..render.shop_panel import ROW_KEYS, ShopPanel
 from .base import Scene
@@ -78,6 +79,16 @@ BANNER_FRAMES = 110
 #: only trying to shut a panel on.
 SHOP_EXIT_KEYS = (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE, pygame.K_ESCAPE)
 
+#: Keys that close the promotion panel without promoting. The same set as the
+#: shop's, and deliberately so: this panel appears in the same slot, and a player
+#: who has learned that Enter dismisses the between-stage screen should not have
+#: that stop being true on the one stage where the screen matters most.
+#:
+#: Declining is a real option rather than a way out of a menu. A promoted class
+#: is a class nothing has measured, and staying what you have played for nineteen
+#: stages is a defensible answer to that.
+JOB_DECLINE_KEYS = SHOP_EXIT_KEYS
+
 
 class PlayScene(Scene):
     def __init__(
@@ -101,6 +112,7 @@ class PlayScene(Scene):
         self.renderer = Renderer(atlas)
         self.hud = Hud()
         self.shop_panel = ShopPanel()
+        self.job_panel = JobPanel()
         self.accumulator = Accumulator()
         self.effects = Effects()
 
@@ -125,6 +137,13 @@ class PlayScene(Scene):
         #: Spending gold is a decision, and a decision taken while a grunt walks
         #: up behind you is a decision taken badly.
         self.shopping = False
+
+        #: Open once per run, on the way into the final stage, and ahead of the
+        #: shop on that one transition. Ordered that way so the Poultice clamps
+        #: against the *promoted* maximum health -- buying 30 health and having
+        #: it clipped away by a class change a moment later is the only ordering
+        #: that would surprise anybody.
+        self.promoting = False
         self._enter_stage()
 
         #: Dodge is edge-triggered. Held as a flag rather than read from the key
@@ -158,6 +177,11 @@ class PlayScene(Scene):
 
     # --- input ---------------------------------------------------------------
     def handle_event(self, event: pygame.event.Event) -> Optional[Scene]:
+        if self.promoting:
+            # Checked before the shop because it is drawn on top of it. Both are
+            # open on this one transition and only the front one takes keys.
+            return self._handle_job_event(event)
+
         if self.shopping:
             # The shop swallows everything. Aiming, swinging and rolling are all
             # meaningless against a world that is not being stepped, and a skill
@@ -180,6 +204,32 @@ class PlayScene(Scene):
                     self._skill_pressed = slot
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             self._dodge_pressed = True
+        return None
+
+    def _handle_job_event(self, event: pygame.event.Event) -> Optional[Scene]:
+        """Choose a path, or press on as what you already are.
+
+        Closing on either outcome, because this is asked once per run and a
+        panel that stayed up after a choice would have nothing left to offer --
+        `jobs.offers_for` is empty the moment a promotion lands.
+
+        Escape declines rather than leaving to the menu. It does that in the
+        shop too, and for a stronger reason here: this is the last stage of a
+        run somebody has spent twenty minutes on.
+        """
+        if event.type != pygame.KEYDOWN:
+            return None
+
+        if event.key in JOB_DECLINE_KEYS:
+            self.promoting = False
+            return None
+
+        if event.key in CHOICE_KEYS:
+            offers = jobs.offers_for(self.run)
+            index = CHOICE_KEYS.index(event.key)
+            if index < len(offers):
+                jobs.promote(self.run, offers[index])
+                self.promoting = False
         return None
 
     def _handle_shop_event(self, event: pygame.event.Event) -> Optional[Scene]:
@@ -275,7 +325,7 @@ class PlayScene(Scene):
 
     # --- update --------------------------------------------------------------
     def update(self, elapsed_seconds: float) -> Optional[Scene]:
-        if self.shopping:
+        if self.promoting or self.shopping:
             # Not stepped, and the accumulator is not fed either -- banking real
             # seconds while a panel is open would fast-forward the first moments
             # of the next stage the instant it closed.
@@ -307,6 +357,15 @@ class PlayScene(Scene):
                 # than at act ends: gold trickles in, and four visits in a
                 # twenty-stage run means three of them with nothing to decide.
                 self.shopping = True
+
+                # And once per run, on the way into the last stage. Asked as a
+                # question about the campaign rather than about stage twenty --
+                # `on_final_stage` is already the property for "there is nothing
+                # after this", so a campaign of a different length still asks at
+                # the right moment. `jobs.can_promote` is what makes deleting the
+                # advanced classes from the JSON turn the whole feature off.
+                if self.run.on_final_stage and jobs.can_promote(self.run):
+                    self.promoting = True
                 break
 
         self.effects.tick()
@@ -329,6 +388,10 @@ class PlayScene(Scene):
 
         if self.shopping:
             self.shop_panel.draw(surface, self.run)
+        if self.promoting:
+            # Over the shop, not instead of it. Both are open on this
+            # transition, and the choice of class is the one being asked for.
+            self.job_panel.draw(surface, self.run, self.atlas)
         elif self.banner > 0:
             # One or the other. Both at once puts the stage name behind the
             # shop's title, and the banner is still counting down underneath --

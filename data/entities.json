@@ -155,6 +155,269 @@
     ]
   },
 
+  "_advanced_comment": [
+    "The ten promoted classes: two per starting class, chosen on reaching the",
+    "final stage. Also faction 'hero', but 'promotes_from' keeps them out of",
+    "bestiary.hero_classes -- so they never appear on the character select, and",
+    "the recorded class x stage balance grid stays five classes wide. That one",
+    "field is the whole safety mechanism; without it these ten would join the",
+    "roster, the select screen and 200 new grid cells at once.",
+    "",
+    "Deleting this section removes the feature. promotions_for() returns nothing,",
+    "the panel never opens, and no code has to be touched.",
+    "",
+    "Each inherits its base's light and neutral attacks *by id*, so a promoted",
+    "class still opens a fight the way the one it grew out of did, and only the",
+    "top two slots are new. Radius, speed and the dodge fields are inherited too:",
+    "Entity.radius reads through to the type, so a promotion that widened the",
+    "body could leave the hero standing inside a wall it was standing beside.",
+    "",
+    "**heal_between_stages is carried over and is inert.** Promotion happens on",
+    "the way into stage 20 and there is no stage after it, so nothing between",
+    "stages ever happens again. It is copied rather than dropped so the number",
+    "stays true to the class, but no branch may differentiate on it -- a promoted",
+    "class whose pitch is 'heals more' has no pitch. HP, arc and knockback are",
+    "where a durable branch has to live.",
+    "",
+    "The numbers are a first pass. Nothing measures them: the reference bot plays",
+    "light-only and never promotes."
+  ],
+
+  "dark_knight": {
+    "name": "Dark Knight",
+    "faction": "hero",
+    "sprite": "dark_knight",
+    "promotes_from": "knight",
+    "hp": 115,
+    "speed": 1.45,
+    "radius": 5.5,
+    "weapons": ["greatsword", "knight_bash", "dark_knight_ruin", "dark_knight_black_tide"],
+    "brain": "player",
+    "dodge_speed": 3.6,
+    "dodge_ticks": 12,
+    "iframe_ticks": 8,
+    "dodge_cooldown": 38,
+    "heal_between_stages": 56,
+    "_comment": [
+      "Fifteen health traded for the two hardest attacks in the game. The Knight",
+      "is already the slowest thing the player can be, so this is not a class that",
+      "can retreat out of a mistake -- it is the branch that intends to finish the",
+      "Sovereign before the Sovereign finishes it."
+    ]
+  },
+
+  "holy_knight": {
+    "name": "Holy Knight",
+    "faction": "hero",
+    "sprite": "holy_knight",
+    "promotes_from": "knight",
+    "hp": 150,
+    "speed": 1.45,
+    "radius": 5.5,
+    "weapons": ["greatsword", "knight_bash", "holy_knight_bulwark", "holy_knight_sanctuary"],
+    "brain": "player",
+    "dodge_speed": 3.6,
+    "dodge_ticks": 12,
+    "iframe_ticks": 8,
+    "dodge_cooldown": 38,
+    "heal_between_stages": 56,
+    "_comment": [
+      "The largest health pool in the game and the hardest knockback, at the cost",
+      "of the damage the Dark Knight took. Twenty more health is about one and a",
+      "half more Lances from the Sovereign -- the branch that intends to still be",
+      "there at the end of a long fight."
+    ]
+  },
+
+  "assassin": {
+    "name": "Assassin",
+    "faction": "hero",
+    "sprite": "assassin",
+    "promotes_from": "rogue",
+    "hp": 78,
+    "speed": 1.95,
+    "radius": 4.5,
+    "weapons": ["dagger", "rogue_knife", "assassin_eviscerate", "assassin_deathmark"],
+    "brain": "player",
+    "dodge_speed": 5.0,
+    "dodge_ticks": 10,
+    "iframe_ticks": 8,
+    "dodge_cooldown": 22,
+    "heal_between_stages": 38,
+    "_comment": [
+      "Two health lighter than the Rogue and a great deal sharper. Both new",
+      "attacks are narrow enough to miss a body directly in front of you, which",
+      "is the class taken to its conclusion: everything it does asks whether you",
+      "are in exactly the right place."
+    ]
+  },
+
+  "shadow_rogue": {
+    "name": "Shadow Rogue",
+    "faction": "hero",
+    "sprite": "shadow_rogue",
+    "promotes_from": "rogue",
+    "hp": 88,
+    "speed": 1.95,
+    "radius": 4.5,
+    "weapons": ["dagger", "rogue_knife", "shadow_rogue_shadowstep", "shadow_rogue_umbral_veil"],
+    "brain": "player",
+    "dodge_speed": 5.0,
+    "dodge_ticks": 11,
+    "iframe_ticks": 9,
+    "dodge_cooldown": 18,
+    "heal_between_stages": 38,
+    "_comment": [
+      "Eight more health, a roll one tick longer with one more invulnerable tick",
+      "in it, and the shortest dodge cooldown in the game at 18. The only branch",
+      "that changes a dodge number, because the roll is the Rogue's whole defence",
+      "and this is the branch that leans on it rather than on being somewhere",
+      "precise.",
+      "",
+      "Drafted at 11 iframes on a 10-tick roll and rejected by test: invulnerable",
+      "for longer than the roll lasts makes the last frames of every dodge free,",
+      "and the correct play becomes rolling constantly rather than rolling at the",
+      "right moment. The gap between the two numbers is the point of both."
+    ]
+  },
+
+  "hunter": {
+    "name": "Hunter",
+    "faction": "hero",
+    "sprite": "hunter",
+    "promotes_from": "archer",
+    "hp": 90,
+    "speed": 1.70,
+    "radius": 5.0,
+    "weapons": ["shortbow", "archer_kick", "hunter_deadeye", "hunter_hunt"],
+    "brain": "player",
+    "dodge_speed": 4.4,
+    "dodge_ticks": 11,
+    "iframe_ticks": 9,
+    "dodge_cooldown": 28,
+    "heal_between_stages": 30,
+    "_comment": [
+      "Five more health and both new attacks pointed at one large body -- the",
+      "fastest projectile in the game and a five-shot fan tight enough that most",
+      "of it lands on a single target. The branch for out-shooting the Sovereign."
+    ]
+  },
+
+  "magic_archer": {
+    "name": "Magic Archer",
+    "faction": "hero",
+    "sprite": "magic_archer",
+    "promotes_from": "archer",
+    "hp": 85,
+    "speed": 1.70,
+    "radius": 5.0,
+    "weapons": ["shortbow", "archer_kick", "magic_archer_runeshot", "magic_archer_starfall"],
+    "brain": "player",
+    "dodge_speed": 4.4,
+    "dodge_ticks": 11,
+    "iframe_ticks": 9,
+    "dodge_cooldown": 28,
+    "heal_between_stages": 30,
+    "_comment": [
+      "The Archer's health, unchanged, and the widest attacks a hero has: the",
+      "fattest bolt in the game and nine shots across a hundred degrees. Answers",
+      "the Sovereign's Rain with a Rain, and answers the two grunts beside it at",
+      "the same time."
+    ]
+  },
+
+  "sage": {
+    "name": "Sage",
+    "faction": "hero",
+    "sprite": "sage",
+    "promotes_from": "magician",
+    "hp": 115,
+    "speed": 1.60,
+    "radius": 5.0,
+    "weapons": ["arcane_bolt", "magician_ward", "sage_aegis", "sage_convergence"],
+    "brain": "player",
+    "dodge_speed": 4.6,
+    "dodge_ticks": 12,
+    "iframe_ticks": 10,
+    "dodge_cooldown": 32,
+    "heal_between_stages": 46,
+    "_comment": [
+      "Ten more health and a full-circle heavy. The Magician's standing problem",
+      "is that its 29-tick bolt is a long time to go uninterrupted on a body that",
+      "cannot afford to be; the Sage buys that time with health and with room",
+      "rather than by killing things faster."
+    ]
+  },
+
+  "wizard": {
+    "name": "Wizard",
+    "faction": "hero",
+    "sprite": "wizard",
+    "promotes_from": "magician",
+    "hp": 100,
+    "speed": 1.60,
+    "radius": 5.0,
+    "weapons": ["arcane_bolt", "magician_ward", "wizard_annihilate", "wizard_cataclysm"],
+    "brain": "player",
+    "dodge_speed": 4.6,
+    "dodge_ticks": 12,
+    "iframe_ticks": 10,
+    "dodge_cooldown": 32,
+    "heal_between_stages": 46,
+    "_comment": [
+      "Five health lighter than the Magician, carrying the hardest projectile in",
+      "the game. Sixty-one ticks per Annihilate on a hundred-health body: the",
+      "branch that doubles down on the commitment the class was already built",
+      "around, rather than making it affordable."
+    ]
+  },
+
+  "battle_priest": {
+    "name": "Battle Priest",
+    "faction": "hero",
+    "sprite": "battle_priest",
+    "promotes_from": "priest",
+    "hp": 105,
+    "speed": 1.55,
+    "radius": 5.0,
+    "weapons": ["censer", "priest_brand", "battle_priest_crusade", "battle_priest_zealot"],
+    "brain": "player",
+    "dodge_speed": 4.0,
+    "dodge_ticks": 11,
+    "iframe_ticks": 9,
+    "dodge_cooldown": 30,
+    "heal_between_stages": 62,
+    "_comment": [
+      "Ten more health and both new attacks in close. The Priest's kit buys space",
+      "it then does not use; this is the branch that stops buying it. Note the",
+      "heal is inherited and does nothing -- there is no stage after the one this",
+      "is chosen for."
+    ]
+  },
+
+  "holy_priest": {
+    "name": "Holy Priest",
+    "faction": "hero",
+    "sprite": "holy_priest",
+    "promotes_from": "priest",
+    "hp": 100,
+    "speed": 1.55,
+    "radius": 5.0,
+    "weapons": ["censer", "priest_brand", "holy_priest_benediction", "holy_priest_absolution"],
+    "brain": "player",
+    "dodge_speed": 4.0,
+    "dodge_ticks": 11,
+    "iframe_ticks": 9,
+    "dodge_cooldown": 30,
+    "heal_between_stages": 62,
+    "_comment": [
+      "The obvious design for this class was 'heals more', and at this trigger",
+      "that is worth nothing at all. So its identity is the censer taken to its",
+      "limit instead: five more health, a full-circle ultimate and the second",
+      "hardest knockback in the game. The class that is never surrounded."
+    ]
+  },
+
   "_enemy_comment": [
     "Anything with faction 'enemy'. Brains are code (game/ai.py), not data --",
     "'chaser', 'charger', 'archer' and 'boss' are the four that exist, and two",

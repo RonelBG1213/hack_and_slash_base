@@ -155,6 +155,17 @@ class EntityType:
     #: and a whole number keeps the pixels hard, which `--smoke` enforces.
     sprite_scale: int = 1
 
+    #: Hero only, and only on an advanced class: the id of the class this one is
+    #: promoted from. Empty on everything else, which is how "this is a starting
+    #: class" is expressed -- as data, not as a second list.
+    #:
+    #: One field doing two jobs on purpose. It says *this is advanced*, which is
+    #: what keeps it off the character select and out of the balance grid, and it
+    #: says *which base it belongs to*, which is what the promotion menu is built
+    #: from. A separate `advanced: bool` beside it could disagree with it; this
+    #: cannot disagree with itself.
+    promotes_from: str = ""
+
     # Hero only. Zero on everything else, which is how "enemies cannot dodge"
     # is expressed -- as data, not as a branch in the sim.
     dodge_speed: float = 0.0
@@ -213,6 +224,7 @@ class EntityType:
             brain=payload.get("brain", "chaser"),
             aggro=float(payload.get("aggro", 0.0)),
             level=int(payload.get("level", 1)),
+            promotes_from=payload.get("promotes_from", ""),
             dodge_speed=float(payload.get("dodge_speed", 0.0)),
             dodge_ticks=int(payload.get("dodge_ticks", 0)),
             iframe_ticks=int(payload.get("iframe_ticks", 0)),
@@ -242,8 +254,42 @@ class Bestiary:
         Order matters: it is the order the character select shows, so it comes
         from the file rather than from sorting, and rearranging the roster is
         done by rearranging the JSON.
+
+        **Advanced classes are excluded**, and that exclusion is load-bearing
+        rather than cosmetic. Eight places read this property -- the character
+        select, both tools, and five test modules including the class x stage
+        balance grid. An advanced class arriving in it would put fifteen columns
+        on a screen laid out for five and take the grid from 80 cells to 280,
+        every new one untuned. `advanced_classes` is the other half of the pair.
         """
-        return tuple(t for t in self.types.values() if t.faction is Faction.HERO)
+        return tuple(
+            t
+            for t in self.types.values()
+            if t.faction is Faction.HERO and not t.promotes_from
+        )
+
+    @property
+    def advanced_classes(self) -> tuple[EntityType, ...]:
+        """Every class reachable only by promotion, in file order.
+
+        The complement of `hero_classes` within the hero faction. Exists so the
+        structural tests -- four slots, the windup ceiling, ascending cooldowns
+        -- can still be applied to advanced classes after the roster property
+        stopped returning them. Without it those rules would quietly go from
+        covering every hero class to covering only five.
+        """
+        return tuple(
+            t for t in self.types.values() if t.faction is Faction.HERO and t.promotes_from
+        )
+
+    def promotions_for(self, base_id: str) -> tuple[EntityType, ...]:
+        """What `base_id` may promote into, in file order.
+
+        Empty for a class with no promotions declared, which is the whole of the
+        feature's off switch: delete the advanced entries from the JSON and the
+        job panel never opens, with no code removed.
+        """
+        return tuple(t for t in self.advanced_classes if t.promotes_from == base_id)
 
     def __getitem__(self, type_id: str) -> EntityType:
         try:

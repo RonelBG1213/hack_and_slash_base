@@ -99,6 +99,20 @@ SPRITE_ORDER = (
     "archer",
     "magician",
     "priest",
+    # promoted on the last stage: same silhouette as the class it grew out of,
+    # so a Dark Knight still reads as a Knight at 1x in a crowded arena. The
+    # branch is told by colour and one mark, which is the only budget a 16px
+    # cell has left once the body shape is spoken for.
+    "dark_knight",
+    "holy_knight",
+    "assassin",
+    "shadow_rogue",
+    "hunter",
+    "magic_archer",
+    "sage",
+    "wizard",
+    "battle_priest",
+    "holy_priest",
     # what it fights
     "grunt",
     "rat",

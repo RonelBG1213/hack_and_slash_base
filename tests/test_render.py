@@ -458,3 +458,164 @@ def test_the_shop_rows_and_hint_fit_above_the_hud(atlas) -> None:
 
     bottom = panel.ROW_Y + len(shop.stock()) * panel.ROW_H + 12 + 13
     assert bottom <= config.VIEWPORT_H, "the shop's hint line is drawn under the HUD"
+
+
+# --- promotion ---------------------------------------------------------------
+def final_stage_scene(atlas, hero: str = "knight") -> PlayScene:
+    """A scene sitting on the last stage with the choice still open.
+
+    `start_stage` is 0-based, so 19 is stage twenty. Built this way rather than
+    by clearing nineteen stages because what is under test is the panel, not the
+    campaign.
+    """
+    scene = PlayScene(campaign(), BESTIARY, atlas, start_stage=19, hero_type_id=hero)
+    scene.promoting = True
+    return scene
+
+
+def test_the_job_panel_draws_for_every_class(atlas) -> None:
+    """Ten advanced classes reached through five panels, and any one of them
+    could be the one with a name too long or a sprite that does not exist."""
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    for cls in BESTIARY.hero_classes:
+        scene = final_stage_scene(atlas, cls.id)
+        scene.draw(surface)
+        assert not is_blank(surface), f"the {cls.id}'s promotion panel drew nothing"
+
+
+def test_the_job_panel_draws_nothing_when_there_is_nothing_to_choose(atlas) -> None:
+    """Belt and braces: the scene should not have opened it, but a panel that
+    indexes into an empty tuple would crash on the last stage of a run."""
+    from hack_and_slash.game import jobs
+    from hack_and_slash.render.job_panel import JobPanel
+
+    scene = final_stage_scene(atlas)
+    jobs.promote(scene.run, jobs.offers_for(scene.run)[0])
+    assert jobs.offers_for(scene.run) == ()
+
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    surface.fill((0, 0, 0))
+    JobPanel().draw(surface, scene.run, atlas)
+    assert is_blank(surface), "the panel painted a frame with no choice in it"
+
+
+def test_a_number_key_takes_that_path(atlas) -> None:
+    scene = final_stage_scene(atlas, "rogue")
+    hero = scene.world.hero
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_2))
+
+    assert scene.run.job_id == "shadow_rogue"
+    assert hero.type is BESTIARY["shadow_rogue"]
+    assert not scene.promoting, "the panel stayed up after a choice was made"
+
+
+def test_enter_declines_and_leaves_the_class_alone(atlas) -> None:
+    """Declining is a real answer, not a way out of a menu: a promoted class is
+    one nothing has measured."""
+    scene = final_stage_scene(atlas)
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+
+    assert not scene.promoting
+    assert scene.run.job_id == ""
+    assert scene.world.hero.type is BESTIARY["knight"]
+
+
+def test_escape_declines_rather_than_leaving_the_run(atlas) -> None:
+    """Same override the shop makes, and for a stronger reason -- this is the
+    last stage of a run somebody has spent twenty minutes on."""
+    exited = []
+    scene = PlayScene(
+        campaign(), BESTIARY, atlas, start_stage=19, on_exit=lambda: exited.append(True)
+    )
+    scene.promoting = True
+
+    assert scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)) is None
+    assert not scene.promoting
+    assert not exited
+
+
+def test_the_panel_pauses_the_world_and_swallows_the_controls(atlas) -> None:
+    scene = final_stage_scene(atlas)
+    before = scene.world.tick
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_f))
+    scene.update(1.0)
+
+    assert scene.world.tick == before, "the world advanced while the panel was open"
+    assert scene._skill_pressed is None, "a skill press leaked past the panel"
+
+
+def test_the_panel_takes_keys_ahead_of_the_shop(atlas) -> None:
+    """Both are open on this one transition and the panel is drawn on top, so it
+    is the one that must answer a keypress. Key 1 means a class here and a
+    Poultice in the shop underneath."""
+    from hack_and_slash.game import shop
+
+    scene = final_stage_scene(atlas)
+    scene.shopping = True
+    scene.run.gold = 100000
+    scene.world.hero.hp = 10
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_1))
+
+    assert scene.run.job_id == "dark_knight"
+    assert shop.bought(scene.run, shop.stock()[0]) == 0, "the shop took the keypress too"
+
+
+def test_the_choice_is_offered_on_the_way_into_the_last_stage(atlas) -> None:
+    """And not before. Clearing stage one opens the shop and nothing else."""
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    assert scene.shopping
+    assert not scene.promoting, "promotion was offered on the way into stage two"
+
+    late = PlayScene(campaign(), BESTIARY, atlas, start_stage=len(campaign()) - 2)
+    for enemy in late.world.enemies():
+        enemy.hp = 0
+    late.update(1.0)
+    assert late.run.on_final_stage
+    assert late.promoting, "the last stage did not offer a promotion"
+
+
+def test_no_job_column_overflows_its_half_of_the_panel(atlas) -> None:
+    """Two columns in 384 pixels, and the longest of them is 'Magic Archer' over
+    'F Starfall 90'. Measured with the panel's own fonts so renaming a class or
+    an attack shows up here rather than on screen."""
+    from hack_and_slash.render import job_panel as panel
+
+    drawn = panel.JobPanel()
+    half = config.INTERNAL_W // len(panel.COLUMN_X)
+
+    for base in BESTIARY.hero_classes:
+        for index, advanced in enumerate(BESTIARY.promotions_for(base.id)):
+            centre = panel.COLUMN_X[index]
+            widest = max(
+                drawn.font.size(advanced.name)[0],
+                *(drawn.small.size(text)[0] for text, _ in drawn._lines(base, advanced)),
+            )
+            assert widest <= half, (
+                f"{advanced.id}'s widest line is {widest}px in a {half}px column"
+            )
+            assert centre - widest // 2 >= 0, f"{advanced.id} runs off the left edge"
+            assert centre + widest // 2 <= config.INTERNAL_W, (
+                f"{advanced.id} runs off the right edge"
+            )
+
+
+def test_the_job_panel_clears_the_portrait_and_the_hud(atlas) -> None:
+    """The name landed inside the portrait frame on the first draft. The frame
+    is `cell + 6` tall and centred below `PORTRAIT_Y`, so the two numbers have
+    to be checked against each other rather than eyeballed."""
+    from hack_and_slash.render import job_panel as panel
+
+    cell = config.TILE * panel.PORTRAIT_SCALE
+    frame_bottom = panel.PORTRAIT_Y + cell // 2 + (cell + 6) // 2
+    assert panel.NAME_Y >= frame_bottom, "the class name is drawn inside its own portrait"
+
+    last_stat = panel.STAT_Y + 2 * panel.STAT_LINE_H
+    assert last_stat < panel.HINT_Y, "the hint overlaps the stat lines"
+    assert panel.HINT_Y + 13 <= config.VIEWPORT_H, "the hint is drawn under the HUD"

@@ -5,7 +5,8 @@ swing, roll to survive. Four attacks per class — light, neutral, heavy, ultima
 on ascending cooldowns. Pick one of five classes, then twenty stages in four acts,
 each ending on a boss. Your wounds come with you from one stage to the next, so
 how well you clear stage one is still with you at the end of the act — and so does
-your gold, which a shop between stages will take off you.
+your gold, which a shop between stages will take off you. Survive nineteen and
+your class forks in two for the last fight.
 
 Python 3.14 + pygame-ce. No engine, no build step.
 
@@ -64,7 +65,8 @@ Then:
 | `R` | Restart the run |
 | Esc | Back to the menu |
 | `1` `2` `3` | Buy, in the shop between stages |
-| Enter / Space / Esc | Leave the shop and start the stage |
+| `1` `2` | Choose a path, on the promotion screen before the last stage |
+| Enter / Space / Esc | Dismiss the shop or the promotion screen and start the stage |
 
 The light attack repeats while held. The three skills do not — each is one press,
 because deciding *when* to spend one is most of what makes it a skill, and a
@@ -76,7 +78,7 @@ leant-on key would spend every cooldown the instant it expired.
 
 | | |
 | --- | --- |
-| [**Design**](docs/design.md) | What the game asks of the player — the fight, the enemies, the bosses, the five classes, the four attack slots, the shape of a run |
+| [**Design**](docs/design.md) | What the game asks of the player — the fight, the enemies, the bosses, the five classes and the ten they promote into, the four attack slots, the shape of a run |
 | [**Loot and gold**](docs/loot.md) | Drop rates, the gold formula, rarity, the between-stage shop, and which of those numbers are measured |
 | [**Architecture**](docs/architecture.md) | The two structural rules, the nine-phase tick, the `Intent` seam, determinism and the two RNG streams |
 | [**Balance**](docs/balance.md) | The brackets the game is held to, the four findings that overturned an assumption, and what to reach for when a bracket breaks |

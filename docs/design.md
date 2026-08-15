@@ -75,7 +75,8 @@ them learns a new move, so nothing you worked out stops being true.
 
 ## The classes
 
-You pick one before the run and it is the whole of character building.
+You pick one before the run. It is almost the whole of character building — the
+one other decision comes nineteen stages later, in [Promotion](#promotion) below.
 
 | Class | What it asks of you |
 | --- | --- |
@@ -137,3 +138,43 @@ full health is exactly the tension the carry-over exists to create.
 
 Gold carries too, and between stages there is a shop — see [Loot and
 gold](loot.md).
+
+---
+
+## Promotion
+
+Clear stage nineteen and the class you have been playing forks into two. Keys `1`
+and `2` choose; Enter declines and keeps you as you are.
+
+| Base | Kill it faster | Outlast it |
+| --- | --- | --- |
+| **Knight** | Dark Knight | Holy Knight |
+| **Rogue** | Assassin | Shadow Rogue |
+| **Archer** | Hunter | Magic Archer |
+| **Magician** | Wizard | Sage |
+| **Priest** | Battle Priest | Holy Priest |
+
+An advanced class **keeps the light and neutral attacks you have used for
+nineteen stages** and replaces the heavy and the ultimate. Health changes; speed,
+body size and the dodge do not, with one exception — the Shadow Rogue, whose
+whole identity is the roll.
+
+> [!IMPORTANT]
+> **This is a capstone, not a second half.** One fight, against the Sovereign —
+> so every branch is aimed at that specific fight's three questions, and nothing
+> that pays off *between* stages can pay off at all. `heal_between_stages` is
+> inherited unchanged and is inert; no branch differentiates on it, and a test
+> enforces that so "the healing one" cannot be reinvented later.
+>
+> The Holy Priest is where this bites hardest: the obvious design for it is
+> "heals more", which here is worth exactly nothing. Its identity is a
+> full-circle ultimate and the second-hardest knockback in the game instead.
+
+Promotion is offered once per run and cannot be revisited. `R` restarts as the
+**base** class — the advanced ones are not on the character select and never
+appear there.
+
+**None of it is measured.** The reference bot never promotes, which is what keeps
+the recorded balance grid measuring the same game it always did — and is exactly
+why nobody knows whether Dark Knight trivialises the last fight. See
+[Limits](limits.md#the-ten-advanced-classes-and-the-twenty-attacks-they-bring).
