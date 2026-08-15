@@ -1,0 +1,106 @@
+{
+  "_comment": [
+    "What a kill is worth, and what gold buys. Every number in the loot layer",
+    "lives here; game/loot.py and game/shop.py hold the arithmetic and none of",
+    "the values.",
+    "",
+    "IMPORTANT, and unlike the rest of data/: these numbers are a first pass and",
+    "have not been measured against a real run. Everything in entities.json and",
+    "weapons.json was measured, and several of those numbers were reverted when",
+    "the measurement disagreed with the guess. Nothing here has been through",
+    "that yet. Treat a price as an opening bid.",
+    "",
+    "Turning the whole system off is two edits: gold.base to 0 and item_chance",
+    "to 0. Nothing then drops, the shop can never be afforded, and the code goes",
+    "quiet without being removed."
+  ],
+
+  "gold": {
+    "base": 3.0,
+    "floor_step": 0.15,
+    "variance": 0.2,
+
+    "_comment": [
+      "gold = base * monster_level * (1 + floor_step * (floor - 1)), rolled",
+      "within +/- variance and never rounding below 1.",
+      "",
+      "Two multipliers rather than one, because they answer different questions.",
+      "monster_level is 'was that worth fighting' -- a sovereign pays eight times",
+      "a rat wherever they stand. floor_step is 'how deep are you' -- at 0.15 the",
+      "twentieth floor pays 3.85x the first, so the same rat is worth more down",
+      "there without a rat ever becoming interesting.",
+      "",
+      "A rat on floor 1 pays 3. A sovereign on floor 20 pays about 92."
+    ]
+  },
+
+  "item_chance": 0.25,
+  "scatter": 6.0,
+
+  "_drop_comment": [
+    "item_chance is per kill, on top of the gold, which always drops. A quarter",
+    "is often enough that a stage reliably produces a few and rare enough that",
+    "the drop itself is the event, before the rarity roll has said anything.",
+    "",
+    "scatter is how far, in pixels, a drop lands from the body -- so a coin and",
+    "the valuable beside it are two things rather than one pile. A drop can",
+    "scatter into a wall and become unwalkable; that is what the sweep on stage",
+    "clear is for, and it means the worst case is collecting it late rather than",
+    "losing it."
+  ],
+
+  "rarities": [
+    { "id": "common", "weight": 60, "worth": 1 },
+    { "id": "uncommon", "weight": 25, "worth": 2 },
+    { "id": "rare", "weight": 10, "worth": 4 },
+    { "id": "epic", "weight": 4, "worth": 8 },
+    { "id": "legendary", "weight": 1, "worth": 16 }
+  ],
+
+  "_rarity_comment": [
+    "Weights are relative, not percentages -- they are summed and rolled",
+    "against, so adding a tier does not mean rebalancing the others to 100.",
+    "As written: common 60%, uncommon 25%, rare 10%, epic 4%, legendary 1%.",
+    "",
+    "'worth' multiplies the same gold figure the kill already produced, so a",
+    "rarity is worth more on a deep floor and off a big monster for free. A",
+    "legendary off a sovereign on floor 20 is around 1500 gold, which is meant",
+    "to be a run-changing amount -- roughly ten stages of ordinary income.",
+    "",
+    "The weights are flat across floors, deliberately. Depth already pays more",
+    "through the gold formula, and tilting the rarities as well is two dials",
+    "doing one job. If loot starts feeling samey deep in a run, that is the",
+    "moment to add a depth term here -- not before."
+  ],
+
+  "shop": {
+    "poultice": { "name": "Poultice", "price": 90, "amount": 30, "limit": 0 },
+    "tonic": { "name": "Tonic", "price": 260, "amount": 6, "limit": 4 },
+    "charm": { "name": "Charm", "price": 340, "amount": 25, "limit": 3 },
+
+    "_comment": [
+      "limit 0 means no limit. The two permanent goods are capped because they",
+      "compound: four Tonics is +24 health back after every remaining stage, and",
+      "three Charms is +75% on everything that drops afterwards. Without a cap",
+      "the correct play is to buy nothing but Charms early, which is a strategy",
+      "the shop should not have.",
+      "",
+      "'amount' means whatever the good does with it -- health for the Poultice,",
+      "heal-per-stage for the Tonic, percentage points of gold find for the",
+      "Charm. game/shop.py decides which; this decides how much.",
+      "",
+      "THESE PRICES ARE SET AGAINST A MEASUREMENT, unlike the drop numbers above.",
+      "A full run banks about 4,700 gold with a bot that never detours for a",
+      "pickup, rising from ~33 on floor 1 to ~400-550 on the late floors. The",
+      "first draft priced the shop at 45/120/150, which maxed every permanent",
+      "good for 930 -- about a fifth of one run, bought out by roughly stage 5,",
+      "after which there was nothing left to decide. At 260 and 340 the two",
+      "permanents cost 2,060 to max, a little under half a run, and the first",
+      "Tonic is out of reach until about floor 4.",
+      "",
+      "What is still NOT measured: whether any of it is worth buying. Nothing",
+      "plays this game with a purse -- autoplay never spends -- so the prices are",
+      "measured against income and against nothing else."
+    ]
+  }
+}

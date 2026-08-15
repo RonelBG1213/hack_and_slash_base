@@ -220,3 +220,123 @@ def test_the_same_seed_replays_the_same_run() -> None:
 
     assert play(11) == play(11)
     assert play(11) != play(12)
+
+
+# --- the purse ---------------------------------------------------------------
+def test_gold_survives_a_stage_transition() -> None:
+    """A stage's takings are banked before the world holding them is replaced.
+
+    `_advance` builds an entirely new `World`; whatever was on the old one goes
+    with it. So the bank happens first, and this is the test that says so.
+    """
+    run = Run.start(campaign(), BESTIARY)
+    clear_current_stage(run)
+
+    assert run.gold > 0, "clearing a stage full of grunts paid nothing"
+    assert run.world.gold == 0, "the new stage started with the last one's takings"
+
+
+def test_gold_accumulates_across_stages() -> None:
+    run = Run.start(campaign(4), BESTIARY)
+
+    running = []
+    for _ in range(3):
+        clear_current_stage(run)
+        running.append(run.gold)
+
+    assert running == sorted(running)
+    assert running[-1] > running[0]
+
+
+def test_the_purse_shown_to_a_player_includes_the_stage_in_progress() -> None:
+    """`gold` lags a stage behind by design; `gold_total` is the honest number.
+
+    A purse that visibly ignores the coin you just walked over is worse than no
+    purse at all.
+    """
+    run = Run.start(campaign(), BESTIARY)
+    run.world.gold = 40
+
+    assert run.gold == 0
+    assert run.gold_total == 40
+
+
+def test_a_deeper_stage_knows_which_floor_it_is() -> None:
+    """The world cannot work this out for itself, and the payout depends on it."""
+    run = Run.start(campaign(4), BESTIARY)
+    assert run.world.purse.floor == 1
+
+    clear_current_stage(run)
+    assert run.world.purse.floor == 2
+
+
+def test_starting_partway_in_arrives_on_the_floor_it_says() -> None:
+    run = Run.start(campaign(6), BESTIARY, at_stage=3)
+    assert run.world.purse.floor == 4
+
+
+def test_a_lost_run_keeps_what_it_had_already_collected() -> None:
+    run = Run.start(campaign(), BESTIARY)
+    run.world.gold = 75
+    run.world.hero.hp = 0
+    step(run.world)
+    run.settle()
+
+    assert run.outcome is RunOutcome.LOST
+    assert run.gold == 75
+
+
+def test_banking_twice_does_not_pay_twice() -> None:
+    """`settle` is called every tick and is meant to be idempotent.
+
+    A death screen is up for as long as the player leaves it up, and `settle`
+    keeps being called behind it.
+    """
+    run = Run.start(campaign(), BESTIARY)
+    run.world.gold = 30
+    run.world.hero.hp = 0
+    step(run.world)
+
+    for _ in range(20):
+        run.settle()
+    assert run.gold == 30
+
+
+def test_winning_the_last_stage_banks_its_takings() -> None:
+    run = Run.start(campaign(1), BESTIARY)
+    clear_current_stage(run)
+
+    assert run.outcome is RunOutcome.WON
+    assert run.gold > 0
+
+
+def test_a_bought_heal_adds_to_the_class_s_own() -> None:
+    run = Run.start(campaign(), BESTIARY)
+    hero = run.world.hero
+    hero.hp = 10
+    run.bonus_heal = 15
+
+    clear_current_stage(run)
+    assert run.world.hero.hp == 10 + HERO.heal_between_stages + 15
+
+
+def test_gold_find_reaches_the_next_stage() -> None:
+    run = Run.start(campaign(), BESTIARY)
+    run.gold_find = 0.5
+
+    clear_current_stage(run)
+    assert run.world.purse.gold_find == 0.5
+
+
+def test_restarting_empties_the_purse_and_everything_bought_with_it() -> None:
+    """A restart is a second attempt, not a continuation. Only the class carries."""
+    run = Run.start(campaign(), BESTIARY)
+    clear_current_stage(run)
+    run.bonus_heal = 12
+    run.gold_find = 0.75
+
+    fresh = run.restart()
+    assert fresh.gold == 0
+    assert fresh.bonus_heal == 0
+    assert fresh.gold_find == 0.0
+    assert fresh.hero_type_id == run.hero_type_id

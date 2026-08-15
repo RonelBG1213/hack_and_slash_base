@@ -19,7 +19,8 @@ one, and moving any of them changes the game:
 7. **strike** -- open hitboxes and arrows resolve against where things are *now*
 8. **advance** -- state machines move on, opening hitboxes and loosing arrows for
    the tick to come
-9. **settle** -- the dead are removed and the run is judged
+9. **settle** -- the run is judged, the dead drop what they were carrying, and
+   then they are removed
 """
 
 from __future__ import annotations
@@ -27,8 +28,8 @@ from __future__ import annotations
 from .. import config
 from ..core.collision import circle_separation, move_and_collide, path_is_clear
 from ..core.vec2 import ZERO, Vec2, from_angle
-from . import actions, ai, combat
-from .entities import ActionState, Entity
+from . import actions, ai, combat, loot
+from .entities import ActionState, Entity, Faction
 from .events import Event, EventKind
 from .intent import NOTHING, Intent
 from .world import Outcome, Projectile, World
@@ -270,11 +271,12 @@ def _loose_projectile(world: World, entity: Entity) -> None:
 
 
 def _settle(world: World) -> None:
-    """Judge the run, then remove the dead.
+    """Judge the run, take what the dead were carrying, then remove them.
 
     In that order: the hero has to still be in the list to be found dead, and
     culling first would make a loss indistinguishable from a hero who was never
-    there.
+    there. Loot goes between the two for the same reason -- a body that has
+    already been culled cannot be asked what it was worth.
     """
     hero = world.hero
     if world.outcome is Outcome.RUNNING:
@@ -283,7 +285,76 @@ def _settle(world: World) -> None:
         elif not world.enemies():
             world.outcome = Outcome.WON
 
+    _drop_loot(world)
     world.entities = [entity for entity in world.entities if entity.is_alive]
+    _collect_pickups(world, hero)
+
+
+def _drop_loot(world: World) -> None:
+    """What the newly dead leave on the floor.
+
+    Called once per tick, immediately before the cull, which is what makes it
+    safe: a body is dead and still in the list for exactly one settle, so every
+    kill is paid out exactly once and no "have I looted this already" flag is
+    needed anywhere.
+
+    Enemies only. Nothing pays out for a dead hero, which is checked in
+    `test_entities.py` from the other end -- no class carries a level.
+    """
+    table = loot.table()
+    for entity in world.entities:
+        if entity.is_alive or entity.type.faction is not Faction.ENEMY:
+            continue
+        world.pickups.extend(
+            table.roll_drops(
+                entity.type.level,
+                world.purse.floor,
+                entity.pos,
+                # The loot stream, never `world.rng`. Drawing from that one here
+                # would shift every damage roll for the rest of the run.
+                world.loot_rng,
+                world.purse.gold_find,
+            )
+        )
+
+
+def _collect_pickups(world: World, hero: Entity | None) -> None:
+    """Bank whatever the hero is standing on -- and everything else once the
+    stage is won.
+
+    The sweep is not a convenience. A stage is won on the tick its last enemy
+    dies, and the run layer builds the next `World` on that same tick, so a drop
+    from the final kill would be destroyed before anyone could walk to it. The
+    fight being over is exactly when picking things up stops being interesting,
+    so it happens on its own.
+
+    `hero` is passed in because it was read before the cull; looking it up again
+    here would return None for a hero who died this tick, and a dead hero
+    collecting a coin is worse than not collecting one.
+    """
+    if hero is None or not hero.is_alive or not world.pickups:
+        return
+
+    sweeping = world.outcome is Outcome.WON
+    reach = hero.radius + loot.PICKUP_RADIUS
+
+    remaining = []
+    for pickup in world.pickups:
+        if not sweeping and pickup.pos.distance_to(hero.pos) > reach:
+            remaining.append(pickup)
+            continue
+        world.gold += pickup.gold
+        world.emit(
+            Event(
+                EventKind.PICKUP,
+                pickup.pos,
+                hero.id,
+                amount=pickup.gold,
+                is_hero=True,
+                rarity=pickup.rarity.value if pickup.rarity else "",
+            )
+        )
+    world.pickups = remaining
 
 
 # --- driving the sim from real time ------------------------------------------

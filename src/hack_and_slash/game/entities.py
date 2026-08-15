@@ -140,6 +140,16 @@ class EntityType:
     brain: str
     aggro: float = 0.0
 
+    #: How dangerous this thing is, on a scale of its own. Read only by the loot
+    #: layer, which pays out on it -- so a boss is worth more than the grunts
+    #: standing around it on the same floor.
+    #:
+    #: Deliberately *not* derived from hp. A health number gets tuned for balance
+    #: reasons every time a stage plays badly, and loot payouts silently moving
+    #: every time that happens is how a reward curve rots without anyone
+    #: touching it. One is a fight; the other is a wage.
+    level: int = 1
+
     #: Whole-number upscale for the sprite. The atlas is a fixed 16px grid, so
     #: this is how something draws bigger than a tile without a second grid --
     #: and a whole number keeps the pixels hard, which `--smoke` enforces.
@@ -202,6 +212,7 @@ class EntityType:
             sprite_scale=int(payload.get("sprite_scale", 1)),
             brain=payload.get("brain", "chaser"),
             aggro=float(payload.get("aggro", 0.0)),
+            level=int(payload.get("level", 1)),
             dodge_speed=float(payload.get("dodge_speed", 0.0)),
             dodge_ticks=int(payload.get("dodge_ticks", 0)),
             iframe_ticks=int(payload.get("iframe_ticks", 0)),

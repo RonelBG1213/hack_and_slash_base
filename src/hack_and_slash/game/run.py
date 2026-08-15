@@ -4,22 +4,28 @@ A `World` is one stage. This is the layer above it -- what carries between stage
 and what happens when one is cleared. The campaign itself is never mutated, so a
 run can always be restarted from the top without touching the disk.
 
-Health is the only thing that carries, and it comes back partway between stages.
-That is the whole progression system: no upgrades, no inventory. What it buys is
-that a stage cleared badly still costs you something on the next one, without a
-single rough stage quietly ending the run three stages before you find out.
+Two things carry: health, which comes back partway between stages, and gold.
+Health is what makes a stage cleared badly cost you something on the next one,
+without a single rough stage quietly ending the run three stages before you find
+out. Gold is what you did about it -- the shop between stages turns a good stage
+into a better next one.
+
+There is still no inventory and nothing to equip. What the shop sells are the
+three integers below: health now, health per stage from now on, and a better
+share of what drops. All of them live on the run rather than on the hero,
+because `EntityType` is frozen content and a class is a class for the whole run.
 
 Pure Python -- no pygame.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 from ..core.campaign import Campaign
 from .entities import DEFAULT_HERO, Bestiary, EntityType
-from .world import Outcome, World
+from .world import Outcome, Purse, World
 
 
 class RunOutcome(str, Enum):
@@ -59,6 +65,25 @@ class Run:
     just_advanced: bool = False
     healed: int = 0
 
+    #: Gold banked from stages already finished. What is loose in the stage
+    #: currently being fought lives on the `World` and is added on arrival at
+    #: the next one -- so this is always a number that has survived a stage, and
+    #: `gold_total` is the one to show a player mid-fight.
+    gold: int = 0
+
+    #: Bought from the shop, and the reason it is spelled out here rather than
+    #: on the hero: `EntityType` is frozen content and shared by every run.
+    #: `bonus_heal` adds to the class's own `heal_between_stages`; `gold_find`
+    #: is a fraction, so 0.5 means half as much again from every drop.
+    bonus_heal: int = 0
+    gold_find: float = 0.0
+
+    #: How many of each good has been bought, for the ones that are capped.
+    #: Counted rather than inferred from `bonus_heal` and `gold_find`: those are
+    #: the *effects*, and reading a cap back out of an effect would break the
+    #: moment anything else moved one of them.
+    purchases: dict[str, int] = field(default_factory=dict)
+
     # --- lifecycle -----------------------------------------------------------
     @classmethod
     def start(
@@ -84,6 +109,9 @@ class Run:
                 bestiary,
                 seed=cls._stage_seed(seed, index),
                 hero_type_id=hero_type_id,
+                # A run started partway in is on the floor it says it is, so a
+                # tool jumping to stage 18 sees stage 18's payouts.
+                purse=Purse(floor=index + 1),
             ),
             index=index,
             seed=seed,
@@ -146,6 +174,16 @@ class Run:
     def is_over(self) -> bool:
         return self.outcome is not RunOutcome.RUNNING
 
+    @property
+    def gold_total(self) -> int:
+        """Banked, plus whatever has been picked up in the stage in progress.
+
+        The number to show a player. `gold` on its own is a bookkeeping figure
+        that lags a stage behind, and a purse that visibly ignores the coin you
+        just walked over is worse than no purse at all.
+        """
+        return self.gold + self.world.gold
+
     # --- advancing -----------------------------------------------------------
     def settle(self) -> None:
         """Act on a stage that finished during the tick just taken.
@@ -161,6 +199,7 @@ class Run:
 
         if self.world.outcome is Outcome.LOST:
             self.outcome = RunOutcome.LOST
+            self._bank()
             return
 
         if self.world.outcome is not Outcome.WON:
@@ -168,9 +207,21 @@ class Run:
 
         if self.on_final_stage:
             self.outcome = RunOutcome.WON
+            self._bank()
             return
 
         self._advance()
+
+    def _bank(self) -> None:
+        """Move the stage's takings into the run's purse.
+
+        Zeroing the world's side is what makes this safe to call more than once.
+        `settle` is called every tick and is meant to be idempotent; a bank that
+        did not clear its source would keep paying out for as long as the death
+        screen was up.
+        """
+        self.gold += self.world.gold
+        self.world.gold = 0
 
     def _advance(self) -> None:
         hero = self.world.hero
@@ -178,10 +229,13 @@ class Run:
         # otherwise -- but the property is Optional, so this stays defensive.
         surviving = hero.hp if hero is not None else 1
         hero_type = self.hero_type
-        heal = hero_type.heal_between_stages
+        heal = hero_type.heal_between_stages + self.bonus_heal
 
         before = surviving
         carried = min(surviving + heal, hero_type.hp)
+
+        # Before the world is replaced, or the stage's takings go with it.
+        self._bank()
 
         self.index += 1
         self.world = World(
@@ -190,6 +244,7 @@ class Run:
             seed=self._stage_seed(self.seed, self.index),
             carry_hp=carried,
             hero_type_id=self.hero_type_id,
+            purse=Purse(floor=self.index + 1, gold_find=self.gold_find),
         )
         self.just_advanced = True
         self.healed = carried - before

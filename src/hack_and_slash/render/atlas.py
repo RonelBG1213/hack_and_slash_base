@@ -71,6 +71,21 @@ class Atlas:
         flashed.fill((*color, 255), special_flags=pygame.BLEND_RGB_MAX)
         return flashed
 
+    def shaded(self, name: str, color: tuple[int, int, int]) -> pygame.Surface:
+        """A copy multiplied by `color`, keeping the sprite's shading.
+
+        The opposite end of `tinted`, and needed for a different job: the relic
+        is drawn pale so that one sprite can serve all five rarities, and MAX
+        against a pale sprite gives back the pale sprite. MULT darkens toward
+        the colour instead, so the highlight stays a highlight.
+
+        Not cached, for the same reason `tinted` is not: this runs for the
+        handful of things lying on the floor of one room.
+        """
+        shaded = self[name].copy()
+        shaded.fill((*color, 255), special_flags=pygame.BLEND_RGB_MULT)
+        return shaded
+
 
 def load(path=None) -> Atlas:
     path = path or config.SPRITE_ATLAS

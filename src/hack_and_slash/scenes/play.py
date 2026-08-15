@@ -9,6 +9,11 @@ carries between stages and when one is cleared.
 Hitstop is run here rather than in the sim. On a solid connect the world simply
 stops being stepped for a few frames while the renderer keeps drawing, which is
 what gives a hit weight without changing a single number in the fight.
+
+The shop between stages uses the same trick at a different scale: while it is
+open the world is not stepped and the accumulator is not fed, so the arena
+behind the panel is genuinely stopped rather than merely hidden. That is the one
+real pause in a run -- the between-stage banner deliberately is not one.
 """
 
 from __future__ import annotations
@@ -20,7 +25,7 @@ import pygame
 from .. import config
 from ..core.campaign import Campaign
 from ..core.vec2 import ZERO, Vec2
-from ..game import skills
+from ..game import shop, skills
 from ..game.entities import DEFAULT_HERO, Bestiary
 from ..game.intent import Intent
 from ..game.run import Run, RunOutcome
@@ -30,6 +35,7 @@ from ..render.camera import Camera
 from ..render.effects import Effects
 from ..render.hud import Hud
 from ..render.renderer import Renderer
+from ..render.shop_panel import ROW_KEYS, ShopPanel
 from .base import Scene
 
 MOVE_KEYS = {
@@ -65,6 +71,13 @@ SKILL_KEYS = {
 #: the next stage is already running underneath it.
 BANNER_FRAMES = 110
 
+#: Keys that close the shop and start the stage. Two of them because the panel
+#: says "Enter" and a player halfway through a run reaches for Escape by habit;
+#: Escape is "leave to the menu" everywhere else, and the shop is the one place
+#: it is worth overriding rather than dropping somebody out of a run they were
+#: only trying to shut a panel on.
+SHOP_EXIT_KEYS = (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE, pygame.K_ESCAPE)
+
 
 class PlayScene(Scene):
     def __init__(
@@ -87,6 +100,7 @@ class PlayScene(Scene):
 
         self.renderer = Renderer(atlas)
         self.hud = Hud()
+        self.shop_panel = ShopPanel()
         self.accumulator = Accumulator()
         self.effects = Effects()
 
@@ -104,6 +118,13 @@ class PlayScene(Scene):
         self.camera = Camera(1, 1, config.INTERNAL_W, config.VIEWPORT_H)
         self.freeze = 0
         self.banner = 0
+
+        #: Open between stages. While it is up the world is not stepped at all,
+        #: which is the one real pause in a run -- the between-stage banner
+        #: deliberately is not one, and the arena keeps fighting behind it.
+        #: Spending gold is a decision, and a decision taken while a grunt walks
+        #: up behind you is a decision taken badly.
+        self.shopping = False
         self._enter_stage()
 
         #: Dodge is edge-triggered. Held as a flag rather than read from the key
@@ -137,6 +158,12 @@ class PlayScene(Scene):
 
     # --- input ---------------------------------------------------------------
     def handle_event(self, event: pygame.event.Event) -> Optional[Scene]:
+        if self.shopping:
+            # The shop swallows everything. Aiming, swinging and rolling are all
+            # meaningless against a world that is not being stepped, and a skill
+            # pressed here would come out on the first tick of the next stage.
+            return self._handle_shop_event(event)
+
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 return self.on_exit() if self.on_exit else None
@@ -153,6 +180,27 @@ class PlayScene(Scene):
                     self._skill_pressed = slot
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             self._dodge_pressed = True
+        return None
+
+    def _handle_shop_event(self, event: pygame.event.Event) -> Optional[Scene]:
+        """Buy, or press on. Nothing else happens while the panel is up.
+
+        A refused purchase is silent on purpose: the row was already greyed out
+        before the key was pressed, and `shop.can_buy` is what greyed it, so
+        there is nothing to explain that the panel was not already saying.
+        """
+        if event.type != pygame.KEYDOWN:
+            return None
+
+        if event.key in SHOP_EXIT_KEYS:
+            self.shopping = False
+            return None
+
+        if event.key in ROW_KEYS:
+            goods = shop.stock()
+            index = ROW_KEYS.index(event.key)
+            if index < len(goods):
+                shop.buy(self.run, goods[index])
         return None
 
     def restarted(self) -> "PlayScene":
@@ -227,6 +275,12 @@ class PlayScene(Scene):
 
     # --- update --------------------------------------------------------------
     def update(self, elapsed_seconds: float) -> Optional[Scene]:
+        if self.shopping:
+            # Not stepped, and the accumulator is not fed either -- banking real
+            # seconds while a panel is open would fast-forward the first moments
+            # of the next stage the instant it closed.
+            return None
+
         intent = self._read_intent()
 
         for _ in range(self.accumulator.ticks_for(elapsed_seconds)):
@@ -248,6 +302,11 @@ class PlayScene(Scene):
                 self.effects.clear()
                 self._enter_stage()
                 self.banner = BANNER_FRAMES
+                # The stage's takings have been banked by now, so the purse the
+                # shop shows is the true one. Opened on every transition rather
+                # than at act ends: gold trickles in, and four visits in a
+                # twenty-stage run means three of them with nothing to decide.
+                self.shopping = True
                 break
 
         self.effects.tick()
@@ -268,7 +327,12 @@ class PlayScene(Scene):
         self.renderer.draw(viewport, self.world, self.camera, self.effects)
         self.hud.draw(surface, self.world, self.run, self.world.tick)
 
-        if self.banner > 0:
+        if self.shopping:
+            self.shop_panel.draw(surface, self.run)
+        elif self.banner > 0:
+            # One or the other. Both at once puts the stage name behind the
+            # shop's title, and the banner is still counting down underneath --
+            # so it gets its remaining frames once the panel is dismissed.
             self._draw_banner(surface)
 
         if self.run.is_over:
@@ -312,6 +376,10 @@ class PlayScene(Scene):
             else f"stage {self.run.stage_number} of {self.run.stage_count}",
             False, config.GREY,
         )
+        # What the run was worth. Nothing carries out of it -- there is no save
+        # file and gold does not persist -- so this is a score, and it is the
+        # only one the game keeps.
+        purse = small.render(f"{self.run.gold_total}g collected", False, config.GOLD)
         hint = small.render("R for a new run    Esc for the menu", False, config.GREY)
 
         # A dim wash rather than a solid panel, so the arena stays visible behind
@@ -323,4 +391,5 @@ class PlayScene(Scene):
         centre = config.INTERNAL_W // 2
         surface.blit(banner, (centre - banner.get_width() // 2, config.VIEWPORT_H // 2 - 32))
         surface.blit(detail, (centre - detail.get_width() // 2, config.VIEWPORT_H // 2 + 2))
-        surface.blit(hint, (centre - hint.get_width() // 2, config.VIEWPORT_H // 2 + 22))
+        surface.blit(purse, (centre - purse.get_width() // 2, config.VIEWPORT_H // 2 + 20))
+        surface.blit(hint, (centre - hint.get_width() // 2, config.VIEWPORT_H // 2 + 40))

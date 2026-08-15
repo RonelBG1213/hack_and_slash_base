@@ -11,6 +11,7 @@ LEVELS_DIR = ROOT / "levels"
 
 ENTITIES_DATA = DATA_DIR / "entities.json"
 WEAPONS_DATA = DATA_DIR / "weapons.json"
+LOOT_DATA = DATA_DIR / "loot.json"
 SPRITE_ATLAS = ASSETS_DIR / "sprites.png"
 
 # --- simulation --------------------------------------------------------------
@@ -113,6 +114,9 @@ SPRITE_ORDER = (
     # neither of these is a creature
     "arrow",
     "shadow",
+    # nor these: what a kill leaves on the floor
+    "coin",
+    "relic",
 )
 ATLAS_COLUMNS = 8
 
@@ -134,3 +138,20 @@ GOOD = (126, 186, 116)
 BAD = (198, 84, 78)
 HERO = (108, 168, 214)
 TELEGRAPH = (224, 122, 95)
+
+# Gold, and the colour of each rarity. Keyed by the string in data/loot.json
+# rather than by the `Rarity` enum, because this module imports nothing and is
+# the one place that is true of -- game/ imports config, never the other way
+# round.
+#
+# The ladder is the one every game of this kind uses, and that is the argument
+# for it: grey-green-blue-purple-orange is read correctly by a player who has
+# never seen this game, without a legend and without being told.
+GOLD = (226, 186, 84)
+RARITY_COLORS = {
+    "common": (170, 176, 188),
+    "uncommon": (126, 186, 116),
+    "rare": (108, 168, 214),
+    "epic": (168, 122, 214),
+    "legendary": (232, 158, 74),
+}

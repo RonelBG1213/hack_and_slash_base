@@ -1,8 +1,9 @@
-"""The bottom strip: health, the cooldown pips, and how many are left.
+"""The bottom strip: health, the cooldown pips, the purse, and how many are left.
 
 Everything here is something a player acts on. Health decides whether to press
-or disengage, the pips decide what is available to press *with*, and the count is
-the only sense of progress a single arena gives.
+or disengage, the pips decide what is available to press *with*, the count is
+the only sense of progress a single arena gives, and the purse is what the shop
+between stages will let you do about all of it.
 
 Every cooldown is drawn the same way -- a small square that empties and refills.
 Four of them in a row is a lot of pips, which is exactly why none of them is a
@@ -69,6 +70,7 @@ class Hud:
             self._draw_dodge(surface, hero, top)
             self._draw_skills(surface, hero, top)
 
+        self._draw_gold(surface, world, top, run)
         self._draw_remaining(surface, world, top, run)
         self._draw_boss_bar(surface, world)
 
@@ -164,6 +166,26 @@ class Hud:
                 SKILL_PIP_LABELS[slot],
             )
             drawn += 1
+
+    # --- gold ----------------------------------------------------------------
+    def _draw_gold(
+        self, surface: pygame.Surface, world: World, top: int, run=None
+    ) -> None:
+        """The purse, under the health bar.
+
+        Read from the run when there is one, because gold banked from earlier
+        stages lives there and what is loose in this arena lives on the world --
+        a readout showing only one of the two is wrong half the time. A world
+        being stepped on its own (a tool, half the tests) has no run to ask, and
+        shows what it collected here.
+
+        A number rather than a shape, unlike everything else in this strip. It
+        is the one thing here that is not read mid-swing: you look at your purse
+        between stages, when there is time to read four digits.
+        """
+        amount = run.gold_total if run is not None else world.gold
+        label = self.small.render(f"{amount}g", False, config.GOLD)
+        surface.blit(label, (BAR_X, top + BAR_Y_OFFSET + 2))
 
     # --- progress ------------------------------------------------------------
     def _draw_remaining(

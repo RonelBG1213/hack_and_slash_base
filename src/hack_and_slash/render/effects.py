@@ -16,6 +16,7 @@ import math
 import random
 from dataclasses import dataclass, field
 
+from .. import config
 from ..core.vec2 import ZERO, Vec2
 from ..game.events import Event, EventKind
 
@@ -91,6 +92,21 @@ class Effects:
                     )
                 case EventKind.DEATH:
                     self.shake = max(self.shake, SHAKE_ON_DEATH)
+                case EventKind.PICKUP:
+                    # The only place a rarity is ever seen. There is one relic
+                    # sprite for all five tiers, so what tells a player they
+                    # just picked up something good is this number's colour and
+                    # the size of it -- and no shake, because a coin is not an
+                    # impact.
+                    self.numbers.append(
+                        FloatingNumber(
+                            text=f"+{event.amount}",
+                            origin=event.pos,
+                            ticks_left=NUMBER_LIFETIME,
+                            color=config.RARITY_COLORS.get(event.rarity, config.GOLD),
+                            drift=0.0,
+                        )
+                    )
                 case EventKind.BLOCKED:
                     # A dodge that looks identical to a miss teaches the player
                     # nothing about what just worked.

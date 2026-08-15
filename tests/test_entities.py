@@ -289,3 +289,56 @@ def test_every_boss_declares_its_three_attacks_in_the_order_the_brain_expects() 
         assert boss.charge_range > 0, f"{boss.id} can never reach its charge"
         # And the bar the HUD draws is keyed off the scale, not off the brain.
         assert boss.sprite_scale > 1, f"{boss.id} would fight without a boss bar"
+
+
+def test_every_enemy_declares_what_killing_it_is_worth() -> None:
+    """`level` is the loot layer's only input from the bestiary.
+
+    Left at the default it would silently pay out as though a sovereign were a
+    rat -- which is not an error anywhere, just a reward curve that quietly does
+    nothing. So it is checked here rather than discovered in play.
+    """
+    for enemy in ENEMIES:
+        assert enemy.level >= 1, f"{enemy.id} has a level below 1"
+        assert enemy.level > 1 or enemy.id == "rat", (
+            f"{enemy.id} is still on the default level of 1; only the rat, which "
+            "is the floor of the scale, is meant to be"
+        )
+
+
+def test_no_class_is_worth_anything_to_kill() -> None:
+    """Heroes keep the default, and nothing pays out for one.
+
+    Not a hypothetical: `Faction` has `hostile_to` in both directions and the
+    loot roll is handed whatever just died. A class carrying a level would put a
+    price on the player's own head the day something friendly-fires.
+    """
+    for cls in CLASSES:
+        assert cls.level == 1, f"{cls.id} declares a level; only enemies should"
+
+
+def test_a_boss_outranks_everything_it_is_fought_beside() -> None:
+    """The whole reason level is separate from floor.
+
+    A boss and the grunts around it share a stage, so a floor number alone
+    cannot tell them apart -- and a boss kill that pays a grunt's wage is the
+    exact thing this field exists to prevent.
+    """
+    bosses = [t for t in ENEMIES if t.brain == "boss"]
+    rank_and_file = [t for t in ENEMIES if t.brain != "boss"]
+
+    assert bosses and rank_and_file
+    assert min(b.level for b in bosses) > max(e.level for e in rank_and_file)
+
+
+def test_level_is_not_just_health_wearing_a_hat() -> None:
+    """Level ranks danger; hp ranks how long something takes to kill.
+
+    If the two agreed everywhere, the field would be dead weight and deriving it
+    from hp would be the better design. They disagree on the brute, which is the
+    slowest, healthiest thing in the game that is barely a threat on its own --
+    and that disagreement is the argument for the field existing at all.
+    """
+    by_level = sorted(ENEMIES, key=lambda t: t.level)
+    by_hp = sorted(ENEMIES, key=lambda t: t.hp)
+    assert [t.id for t in by_level] != [t.id for t in by_hp]

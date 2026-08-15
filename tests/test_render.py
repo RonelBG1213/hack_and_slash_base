@@ -274,3 +274,187 @@ def test_the_highest_slot_wins_when_two_keys_land_in_one_frame(atlas) -> None:
     for key in (pygame.K_f, pygame.K_q):
         scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=key))
     assert scene._read_intent().weapon == skills.ULTIMATE
+
+
+# --- loot on the floor -------------------------------------------------------
+def test_the_renderer_draws_every_rarity_and_a_plain_coin(atlas) -> None:
+    """One relic sprite serves all five tiers, and the colour is the whole
+    difference between them -- so every tier has to survive being drawn."""
+    from hack_and_slash.game.loot import Pickup, Rarity
+    from hack_and_slash.render.camera import Camera
+
+    world = make_world()
+    world.pickups.append(Pickup(pos=world.hero.pos + Vec2(8, 0), gold=5))
+    for index, rarity in enumerate(Rarity):
+        world.pickups.append(
+            Pickup(pos=world.hero.pos + Vec2(-20 - index * 6, 0), gold=10, rarity=rarity)
+        )
+
+    surface = pygame.Surface((config.INTERNAL_W, config.VIEWPORT_H))
+    camera = Camera(*world.level.pixel_size, config.INTERNAL_W, config.VIEWPORT_H)
+    camera.snap_to(world.hero.pos)
+    Renderer(atlas).draw(surface, world, camera, Effects())
+
+    assert not is_blank(surface)
+
+
+def test_shading_a_sprite_keeps_its_shape(atlas) -> None:
+    """MULT rather than MAX. The relic is drawn pale so it can take a colour,
+    and MAX against a pale sprite gives the pale sprite straight back."""
+    plain = atlas["relic"]
+    shaded = atlas.shaded("relic", (255, 0, 0))
+
+    assert shaded.get_size() == plain.get_size()
+    assert any(
+        shaded.get_at((x, y))[3] == plain.get_at((x, y))[3]
+        for x in range(plain.get_width())
+        for y in range(plain.get_height())
+    )
+    assert shaded.get_at((plain.get_width() // 2, plain.get_height() // 2)) != plain.get_at(
+        (plain.get_width() // 2, plain.get_height() // 2)
+    )
+
+
+def test_the_hud_shows_the_purse_with_and_without_a_run(atlas) -> None:
+    """A world stepped on its own -- a tool, half the tests -- has no run to ask
+    what was banked earlier, and must still draw."""
+    world = make_world()
+    world.gold = 1234
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+
+    Hud().draw(surface, world, tick=0)
+    assert not is_blank(surface)
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.run.gold = 500
+    scene.world.gold = 25
+    assert scene.run.gold_total == 525
+    scene.draw(pygame.Surface((config.INTERNAL_W, config.INTERNAL_H)))
+
+
+# --- the shop ----------------------------------------------------------------
+def test_the_shop_panel_draws_in_every_state(atlas) -> None:
+    from hack_and_slash.game import shop
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.shopping = True
+
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+
+    # Broke, so every row is greyed out.
+    scene.draw(surface)
+    assert not is_blank(surface)
+
+    # Rich, hurt, and with one good already capped out.
+    scene.run.gold = 100000
+    scene.world.hero.hp = 10
+    for good in shop.stock():
+        for _ in range(good.limit or 1):
+            shop.buy(scene.run, good)
+    scene.draw(surface)
+    assert not is_blank(surface)
+
+
+def test_the_shop_pauses_the_world_and_swallows_the_controls(atlas) -> None:
+    """While the panel is up the world is not stepped at all.
+
+    A skill pressed here would otherwise come out on the first tick of the next
+    stage, which is a swing the player did not aim.
+    """
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.shopping = True
+    before = scene.world.tick
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_f))
+    scene.update(1.0)
+
+    assert scene.world.tick == before, "the world advanced while the shop was open"
+    assert scene._skill_pressed is None, "a skill press leaked past the shop"
+
+
+def test_a_number_key_buys_the_good_on_that_row(atlas) -> None:
+    from hack_and_slash.game import shop
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.shopping = True
+    scene.run.gold = 100000
+    tonic = shop.stock()[1]
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_2))
+    assert shop.bought(scene.run, tonic) == 1
+    assert scene.run.gold == 100000 - tonic.price
+
+
+def test_enter_closes_the_shop_and_play_resumes(atlas) -> None:
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.shopping = True
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+    assert not scene.shopping
+
+    before = scene.world.tick
+    scene.update(0.5)
+    assert scene.world.tick > before
+
+
+def test_escape_shuts_the_shop_rather_than_leaving_the_run(atlas) -> None:
+    """Escape is "back to the menu" everywhere else in this scene.
+
+    The shop is the one place worth overriding it: a player shutting a panel
+    reaches for Escape by habit, and dropping them out of a twenty-stage run for
+    it is not a trade worth making.
+    """
+    exited = []
+    scene = PlayScene(campaign(), BESTIARY, atlas, on_exit=lambda: exited.append(True))
+    scene.shopping = True
+
+    assert scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)) is None
+    assert not scene.shopping
+    assert not exited
+
+
+def test_clearing_a_stage_opens_the_shop_with_the_takings_already_banked(atlas) -> None:
+    """The order matters: `Run._advance` banks before it replaces the world, so
+    the purse the panel shows is the real one rather than a stage behind."""
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+
+    assert scene.shopping, "clearing a stage did not open the shop"
+    assert scene.run.stage_number == 2
+    assert scene.run.gold > 0, "the shop opened on an empty purse after a full stage"
+    assert scene.world.gold == 0
+
+
+def test_no_shop_row_overflows_the_panel(atlas) -> None:
+    """384 pixels wide, and a blurb that runs into the sold-out tally is the
+    failure this catches -- it looks like a rendering bug and is a wording one.
+
+    Measured with the panel's own fonts and columns rather than by counting
+    characters, so shortening a template or moving a column both show up here.
+    """
+    from hack_and_slash.game import shop
+    from hack_and_slash.render import shop_panel as panel
+
+    drawn = panel.ShopPanel()
+    for good in shop.stock():
+        blurb_right = panel.LEFT + panel.BLURB_X + drawn.small.size(good.blurb)[0]
+        assert blurb_right <= panel.TALLY_RIGHT, (
+            f"{good.id}: '{good.blurb}' runs {blurb_right - panel.TALLY_RIGHT}px "
+            "into the sold-out tally"
+        )
+
+        price_right = panel.LEFT + panel.PRICE_X + drawn.font.size(f"{good.price}g")[0]
+        assert price_right <= panel.LEFT + panel.BLURB_X, f"{good.id}: the price runs into the blurb"
+        name_right = panel.LEFT + panel.NAME_X + drawn.font.size(good.name)[0]
+        assert name_right <= panel.LEFT + panel.PRICE_X, f"{good.id}: the name runs into the price"
+
+
+def test_the_shop_rows_and_hint_fit_above_the_hud(atlas) -> None:
+    from hack_and_slash.game import shop
+    from hack_and_slash.render import shop_panel as panel
+
+    bottom = panel.ROW_Y + len(shop.stock()) * panel.ROW_H + 12 + 13
+    assert bottom <= config.VIEWPORT_H, "the shop's hint line is drawn under the HUD"

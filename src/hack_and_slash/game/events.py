@@ -23,6 +23,7 @@ class EventKind(str, Enum):
     DODGE = "dodge"
     SHOOT = "shoot"
     PROJECTILE_SPENT = "projectile_spent"
+    PICKUP = "pickup"  # gold or a valuable was collected
 
 
 @dataclass(frozen=True)
@@ -33,3 +34,9 @@ class Event:
     amount: int = 0
     facing: float = 0.0
     is_hero: bool = False
+
+    #: Which rarity a PICKUP was, as the plain string from `data/loot.json`.
+    #: Empty on a coin, and on every other kind of event. A string rather than
+    #: the `Rarity` enum so the presentation layer can look up a colour in
+    #: `config.RARITY_COLORS` without importing anything from `game/`.
+    rarity: str = ""

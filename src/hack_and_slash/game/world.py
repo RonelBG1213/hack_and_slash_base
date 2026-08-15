@@ -5,9 +5,16 @@ that is `sim.step`. The split is what makes the sim testable: a test builds a
 world, steps it a known number of ticks, and asserts on what it finds, with no
 window, no clock and no input device anywhere in the picture.
 
-Randomness lives here, in one seeded `Random`. Nothing anywhere else may call
-the module-level `random` functions; if it did, a seeded run would stop
-replaying and every damage assertion in the suite would become a coin toss.
+Randomness lives here, in *two* seeded `Random`s, and the split matters. `rng`
+is the fight: damage rolls, and nothing else. `loot_rng` is what a kill leaves
+behind. Both are derived from the one seed, so a run still replays exactly --
+but a loot roll can never shift the sequence a damage roll draws from, which is
+what lets the loot layer be added to a tuned game without moving a single
+recorded number. `test_loot.py` asserts that rather than trusting it.
+
+Nothing anywhere else may call the module-level `random` functions; if it did, a
+seeded run would stop replaying and every damage assertion in the suite would
+become a coin toss.
 """
 
 from __future__ import annotations
@@ -21,6 +28,27 @@ from ..core.spatial import SpatialHash
 from ..core.vec2 import Vec2
 from .entities import DEFAULT_HERO, Bestiary, Entity, Faction, spawn
 from .events import Event
+from .loot import Pickup
+
+#: Offset that separates the loot stream from the combat one. Any constant would
+#: do; what matters is that the two generators never see the same seed, because
+#: two `Random`s seeded identically produce identical sequences and the whole
+#: point of the split would be lost.
+LOOT_STREAM = 0x10071
+
+
+@dataclass(frozen=True)
+class Purse:
+    """What the hero is carrying into this stage, from the run above it.
+
+    Two numbers that the world needs and cannot work out for itself: which floor
+    this is, and how much extra its drops are worth. Passed as one thing so that
+    a third does not mean another positional argument on a constructor with six
+    of them already.
+    """
+
+    floor: int = 1
+    gold_find: float = 0.0
 
 
 class Outcome(str, Enum):
@@ -50,6 +78,7 @@ class World:
         seed: int = 0,
         carry_hp: int | None = None,
         hero_type_id: str = DEFAULT_HERO,
+        purse: Purse | None = None,
     ) -> None:
         """One stage in progress.
 
@@ -61,6 +90,11 @@ class World:
         `hero_type_id` is which class is being played. It defaults, so a world
         built without an opinion is still a real fight -- which is what keeps
         every test and tool that predates classes working unchanged.
+
+        `purse` is what the run above knows and this world does not: which floor
+        it is and how much gold find has been bought. It defaults to floor one
+        with no bonus, which is a perfectly coherent standalone fight -- so
+        every tool and test that predates loot goes on working untouched.
         """
         self.level = level
         self.bestiary = bestiary
@@ -68,6 +102,11 @@ class World:
         self.seed = seed
         self.carry_hp = carry_hp
         self.hero_type_id = hero_type_id
+        self.purse = purse or Purse()
+
+        #: Separate from `rng` on purpose. See the module docstring: this is the
+        #: guarantee that adding loot to a tuned game moved nothing.
+        self.loot_rng = random.Random(seed ^ LOOT_STREAM)
 
         self.tick = 0
         self.outcome = Outcome.RUNNING
@@ -75,6 +114,13 @@ class World:
         self.entities: list[Entity] = []
         self.projectiles: list[Projectile] = []
         self.events: list[Event] = []
+
+        #: Loot on the floor, and what has been picked up off it. Kept out of
+        #: `entities` deliberately -- a pickup has no health, no faction and no
+        #: brain, and putting one in that list would hand it to the broadphase,
+        #: the separation pass and every AI brain in the game.
+        self.pickups: list[Pickup] = []
+        self.gold = 0
 
         # Cell a little wider than the longest reach in the game, so a swing
         # query sweeps four buckets at worst.

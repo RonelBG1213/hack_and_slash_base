@@ -57,6 +57,9 @@ class Renderer:
 
         self._draw_tiles(surface, world, view)
         self._draw_shadows(surface, world, view)
+        # Under the bodies. A coin is never the thing you need to see, and one
+        # drawn over a charger's telegraph is a coin that got somebody killed.
+        self._draw_pickups(surface, world, view)
         self._draw_projectiles(surface, world, view)
         self._draw_bodies(surface, world, view)
         self._draw_swings(surface, world, view)
@@ -91,6 +94,27 @@ class Renderer:
             )
             sx, sy = camera.to_screen(entity.pos)
             surface.blit(shadow, (sx - shadow.get_width() // 2, sy - shadow.get_height() // 2))
+
+    # --- loot ----------------------------------------------------------------
+    def _draw_pickups(self, surface: pygame.Surface, world: World, camera: Camera) -> None:
+        """Coins and valuables on the floor.
+
+        There is one relic sprite for all five rarities and the colour is the
+        entire difference between them, which is why this is the one thing in
+        the game drawn through `Atlas.shaded`. A coin is drawn as painted --
+        gold is gold, and giving it a rarity colour would imply loose change had
+        tiers.
+        """
+        for pickup in world.pickups:
+            if not camera.is_on_screen(pickup.pos):
+                continue
+            sprite = self.atlas[pickup.sprite]
+            if pickup.rarity is not None:
+                sprite = self.atlas.shaded(
+                    pickup.sprite, config.RARITY_COLORS[pickup.rarity.value]
+                )
+            sx, sy = camera.to_screen(pickup.pos)
+            surface.blit(sprite, (sx - sprite.get_width() // 2, sy - sprite.get_height() // 2))
 
     # --- bodies --------------------------------------------------------------
     def _draw_bodies(self, surface: pygame.Surface, world: World, camera: Camera) -> None:

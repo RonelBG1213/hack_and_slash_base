@@ -1,9 +1,11 @@
-"""Choosing a class, which is the only decision the game asks for outside a fight.
+"""Choosing a class, which is the first decision the game asks for.
 
-There are no upgrades and no inventory -- this screen is the whole of character
-building, so it has one job: make the five readable enough that the choice is
-informed rather than a coin toss. Hence the stat row and the one-line role. A
-grid of five names would be a menu; this is supposed to be a decision.
+There is no inventory and nothing to equip: the shop between stages sells three
+goods and none of them changes what a class *is*. So this screen is still the
+whole of character building, and it has one job -- make the five readable enough
+that the choice is informed rather than a coin toss. Hence the stat row and the
+one-line role. A grid of five names would be a menu; this is supposed to be a
+decision, and it is the only one that cannot be revisited for the rest of a run.
 
 The roster comes from `bestiary.hero_classes`, which is every entity whose
 faction is `hero`, in the order `data/entities.json` lists them. Adding a class

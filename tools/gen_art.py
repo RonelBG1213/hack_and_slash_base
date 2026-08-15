@@ -270,6 +270,27 @@ def paint_shadow(surface: pygame.Surface) -> None:
     pygame.draw.ellipse(surface, (0, 0, 0, 90), (3, CELL - 6, CELL - 6, 5))
 
 
+def paint_coin(surface: pygame.Surface) -> None:
+    # Small and unmistakable. It sits on the floor under everything else in the
+    # room, so it has to read at 1x from the corner of your eye without being
+    # big enough to hide a rat behind.
+    mid = CELL // 2
+    pygame.draw.rect(surface, (150, 110, 34), (mid - 3, mid - 2, 6, 5))
+    pygame.draw.rect(surface, config.GOLD, (mid - 3, mid - 2, 6, 4))
+    pygame.draw.rect(surface, (250, 232, 168), (mid - 2, mid - 1, 2, 2))
+
+
+def paint_relic(surface: pygame.Surface) -> None:
+    # A valuable. Drawn plain white-ish so the renderer can tint it to the
+    # rarity that was rolled -- there is one sprite for all five tiers, and the
+    # colour is the entire difference between a common and a legendary.
+    mid = CELL // 2
+    pygame.draw.rect(surface, (60, 62, 78), (mid - 4, mid - 4, 8, 8))
+    pygame.draw.rect(surface, (236, 239, 244), (mid - 3, mid - 3, 6, 6))
+    pygame.draw.rect(surface, (150, 156, 170), (mid - 3, mid + 1, 6, 2))
+    pygame.draw.rect(surface, (255, 255, 255), (mid - 2, mid - 2, 2, 2))
+
+
 PAINTERS = {
     "floor": paint_floor,
     "wall": paint_wall,
@@ -290,6 +311,8 @@ PAINTERS = {
     "sovereign": paint_sovereign,
     "arrow": paint_arrow,
     "shadow": paint_shadow,
+    "coin": paint_coin,
+    "relic": paint_relic,
 }
 
 

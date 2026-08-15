@@ -4,7 +4,8 @@ A top-down twin-stick arena brawler. Move with WASD, aim with the mouse, click
 to swing, roll to survive. Four attacks per class — light, neutral, heavy,
 ultimate — on ascending cooldowns. Pick one of five classes, then twenty stages
 in four acts, each ending on a boss. Your wounds come with you from one stage to
-the next, so how well you clear stage one is still with you at the end of the act.
+the next, so how well you clear stage one is still with you at the end of the
+act — and so does your gold, which a shop between stages will take off you.
 
 Python 3.14 + pygame-ce. No engine, no build step.
 
@@ -124,6 +125,64 @@ Your dodge roll is invulnerable from its very first frame, and the
 invulnerability ends *before* the roll does — so rolling at the right moment
 works and rolling constantly does not.
 
+### Loot and gold
+
+Everything you kill drops gold, and one kill in four drops a valuable on top of
+it. Both land on the floor and are picked up by walking over them; anything
+still lying there when the room is cleared is swept up automatically, so
+finishing a stage never costs you a drop.
+
+**What a kill pays** is `base × monster level × depth`. Monster level is a
+number per enemy in `data/entities.json`, running from the rat at 1 to the
+Sovereign at 8, and it is deliberately not derived from health — a Brute has
+nearly four times a Bowman's hp and is worth twice as much, because most of that
+health is time rather than danger. Depth is the floor you are on, adding 15% a
+stage, so the twentieth pays nearly four times the first.
+
+**Rarity is worth, not power.** There is no inventory and nothing to equip: a
+valuable's rarity multiplies the gold the kill already produced.
+
+| Rarity | Chance | Worth |
+| --- | --- | --- |
+| Common | 60% | ×1 |
+| Uncommon | 25% | ×2 |
+| Rare | 10% | ×4 |
+| Epic | 4% | ×8 |
+| Legendary | 1% | ×16 |
+
+A legendary off the Sovereign on floor 20 is around 1,500 gold — roughly ten
+stages of ordinary income, and meant to be the kind of thing you remember. The
+weights are flat across floors on purpose: depth already pays more through the
+gold formula, and tilting the rarities as well is two dials doing one job.
+
+**The shop** opens between every stage and pauses the game, which nothing else
+in a run does — the between-stage banner deliberately does not. It stocks three
+things, and none of them touches what a class *is*:
+
+| Good | Price | Effect | Cap |
+| --- | --- | --- | --- |
+| Poultice | 90g | +30 health now | — |
+| Tonic | 260g | +6 health back after every stage, permanently | 4 |
+| Charm | 340g | +25% gold find, permanently | 3 |
+
+The two permanent goods are capped because they compound; uncapped, the correct
+play is to buy nothing but Charms early and the shop stops being a decision.
+
+**What is measured and what is not.** A full run banks about 4,700 gold — around
+33 on floor 1, rising to 400–550 on the late floors — measured with the same bot
+the rest of the balance work uses. The prices are set against that: maxing both
+permanents costs 2,060g, a little under half a run, and the first Tonic is out of
+reach until roughly floor 4. The first draft priced them at 45/120/150, which
+bought the whole shop out by about stage 5 and left nothing to decide for the
+remaining fifteen.
+
+What that measurement cannot tell you is whether any of it is *worth* buying,
+because nothing plays this game with a purse — `autoplay` never spends. So the
+drop rates, the rarity worths and the three effects remain a first pass;
+`data/loot.json` says so at the top, and the suite pins only the relationships —
+rarer is worth more and drops less, a deeper floor pays more, a bigger monster
+pays more — never the values.
+
 ## Setup
 
 ```sh
@@ -169,6 +228,12 @@ The art and the stages are both generated, not committed. Build them once:
 | Space / Shift / right click | Dodge roll |
 | `R` | Restart the run |
 | Esc | Back to the menu |
+| `1` `2` `3` | Buy, in the shop between stages |
+| Enter / Space / Esc | Leave the shop and start the stage |
+
+The shop swallows every other control while it is open, including Esc — which is
+"back to the menu" everywhere else. Dropping somebody out of a twenty-stage run
+because they reached for Escape to shut a panel is not a trade worth making.
 
 The light attack repeats while held. The three skills do not — each is one press,
 because deciding *when* to spend one is most of what makes it a skill, and a
@@ -185,7 +250,7 @@ src/hack_and_slash/
   game/     entities, actions, combat, AI, run, the tick          <- no pygame
   render/   atlas, camera, renderer, HUD, effects
   scenes/   menu, select, play, smoke
-data/       entities.json, weapons.json   -- content, not code
+data/       entities.json, weapons.json, loot.json   -- content, not code
 levels/     stage1..20.json, campaign.json
 tools/      art generator, level builder, headless screenshots
 ```
@@ -234,6 +299,13 @@ the run never gets tense (the heal is too large).
 Only the floor and the game is unfair; only the ceiling and there is no game.
 `tests/test_playthrough.py` pins all three.
 
+**None of these numbers include loot.** The bot never buys anything and never
+detours for a pickup, so every figure above measures the same game it measured
+before the shop existed — which is the point: the loot layer was added on top of
+a tuned game without moving a cell of it. The cost is that the shop's own
+numbers have no instrument behind them. Teaching `autoplay` to spend gold would
+give you one, and would stop the grid being a fixed reference the same day.
+
 **Two findings worth knowing before you tune anything.**
 
 *Reaction time is not what decides these fights.* Across slow and moderate
@@ -273,10 +345,16 @@ To add an enemy, append to `data/entities.json`:
 ```json
 "brute": {
   "name": "Brute", "faction": "enemy", "sprite": "brute",
+  "level": 4,
   "hp": 40, "speed": 0.7, "radius": 7.0, "weapon": "gore",
   "brain": "chaser", "aggro": 200
 }
 ```
+
+`level` is what killing it pays, 1 to 8, and it is the only thing the loot layer
+reads out of the bestiary. Leave it off and the enemy quietly pays a rat's wage
+for the rest of the game — which is not an error anywhere, so
+`tests/test_entities.py` refuses an enemy still sitting on the default.
 
 then add `"brute"` to `SPRITE_ORDER` in `config.py` and a painter for it in
 `tools/gen_art.py`, and regenerate. `tests/test_atlas.py` fails if the data and
@@ -312,13 +390,21 @@ python tools/screenshot.py play out.png --stage 20 --class priest --ticks 240
 
 ## Known limits
 
-- **No progression beyond health.** No upgrades, no loot, no build. You pick a
-  class and that is the whole of character building; a run is twenty fights and
-  what you have left. This one is load-bearing rather than incidental: because the
-  hero never gets stronger, health on a later boss buys fight *length* and nothing
-  else, so the act bosses are not much tougher than the first and take their
-  difficulty from reach, cadence and arena instead. Both later bosses were drafted
-  far tankier and were unwinnable on every seed.
+- **No progression that makes you hit harder.** There is loot and there is a
+  shop, but the three things it sells are health now, health per stage, and gold
+  find — nothing touches damage, speed or maximum health. That is load-bearing
+  rather than squeamish: because the hero's *output* never grows, health on a
+  later boss buys fight **length** and nothing else, so the act bosses are not
+  much tougher than the first and take their difficulty from reach, cadence and
+  arena instead. Both later bosses were drafted far tankier and were unwinnable
+  on every seed. Selling a damage upgrade would need a per-`Entity` stat layer
+  that every lookup in the game went through, and would invalidate the whole
+  recorded balance grid on the day it shipped.
+- **Nothing measures the shop.** `autoplay` never buys anything and never
+  detours for a pickup, which is exactly why the balance grid is provably
+  unmoved by all of this — and exactly why nobody knows whether four Tonics
+  trivialise act two. The loot numbers are a first pass and `data/loot.json`
+  says so at the top.
 - **No level editor.** `tools/make_level.py` describes each stage as a border plus
   a list of pillar rectangles and writes the JSON. An editor is roughly half a
   project on its own; a short script is still the honest trade at twenty stages,
