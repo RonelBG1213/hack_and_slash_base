@@ -6,16 +6,21 @@ puts that request through exactly the same code the player's input goes through,
 so an enemy can never do something the hero physically could not -- no gliding
 through walls, no attacking during its own recovery.
 
-Three brains, three questions they ask the player:
+Five brains, five questions they ask the player:
 
 * **chaser** -- can you make space? Straightforward pressure, walks in and swings.
 * **charger** -- are you standing in a line with it? Long telegraph, committed
   dash, sidestep or eat it.
 * **archer** -- are you standing still in the open? Keeps its distance, needs
   line of sight, so cover is the answer.
+* **flanker** -- is your way out as clear as you think? Closes on an arc rather
+  than a line, so backing straight away no longer answers everything in the room.
+* **boss** -- all three of the above, chosen by distance, one to an act.
 """
 
 from __future__ import annotations
+
+import math
 
 from ..core.collision import line_of_sight
 from ..core.vec2 import Vec2
@@ -30,6 +35,11 @@ PAUSE_AFTER_ATTACK = {
     "chaser": 20,
     "charger": 45,
     "archer": 34,
+    # A chaser's, and left there deliberately. Cadence was tried as the fix when
+    # the demon first broke acts VII-VIII -- 20 to 38, which is most of the way
+    # to the charger's -- and it moved not one seed of eight on three separate
+    # stages. The dial that mattered was the arc itself; see `flank_degrees`.
+    "flanker": 20,
     "boss": 40,
 }
 
@@ -66,6 +76,8 @@ def decide(world, entity: Entity) -> Intent:
             return _charger(world, entity, hero, to_hero, distance)
         case "archer":
             return _archer(world, entity, hero, to_hero, distance)
+        case "flanker":
+            return _flanker(world, entity, hero, to_hero, distance)
         case "boss":
             return _boss(world, entity, hero, to_hero, distance)
         case _:
@@ -126,6 +138,59 @@ def _archer(world, entity: Entity, hero: Entity, to_hero: Vec2, distance: float)
     # per enemy rather than random, so a seeded run replays exactly.
     drift = heading.perpendicular() * (1.0 if entity.id % 2 == 0 else -1.0)
     return Intent(move=drift * 0.6, aim=heading)
+
+
+def _flanker(world, entity: Entity, hero: Entity, to_hero: Vec2, distance: float) -> Intent:
+    """A chaser that will not come at you down a straight line.
+
+    Every other brain in the game approaches on the vector to the hero, which
+    means one retreat -- straight backwards -- answers all four at once. The
+    measurement is blunt about what that is worth: across the reaction ladder
+    what separates a won run from a lost one is *disengaging when hurt*, not
+    reflexes. So the only thing in the game that costs the player anything is
+    the walk away, and nothing has ever contested it.
+
+    A flanker contests it, and does so without breaking the deal the whole fight
+    rests on. It is still slower than every class, so the retreat still works --
+    it just stops being free, because the thing following you is arriving from
+    somewhere other than where you left it. In a game with no pathing, where kill
+    order is already decided by geometry, that is the cheapest way to ask a new
+    question: no new verb for the player to learn, just a worse assumption.
+
+    The arc closes as it gets near. At the edge of aggro it is walking almost
+    sideways; by the time it is in reach it is coming straight in. A *constant*
+    offset would orbit forever and never land a hit, which is why the taper is
+    the shape of the thing rather than a refinement of it.
+
+    **The width of the arc is the whole creature**, and it is not a gentle dial.
+    Swept on `dark_knight` / stage 36 over eight seeds, 35 degrees clears 8/8 and
+    55 clears 3/8; durability and cadence, the two levers the project's recorded
+    order reaches for first, moved almost nothing between them. That order is
+    right for a creature fighting on the existing axes and says little about one
+    that adds an axis -- there, the new axis is the dial.
+
+    See `demon` in `data/entities.json` for why nothing spawns one yet.
+    """
+    heading = to_hero.normalized()
+    strike_range = entity.weapon.reach + hero.radius - REACH_MARGIN
+
+    if distance <= strike_range and _may_attack(entity):
+        return Intent(aim=heading, attack=True)
+
+    # 1 at the edge of aggro, 0 at the point it can swing.
+    span = max(1.0, entity.type.aggro - strike_range)
+    openness = min(1.0, max(0.0, (distance - strike_range) / span))
+
+    # Which side it comes round is fixed per body, exactly as the archer's drift
+    # is (`_archer` above), and for the same reason: anything drawn from `random`
+    # here would break seeded replay, and every recorded number in the project
+    # rests on a run replaying exactly.
+    side = 1.0 if entity.id % 2 == 0 else -1.0
+    offset = math.radians(entity.type.flank_degrees) * openness * side
+
+    # Aim stays on the hero even while the feet go elsewhere -- it is a body
+    # circling you, not one looking away.
+    return Intent(move=heading.rotated(offset), aim=heading)
 
 
 def _boss(world, entity: Entity, hero: Entity, to_hero: Vec2, distance: float) -> Intent:

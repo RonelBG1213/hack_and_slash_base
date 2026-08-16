@@ -41,7 +41,7 @@
       "y": 10
     },
     {
-      "type": "revenant",
+      "type": "beastman",
       "x": 25,
       "y": 15
     },
@@ -51,7 +51,7 @@
       "y": 7
     },
     {
-      "type": "stalker",
+      "type": "beastman_stalker",
       "x": 34,
       "y": 15
     },
@@ -61,7 +61,7 @@
       "y": 8
     },
     {
-      "type": "mage",
+      "type": "imp",
       "x": 35,
       "y": 22
     },

@@ -1319,6 +1319,33 @@
     ]
   },
 
+  "demon_claw": {
+    "name": "Rake",
+    "damage": 11,
+    "variance": 2,
+    "arc_degrees": 90,
+    "reach": 20,
+    "windup": 24,
+    "active": 3,
+    "recovery": 26,
+    "knockback": 3.0,
+    "hitstop": 3,
+    "_comment": [
+      "The demon, and deliberately the least interesting thing about it. A rend",
+      "with a point knocked off the damage and two ticks added to the tell.",
+      "",
+      "The demon's question is the flanking approach, not the hit at the end of",
+      "it -- so the hit is drafted to be answerable by everything the player",
+      "already knows. Giving a new brain a new weapon as well would make it two",
+      "new things at once and leave nobody able to say which of them was the",
+      "part that felt wrong.",
+      "",
+      "Sits comfortably clear of the binding constraint: the slowest class light",
+      "attack is the Magician's 12-tick bolt, and every enemy tell in the game",
+      "has to be longer than that."
+    ]
+  },
+
   "lunge": {
     "name": "Lunge",
     "damage": 15,

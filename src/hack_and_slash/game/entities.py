@@ -155,6 +155,23 @@ class EntityType:
     #: and a whole number keeps the pixels hard, which `--smoke` enforces.
     sprite_scale: int = 1
 
+    #: Enemy only: the id of the creature this one is a cosmetic variant of.
+    #: Empty on everything else, which is how "this is its own creature" is
+    #: expressed -- as data, not as a second list.
+    #:
+    #: The same trick `promotes_from` plays, for the same reason. It says *this
+    #: is a variant*, which is what lets a test assert that it carries no numbers
+    #: of its own, and it says *which line it copies*, which is what that test
+    #: compares against. A `cosmetic: bool` beside a `copies: str` could disagree
+    #: with each other; one field cannot disagree with itself.
+    #:
+    #: A variant exists so a stage can field a goblin instead of a grunt without
+    #: fielding anything the balance grid has not already measured. Every stat is
+    #: the base's, to the byte -- so substituting one into an arena moves nothing,
+    #: and `test_a_variant_is_stat_identical_to_what_it_varies` is what makes that
+    #: a fact rather than an intention.
+    variant_of: str = ""
+
     #: Hero only, and only on an advanced class: the id of the class this one is
     #: promoted from. Empty on everything else, which is how "this is a starting
     #: class" is expressed -- as data, not as a second list.
@@ -185,6 +202,15 @@ class EntityType:
     # Archer only.
     preferred_range: float = 0.0
     retreat_range: float = 0.0
+
+    #: Flanker only: how far off the straight line to the hero it approaches, in
+    #: degrees, measured at the edge of its aggro. The angle closes to nothing as
+    #: it arrives, so this is the *widest* the arc ever gets rather than a fixed
+    #: offset -- a constant one orbits forever and never lands a hit.
+    #:
+    #: Zero on everything else, which is how "this walks straight at you" is
+    #: expressed -- as data, the way `dodge_ticks` says enemies cannot roll.
+    flank_degrees: float = 0.0
 
     @property
     def can_dodge(self) -> bool:
@@ -224,6 +250,7 @@ class EntityType:
             brain=payload.get("brain", "chaser"),
             aggro=float(payload.get("aggro", 0.0)),
             level=int(payload.get("level", 1)),
+            variant_of=payload.get("variant_of", ""),
             promotes_from=payload.get("promotes_from", ""),
             dodge_speed=float(payload.get("dodge_speed", 0.0)),
             dodge_ticks=int(payload.get("dodge_ticks", 0)),
@@ -233,6 +260,7 @@ class EntityType:
             charge_range=float(payload.get("charge_range", 0.0)),
             preferred_range=float(payload.get("preferred_range", 0.0)),
             retreat_range=float(payload.get("retreat_range", 0.0)),
+            flank_degrees=float(payload.get("flank_degrees", 0.0)),
         )
 
 
@@ -281,6 +309,26 @@ class Bestiary:
         return tuple(
             t for t in self.types.values() if t.faction is Faction.HERO and t.promotes_from
         )
+
+    @property
+    def variants(self) -> tuple[EntityType, ...]:
+        """Every creature that is a cosmetic re-skin of another, in file order.
+
+        The set the identity test iterates. Derived from the field rather than
+        listed here for the same reason `hero_classes` is: a second list is a
+        thing that can drift, and this one drifting means a creature carrying
+        numbers nobody measured while claiming to carry none.
+        """
+        return tuple(t for t in self.types.values() if t.variant_of)
+
+    def variants_of(self, base_id: str) -> tuple[EntityType, ...]:
+        """Every face the `base_id` line wears, in file order.
+
+        Several variants may share a base -- the point of one is a face, not a
+        stat line, so two families are free to wear the same mechanics in
+        different acts.
+        """
+        return tuple(t for t in self.variants if t.variant_of == base_id)
 
     def promotions_for(self, base_id: str) -> tuple[EntityType, ...]:
         """What `base_id` may promote into, in file order.

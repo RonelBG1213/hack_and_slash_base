@@ -143,6 +143,22 @@ SPRITE_ORDER = (
     # nor these: what a kill leaves on the floor
     "coin",
     "relic",
+    # the same creatures wearing another face -- nine cosmetic variants, each
+    # byte-identical in entities.json to the one named in its `variant_of`.
+    # Appended here rather than filed beside the creatures they copy, for the
+    # reason stated above: a cell is found by index, and inserting a goblin next
+    # to the grunt would renumber every sprite after it.
+    "goblin",
+    "goblin_slinger",
+    "goblin_pup",
+    "orc",
+    "orc_charger",
+    "beastman",
+    "beastman_stalker",
+    "imp",
+    "hellhound",
+    # and the one thing here that is not a re-skin
+    "demon",
 )
 ATLAS_COLUMNS = 8
 

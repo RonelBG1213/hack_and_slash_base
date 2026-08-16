@@ -46,7 +46,7 @@
       "y": 15
     },
     {
-      "type": "revenant",
+      "type": "beastman",
       "x": 31,
       "y": 15
     },
@@ -56,7 +56,7 @@
       "y": 7
     },
     {
-      "type": "stalker",
+      "type": "beastman_stalker",
       "x": 39,
       "y": 15
     },
@@ -116,7 +116,7 @@
       "y": 9
     },
     {
-      "type": "charger",
+      "type": "hellhound",
       "x": 29,
       "y": 6
     }

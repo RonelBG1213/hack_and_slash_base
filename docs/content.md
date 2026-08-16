@@ -48,11 +48,85 @@ if the data and the art disagree about which sprites exist.
 
 ## Adding a brain
 
-Brains are code, not data — `game/ai.py` has four, each about twenty lines. A new
+Brains are code, not data — `game/ai.py` has five, each about twenty lines. A new
 one is a new `case` in `decide` plus a name in the JSON.
 
 Several creatures sharing one is normal: the bowman and the mage are both
 `"archer"`, which names a **behaviour** rather than a creature.
+
+Two things that are easy to get wrong and silent when you do:
+
+- **Add the brain to `PAUSE_AFTER_ATTACK`.** It is a `.get(brain, 20)`, so a
+  missing key takes the chaser's pause and nothing says a word.
+- **`decide` falls through to the chaser**, so a typo'd brain string loads,
+  spawns and fights — as a chaser. `test_every_brain_named_in_the_data_is_a_brain_that_exists`
+  is the check that catches it.
+
+Prefer reusing one. The bar the acts V–VIII pass set is that a new brain has to
+earn itself against something the measurement already says matters, and the two
+creatures added there both reused one.
+
+> [!WARNING]
+> **A new brain can outrun the instrument that is supposed to judge it**, and the
+> `flanker` is the worked example. It was added on a good argument — all four
+> original brains approach on the straight line to the hero, so one retreat
+> answers all of them, and [Balance](balance.md#findings) says disengaging is
+> exactly what separates a won run from a lost one.
+>
+> But `autoplay` disengages by backing away in a straight line, which is the
+> precise thing the brain is built to defeat. One demon replacing one revenant
+> took the assassin's stage 39 from 8/8 to 0/8 — not because the fight is that
+> much harder, but because the bot has no answer a human would reach for. The
+> creature ships in the bestiary and in no stage; `data/entities.json` records
+> the sweep.
+>
+> The general form: **a brain that targets a specific player behaviour can only
+> be measured by an instrument that has that behaviour.** Check what the bot
+> actually does before drafting one.
+
+## Adding a variant
+
+A **variant** is an existing creature wearing another face: a new name, a new
+sprite, and every number copied from the line it names.
+
+```json
+"goblin": {
+  "name": "Goblin", "faction": "enemy", "sprite": "goblin",
+  "variant_of": "grunt",
+  "level": 2, "hp": 18, "speed": 1.05, "radius": 5.0,
+  "weapon": "claw", "brain": "chaser", "aggro": 220
+}
+```
+
+The point is variety that costs nothing to measure. Substituting a goblin for a
+grunt in an arena cannot move the class×stage grid, because nothing the sim reads
+is different — and `test_a_variant_is_stat_identical_to_what_it_varies` settles
+that in milliseconds where a balance sweep takes minutes.
+
+`variant_of` does the same two jobs `promotes_from` does: it marks the creature a
+variant, which is what puts it in `bestiary.variants` for the identity test to
+find, and it names the line being copied, which is what the test compares
+against. One field cannot disagree with itself.
+
+Three rules, all enforced by `tests/test_entities.py`:
+
+| Rule | Why |
+| --- | --- |
+| **Every** field but `name`, `sprite` and `variant_of` matches the base | It is the whole promise. The test iterates `dataclasses.fields`, so a field added to `EntityType` later is covered the day it lands |
+| No variant of a variant | One hop, so "identical to its base" means one unambiguous thing |
+| Enemies only | `variant_of` is to enemies what `promotes_from` is to heroes |
+
+Two variants may share a base — `orc_charger` and `hellhound` are both the
+charger — and that is deliberate: the point of one is a face, not a stat line.
+
+**Drawing one.** Keep the base's body dimensions exactly; change the colour and
+one mark. This is the promoted-hero rule pointed at the enemies, and it matters
+more here: a player reads danger off silhouette before colour, so an orc drawn
+smaller than the brute whose 55 health it is carrying teaches the wrong lesson,
+and the player learns it by dying.
+
+If you find yourself wanting to give a variant its own hp, it has stopped being
+one. Give it its own entry — and its own tuning pass.
 
 ## Adding a class
 
@@ -200,7 +274,7 @@ loudly with the command to run if the art is missing.
 
 To swap in real art, replace `assets/sprites.png` with a PNG of the same cell
 layout: `config.ATLAS_COLUMNS` (8) cells across, `config.TILE` (16) pixels each,
-as many rows as `SPRITE_ORDER` needs — currently 37 sprites over 5 rows. The atlas
+as many rows as `SPRITE_ORDER` needs — currently 47 sprites over 6 rows. The atlas
 loader refuses a sheet too small for the order and says what size it wanted.
 
 Append to `SPRITE_ORDER`, never insert into it. A cell is found by index, so a

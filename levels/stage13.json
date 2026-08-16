@@ -34,7 +34,7 @@
   ],
   "enemies": [
     {
-      "type": "brute",
+      "type": "orc",
       "x": 26,
       "y": 14
     },
@@ -59,12 +59,12 @@
       "y": 11
     },
     {
-      "type": "bowman",
+      "type": "goblin_slinger",
       "x": 35,
       "y": 17
     },
     {
-      "type": "charger",
+      "type": "orc_charger",
       "x": 17,
       "y": 8
     },
@@ -79,12 +79,12 @@
       "y": 14
     },
     {
-      "type": "grunt",
+      "type": "goblin",
       "x": 28,
       "y": 6
     },
     {
-      "type": "grunt",
+      "type": "goblin",
       "x": 28,
       "y": 22
     },
@@ -94,7 +94,7 @@
       "y": 10
     },
     {
-      "type": "rat",
+      "type": "goblin_pup",
       "x": 24,
       "y": 18
     },

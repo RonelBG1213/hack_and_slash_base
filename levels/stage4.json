@@ -28,7 +28,7 @@
   ],
   "enemies": [
     {
-      "type": "rat",
+      "type": "goblin_pup",
       "x": 14,
       "y": 5
     },
@@ -38,7 +38,7 @@
       "y": 17
     },
     {
-      "type": "rat",
+      "type": "goblin_pup",
       "x": 20,
       "y": 6
     },
@@ -48,7 +48,7 @@
       "y": 16
     },
     {
-      "type": "rat",
+      "type": "goblin_pup",
       "x": 27,
       "y": 8
     },
@@ -68,12 +68,12 @@
       "y": 11
     },
     {
-      "type": "grunt",
+      "type": "goblin",
       "x": 30,
       "y": 5
     },
     {
-      "type": "grunt",
+      "type": "goblin",
       "x": 30,
       "y": 17
     },

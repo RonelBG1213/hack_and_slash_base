@@ -50,7 +50,7 @@
       "y": 6
     },
     {
-      "type": "grunt",
+      "type": "goblin",
       "x": 25,
       "y": 18
     },
@@ -60,12 +60,12 @@
       "y": 4
     },
     {
-      "type": "rat",
+      "type": "goblin_pup",
       "x": 21,
       "y": 20
     },
     {
-      "type": "charger",
+      "type": "orc_charger",
       "x": 24,
       "y": 12
     },

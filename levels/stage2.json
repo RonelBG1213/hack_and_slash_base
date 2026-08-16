@@ -26,7 +26,7 @@
   ],
   "enemies": [
     {
-      "type": "grunt",
+      "type": "goblin",
       "x": 13,
       "y": 4
     },
@@ -36,7 +36,7 @@
       "y": 15
     },
     {
-      "type": "grunt",
+      "type": "goblin",
       "x": 21,
       "y": 10
     },
@@ -46,7 +46,7 @@
       "y": 4
     },
     {
-      "type": "bowman",
+      "type": "goblin_slinger",
       "x": 30,
       "y": 5
     },

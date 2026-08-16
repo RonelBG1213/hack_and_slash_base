@@ -318,6 +318,162 @@ def paint_stalker(surface: pygame.Surface) -> None:
     _eyes(surface, rect, (252, 226, 96), gap=2)
 
 
+# --- the same creatures wearing another face ---------------------------------
+# The nine cosmetic variants. Each one is byte-identical in `entities.json` to
+# the creature named in its `variant_of`, so the brief here is the *inverse* of
+# the usual one: it must read as a different creature without ever reading as a
+# different threat.
+#
+# Which settles the rule these are all drawn under, and it is the promoted-hero
+# rule pointed at the enemies:
+#
+#     keep the base's body dimensions exactly; change the colour and one mark.
+#
+# The dimensions are load-bearing rather than tidy. A player reads danger off
+# silhouette before colour -- a brute-sized shape means "do not stand next to
+# that" and a rat-sized one means "this dies instantly". An orc drawn smaller
+# than the brute whose numbers it is carrying would teach the wrong lesson about
+# a 55hp body, and the player would learn it by dying. So the family is in the
+# hue and one silhouette detail, and the size belongs to the base.
+#
+# Four families, four hues nothing else in the atlas uses: goblins mustard, orcs
+# moss, beastmen tawny, demons charcoal with an ember.
+def paint_goblin(surface: pygame.Surface) -> None:
+    # The grunt's body (9x11) in mustard rather than leaf green. Ears are the
+    # one mark -- cheap, instantly legible, and the whole goblin family shares
+    # them, so three sprites become one idea.
+    rect = _body(surface, (150, 148, 72), (72, 70, 32), (192, 190, 110), 9, 11)
+    pygame.draw.rect(surface, (192, 190, 110), (rect.x - 1, rect.y + 1, 1, 3))
+    pygame.draw.rect(surface, (192, 190, 110), (rect.right, rect.y + 1, 1, 3))
+    _eyes(surface, rect, (28, 32, 26))
+
+
+def paint_goblin_slinger(surface: pygame.Surface) -> None:
+    # The bowman's body (8x11) and the bowman's hood, because the hood is how a
+    # ranged enemy is told from a melee one at a glance and that reading must
+    # survive the re-skin. Mustard underneath, ears poking out of the hood.
+    rect = _body(surface, (150, 148, 72), (72, 70, 32), (192, 190, 110), 8, 11)
+    pygame.draw.rect(surface, (94, 92, 38), (rect.x, rect.y - 1, rect.width, 4))
+    surface.set_at((rect.x - 1, rect.y + 2), (192, 190, 110))
+    surface.set_at((rect.right, rect.y + 2), (192, 190, 110))
+    _eyes(surface, rect, (250, 244, 200), gap=1)
+
+
+def paint_goblin_pup(surface: pygame.Surface) -> None:
+    # The rat's body (6x7), which is the smallest in the game and has to stay
+    # that way: this thing dies to one hit from anything, and the sprite is the
+    # only warning of that the player gets.
+    rect = _body(surface, (150, 148, 72), (72, 70, 32), (192, 190, 110), 6, 7)
+    surface.set_at((rect.x - 1, rect.y), (192, 190, 110))
+    surface.set_at((rect.right, rect.y), (192, 190, 110))
+    _eyes(surface, rect, (232, 108, 100), gap=1)
+
+
+def paint_orc(surface: pygame.Surface) -> None:
+    # The brute's body (14x13) -- the biggest ordinary enemy in the game, and
+    # the size is the entire warning. Moss green and cold where the brute is
+    # muddy red, with the brute's heavy shoulders kept for the same reason the
+    # slinger keeps its hood.
+    rect = _body(surface, (98, 120, 86), (44, 58, 40), (138, 164, 120), 14, 13)
+    pygame.draw.rect(surface, (44, 58, 40), (rect.x - 1, rect.y + 2, 2, 4))
+    pygame.draw.rect(surface, (44, 58, 40), (rect.right - 1, rect.y + 2, 2, 4))
+    # Tusks: a pale jaw along the bottom edge rather than two pixels below the
+    # eyes. The first draft put them at centery + 3 and at 16px they read as a
+    # second pair of eyes -- the body is only thirteen tall, so anything round
+    # and light near the middle is an eye whatever it was drawn as.
+    pygame.draw.rect(surface, (238, 232, 210), (rect.x + 3, rect.bottom - 3, 2, 2))
+    pygame.draw.rect(surface, (238, 232, 210), (rect.right - 5, rect.bottom - 3, 2, 2))
+    _eyes(surface, rect, (250, 214, 120), gap=3)
+
+
+def paint_orc_charger(surface: pygame.Surface) -> None:
+    # The charger's body (13x12) and the charger's horns. The horns are the
+    # telegraph's silhouette -- the player learns "wide pale horns means it is
+    # about to run at me" on stage 2 and must not have to learn it twice.
+    rect = _body(surface, (98, 120, 86), (44, 58, 40), (138, 164, 120), 13, 12)
+    pygame.draw.rect(surface, (240, 226, 200), (rect.x, rect.y - 2, 2, 3))
+    pygame.draw.rect(surface, (240, 226, 200), (rect.right - 2, rect.y - 2, 2, 3))
+    surface.set_at((rect.centerx - 3, rect.centery + 1), (250, 240, 120))
+    surface.set_at((rect.centerx + 3, rect.centery + 1), (250, 240, 120))
+
+
+def paint_beastman(surface: pygame.Surface) -> None:
+    # The revenant's body (12x13) in tawny fur. Deliberately *without* the
+    # revenant's ribs: a broken outline is that sprite's one silhouette trick
+    # and the thing that reads as dead at 1x. A beastman is alive, so it gets a
+    # mane instead and the atlas keeps one holed body rather than two.
+    # Orange, not brown -- and that is a correction rather than a preference.
+    # Drafted in tawny (170, 134, 90) it sat one step from the brute's muddy
+    # (146, 82, 62) at a size one pixel narrower, and those two must never be
+    # confused: a brute is 55hp you can walk away from, a beastman is 32hp that
+    # follows. Orange is the one warm hue no enemy had.
+    rect = _body(surface, (192, 124, 58), (96, 56, 24), (228, 170, 110), 12, 13)
+    pygame.draw.rect(surface, (96, 56, 24), (rect.x + 1, rect.y - 1, rect.width - 2, 2))
+    surface.set_at((rect.x, rect.y - 2), (228, 170, 110))
+    surface.set_at((rect.right - 1, rect.y - 2), (228, 170, 110))
+    _eyes(surface, rect, (250, 240, 200), gap=3)
+
+
+def paint_beastman_stalker(surface: pygame.Surface) -> None:
+    # The stalker's body (10x12) and its lean, which is the only asymmetric
+    # silhouette in the atlas and means "this commits from further out than the
+    # charger does". Tawny and darker, so the family reads before the threat.
+    rect = _body(surface, (160, 96, 44), (78, 44, 18), (206, 142, 82), 10, 12)
+    pygame.draw.rect(surface, (78, 44, 18), (rect.right, rect.y + 3, 2, 5))
+    pygame.draw.rect(surface, (206, 142, 82), (rect.x - 1, rect.y + 1, 1, 4))
+    _eyes(surface, rect, (252, 226, 96), gap=2)
+
+
+def paint_imp(surface: pygame.Surface) -> None:
+    # The mage's body (8x11), hood and held bolt. Charcoal instead of purple,
+    # and the bolt burns rather than freezes -- the demons are the only things
+    # in the atlas with an ember on them, which is the family's whole signature.
+    rect = _body(surface, (78, 66, 84), (34, 28, 38), (118, 102, 126), 8, 11)
+    pygame.draw.rect(surface, (34, 28, 38), (rect.x, rect.y - 1, rect.width, 4))
+    # Horns, above the hood.
+    surface.set_at((rect.x + 1, rect.y - 2), (156, 140, 164))
+    surface.set_at((rect.right - 2, rect.y - 2), (156, 140, 164))
+    pygame.draw.rect(surface, (250, 140, 60), (rect.centerx - 1, rect.bottom - 2, 2, 2))
+    _eyes(surface, rect, (250, 140, 60), gap=1)
+
+
+def paint_hellhound(surface: pygame.Surface) -> None:
+    # The charger's body (13x12) and horns again, in the demon charcoal. Two
+    # variants of the charger ship (orc_charger, hellhound) and that is the
+    # point of a variant: the numbers are the act-I charger's either way, so a
+    # player who learned the tell in act I still reads it in act VIII.
+    rect = _body(surface, (64, 58, 66), (28, 24, 30), (104, 96, 108), 13, 12)
+    pygame.draw.rect(surface, (240, 226, 200), (rect.x, rect.y - 2, 2, 3))
+    pygame.draw.rect(surface, (240, 226, 200), (rect.right - 2, rect.y - 2, 2, 3))
+    # The ember, where the charger has its two yellow pixels.
+    surface.set_at((rect.centerx - 3, rect.centery + 1), (250, 140, 60))
+    surface.set_at((rect.centerx + 3, rect.centery + 1), (250, 140, 60))
+    pygame.draw.rect(surface, (250, 140, 60), (rect.centerx - 1, rect.bottom - 3, 2, 1))
+
+
+def paint_demon(surface: pygame.Surface) -> None:
+    # The only genuinely new creature in this batch, and the only one allowed to
+    # invent a silhouette -- the nine above are re-skins and borrow theirs.
+    #
+    # It gets the one shape nothing else has: wings, drawn as a pair of blocks
+    # spread wider than the body. A flanker is the only thing in the game that
+    # does not come straight at you, and the sprite has to say "this one moves
+    # differently" before it has moved at all, in a room that by act VII holds
+    # six creatures the player already knows.
+    rect = _body(surface, (108, 52, 62), (48, 20, 26), (156, 84, 96), 10, 12)
+
+    # Wings: wider than the body on both sides, which is the whole read.
+    pygame.draw.rect(surface, (48, 20, 26), (rect.x - 3, rect.y + 2, 3, 5))
+    pygame.draw.rect(surface, (48, 20, 26), (rect.right, rect.y + 2, 3, 5))
+    surface.set_at((rect.x - 3, rect.y + 1), (156, 84, 96))
+    surface.set_at((rect.right + 2, rect.y + 1), (156, 84, 96))
+
+    # Horns, and the family's ember.
+    pygame.draw.rect(surface, (232, 214, 200), (rect.x + 1, rect.y - 2, 1, 2))
+    pygame.draw.rect(surface, (232, 214, 200), (rect.right - 2, rect.y - 2, 1, 2))
+    _eyes(surface, rect, (250, 140, 60), gap=2)
+
+
 # --- one at the end of each act ----------------------------------------------
 # All eight fill their cell: the renderer draws them at 2x, and anything with a
 # margin would float inside a 32px footprint. Each is a different temperature
@@ -516,6 +672,16 @@ PAINTERS = {
     "mage": paint_mage,
     "revenant": paint_revenant,
     "stalker": paint_stalker,
+    "goblin": paint_goblin,
+    "goblin_slinger": paint_goblin_slinger,
+    "goblin_pup": paint_goblin_pup,
+    "orc": paint_orc,
+    "orc_charger": paint_orc_charger,
+    "beastman": paint_beastman,
+    "beastman_stalker": paint_beastman_stalker,
+    "imp": paint_imp,
+    "hellhound": paint_hellhound,
+    "demon": paint_demon,
     "boss": paint_boss,
     "houndmaster": paint_houndmaster,
     "effigy": paint_effigy,

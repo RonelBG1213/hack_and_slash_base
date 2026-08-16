@@ -1,4 +1,4 @@
-"""The three enemy brains, and the arrows one of them shoots.
+"""The enemy brains, and the arrows one of them shoots.
 
 Each brain exists to ask the player a different question. These tests check that
 the question actually gets asked -- a charger that homes in mid-dash, or an
@@ -19,6 +19,7 @@ from .helpers import BESTIARY, add_enemy, make_world, open_room, run
 GRUNT = BESTIARY["grunt"]
 CHARGER = BESTIARY["charger"]
 ARCHER = BESTIARY["bowman"]
+DEMON = BESTIARY["demon"]
 GORE = BESTIARY.weapons["gore"]
 BOW = BESTIARY.weapons["arrow"]
 
@@ -286,6 +287,111 @@ def test_an_archer_will_not_shoot_through_a_pillar() -> None:
         step(world)
         fired += sum(1 for e in world.events if e.kind is EventKind.SHOOT)
     assert fired == 0, "shot straight through a wall"
+
+
+# --- the flanker -------------------------------------------------------------
+# The fifth brain, and the only one that does not walk the straight line to the
+# hero. Every test here is about that line: that it is genuinely departed from
+# far out, genuinely returned to up close, and identical on a re-run.
+def test_a_flanker_approaches_off_the_straight_line() -> None:
+    """The whole point of the brain. If this passes trivially it is a chaser."""
+    world = make_world(big_room())
+    enemy = add_enemy(world, "demon", world.hero.pos + Vec2(DEMON.aggro - 20, 0))
+
+    to_hero = (world.hero.pos - enemy.pos).normalized()
+    move = ai.decide(world, enemy).move.normalized()
+
+    # Well off the line, but still broadly towards the hero rather than away.
+    assert 0.1 < move.dot(to_hero) < 0.95, (
+        f"flanker moved at {move} against a straight line of {to_hero}; it is "
+        "either walking straight in (a chaser) or walking away"
+    )
+
+
+def test_a_flankers_arc_closes_as_it_gets_near() -> None:
+    """A constant offset orbits forever and never lands a hit.
+
+    This is the property that makes the brain a tactic rather than a bug, and it
+    is the one the first draft got wrong.
+    """
+    world = make_world(big_room())
+    far = add_enemy(world, "demon", world.hero.pos + Vec2(DEMON.aggro - 20, 0))
+    near = add_enemy(world, "demon", world.hero.pos + Vec2(40, 0))
+    # Same id parity, so this measures the distance and not the side it picked.
+    near.id = far.id + 2
+
+    def offness(enemy):
+        line = (world.hero.pos - enemy.pos).normalized()
+        return ai.decide(world, enemy).move.normalized().dot(line)
+
+    assert offness(near) > offness(far), (
+        "the arc does not close with distance, so a flanker circles rather "
+        "than arrives"
+    )
+
+
+def test_a_flanker_still_arrives_and_swings() -> None:
+    """Off-axis is a longer route, not a refusal to fight."""
+    world = make_world(big_room())
+    enemy = add_enemy(world, "demon", world.hero.pos + Vec2(140, 0))
+
+    swung = False
+    for _ in range(400):
+        step(world)
+        swung = swung or any(
+            e.kind is EventKind.SWING and e.entity_id == enemy.id for e in world.events
+        )
+    assert swung, "circled the hero for 400 ticks and never attacked"
+
+
+def test_a_flanker_picks_its_side_from_its_id_not_from_chance() -> None:
+    """Determinism, and the reason it is worth its own test.
+
+    Every recorded number in this project rests on a seeded run replaying
+    exactly. A brain reaching for `random` would keep passing every behavioural
+    test above while quietly making the balance grid unreproducible -- the
+    failure would surface as numbers drifting between runs, months later, with
+    nothing pointing here.
+    """
+    world = make_world(big_room())
+    left = add_enemy(world, "demon", world.hero.pos + Vec2(150, 0))
+    right = add_enemy(world, "demon", world.hero.pos + Vec2(150, 0))
+    right.id = left.id + 1
+
+    first = ai.decide(world, left).move
+    assert ai.decide(world, left).move == first, "same body, same tick, two answers"
+
+    # Consecutive ids go opposite ways round, so a pack does not stack up on
+    # one side of the player. `perpendicular` gives the signed side of the line.
+    side = (world.hero.pos - left.pos).normalized().perpendicular()
+    assert first.dot(side) * ai.decide(world, right).move.dot(side) < 0, (
+        "two flankers with consecutive ids came round the same side"
+    )
+
+
+def test_a_flanker_ignores_a_hero_beyond_its_aggro_range() -> None:
+    world = make_world(open_room(60, 20))
+    far = world.hero.pos + Vec2(DEMON.aggro + 60, 0)
+    enemy = add_enemy(world, "demon", far)
+
+    run(world, 30)
+
+    assert enemy.pos == far, "noticed the hero from outside its aggro range"
+
+
+def test_every_brain_named_in_the_data_is_a_brain_that_exists() -> None:
+    """`decide` falls through to the chaser, so a typo is silent.
+
+    A creature declaring `"brain": "flanker "` would load, spawn, fight, and be
+    a chaser -- and the only symptom would be a stage that measured slightly
+    easier than it was drafted to be.
+    """
+    known = set(ai.PAUSE_AFTER_ATTACK) | {"player"}
+    for entity_type in BESTIARY.types.values():
+        assert entity_type.brain in known, (
+            f"{entity_type.id} declares brain '{entity_type.brain}', which has no "
+            f"case in ai.decide; known brains: {', '.join(sorted(known))}"
+        )
 
 
 # --- brains in general -------------------------------------------------------

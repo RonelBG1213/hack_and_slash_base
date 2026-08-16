@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import math
 
 import pytest
@@ -36,6 +37,8 @@ def test_every_shipped_type_loads() -> None:
         "grunt", "rat", "charger", "brute", "bowman", "mage",
         # and what it fights after the fork
         "revenant", "stalker",
+        # and the fifth brain, in acts VII-VIII
+        "demon",
         # one at the end of each act
         "boss", "houndmaster", "effigy", "sovereign",
         "herald", "gaoler", "choir", "hollow_king",
@@ -45,6 +48,12 @@ def test_every_shipped_type_loads() -> None:
         "hunter", "magic_archer",
         "sage", "wizard",
         "battle_priest", "holy_priest",
+        # cosmetic variants: an existing creature wearing another face, with
+        # every number copied from the line named in `variant_of`
+        "goblin", "goblin_slinger", "goblin_pup",
+        "orc", "orc_charger",
+        "beastman", "beastman_stalker",
+        "imp", "hellhound",
     }
 
 
@@ -320,9 +329,14 @@ def test_every_enemy_declares_what_killing_it_is_worth() -> None:
     """
     for enemy in ENEMIES:
         assert enemy.level >= 1, f"{enemy.id} has a level below 1"
-        assert enemy.level > 1 or enemy.id == "rat", (
+        # The rat's *line*, not the default. A variant copies its base's wage
+        # along with everything else, so a re-skinned rat is legitimately on 1 --
+        # but widening this to "or it is a variant" would stop it catching a
+        # variant whose level was simply forgotten, which is the whole job.
+        on_the_rats_line = enemy.id == "rat" or enemy.variant_of == "rat"
+        assert enemy.level > 1 or on_the_rats_line, (
             f"{enemy.id} is still on the default level of 1; only the rat, which "
-            "is the floor of the scale, is meant to be"
+            "is the floor of the scale, and things that copy it are meant to be"
         )
 
 
@@ -372,6 +386,85 @@ def test_level_is_not_just_health_wearing_a_hat() -> None:
     by_level = sorted(ENEMIES, key=lambda t: t.level)
     by_hp = sorted(ENEMIES, key=lambda t: t.hp)
     assert [t.id for t in by_level] != [t.id for t in by_hp]
+
+
+# --- variants -----------------------------------------------------------------
+#: The only three things a variant is allowed to change. Everything else in
+#: `EntityType` is a number the balance grid has measured.
+MAY_DIFFER = {"id", "name", "sprite", "variant_of"}
+
+
+def test_every_variant_names_a_base_that_exists() -> None:
+    """A typo here is a creature quietly claiming to copy nothing.
+
+    The identity test below iterates the same set, so a `variant_of` pointing at
+    a name that is not in the bestiary would raise there rather than fail -- and
+    a KeyError in a test is a broken test, not a reported problem.
+    """
+    assert BESTIARY.variants, "no variants loaded; the set is meant to be nine"
+    for variant in BESTIARY.variants:
+        assert variant.variant_of in BESTIARY.types, (
+            f"{variant.id} is a variant of '{variant.variant_of}', which is not "
+            f"a type; known types: {', '.join(sorted(BESTIARY.types))}"
+        )
+
+
+def test_a_variant_is_stat_identical_to_what_it_varies() -> None:
+    """The load-bearing test of the whole variant idea.
+
+    A variant exists so a stage can field a goblin where it fielded a grunt
+    *without* fielding anything the class x stage grid has not already measured.
+    That is only true if the numbers are the same ones -- and "the same ones" is
+    a claim about twenty-odd fields that nobody is going to re-check by eye every
+    time this data is touched.
+
+    The alternative was a multi-minute balance sweep proving the grid did not
+    move. This settles the same claim in milliseconds, and it settles it for
+    every future variant rather than for the nine that exist today.
+
+    Iterates `dataclasses.fields` rather than a list of names on purpose: a field
+    added to `EntityType` later is covered the day it lands, where a hand-written
+    list would silently stop checking it.
+    """
+    for variant in BESTIARY.variants:
+        base = BESTIARY[variant.variant_of]
+        for field in dataclasses.fields(variant):
+            if field.name in MAY_DIFFER:
+                continue
+            mine = getattr(variant, field.name)
+            theirs = getattr(base, field.name)
+            assert mine == theirs, (
+                f"{variant.id}.{field.name} is {mine!r}, but it is a variant of "
+                f"{base.id}, which has {theirs!r}. A variant carries no numbers "
+                "of its own -- if this one needs to, it wants its own entry in "
+                "entities.json and its own tuning pass."
+            )
+
+
+def test_a_variant_is_never_a_variant_of_a_variant() -> None:
+    """One hop, so "identical to its base" means one unambiguous thing.
+
+    A chain would still be identical in practice -- identity is transitive -- but
+    it would make the failure message above point at a creature that is itself a
+    copy, and it invites a middle link that quietly acquires a number of its own.
+    """
+    for variant in BESTIARY.variants:
+        base = BESTIARY[variant.variant_of]
+        assert not base.variant_of, (
+            f"{variant.id} varies {base.id}, which is itself a variant of "
+            f"{base.variant_of}; variants copy an original, not each other"
+        )
+
+
+def test_no_class_is_a_variant() -> None:
+    """`variant_of` is enemy-only, the way `promotes_from` is hero-only.
+
+    A hero carrying one would put a class in `Bestiary.variants` and assert that
+    its stats match another class's -- which is the opposite of what the roster
+    is for.
+    """
+    for cls in PLAYABLE:
+        assert not cls.variant_of, f"{cls.id} declares variant_of; only enemies should"
 
 
 # --- promotion ---------------------------------------------------------------

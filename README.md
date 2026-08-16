@@ -90,7 +90,7 @@ leant-on key would spend every cooldown the instant it expired.
 | [**Loot and gold**](docs/loot.md) | Drop rates, the gold formula, rarity, the between-stage shop, and which of those numbers are measured |
 | [**Architecture**](docs/architecture.md) | The two structural rules, the nine-phase tick, the `Intent` seam, determinism and the two RNG streams |
 | [**Balance**](docs/balance.md) | The brackets the game is held to, the four findings that overturned an assumption, and what to reach for when a bracket breaks |
-| [**Content and tuning**](docs/content.md) | Editing the JSON: adding an enemy, a class, a boss, a brain. The tools |
+| [**Content and tuning**](docs/content.md) | Editing the JSON: adding an enemy, a variant, a class, a boss, a brain. The tools |
 | [**Testing**](docs/testing.md) | Running the suite, the three load-bearing tests, and the strict-xfail policy |
 | [**Known limits**](docs/limits.md) | What this does not do, and which of those were decisions |
 

@@ -35,12 +35,12 @@
       "y": 12
     },
     {
-      "type": "brute",
+      "type": "orc",
       "x": 33,
       "y": 12
     },
     {
-      "type": "charger",
+      "type": "orc_charger",
       "x": 31,
       "y": 12
     },
@@ -55,12 +55,12 @@
       "y": 18
     },
     {
-      "type": "grunt",
+      "type": "goblin",
       "x": 24,
       "y": 4
     },
     {
-      "type": "grunt",
+      "type": "goblin",
       "x": 24,
       "y": 20
     },
@@ -75,7 +75,7 @@
       "y": 12
     },
     {
-      "type": "rat",
+      "type": "goblin_pup",
       "x": 19,
       "y": 16
     },
@@ -85,7 +85,7 @@
       "y": 7
     },
     {
-      "type": "bowman",
+      "type": "goblin_slinger",
       "x": 37,
       "y": 17
     }

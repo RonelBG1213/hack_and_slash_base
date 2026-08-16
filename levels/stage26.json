@@ -39,12 +39,12 @@
       "y": 8
     },
     {
-      "type": "stalker",
+      "type": "beastman_stalker",
       "x": 18,
       "y": 20
     },
     {
-      "type": "stalker",
+      "type": "beastman_stalker",
       "x": 27,
       "y": 14
     },
@@ -89,7 +89,7 @@
       "y": 14
     },
     {
-      "type": "revenant",
+      "type": "beastman",
       "x": 40,
       "y": 10
     },

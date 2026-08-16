@@ -31,7 +31,7 @@
       "y": 10
     },
     {
-      "type": "grunt",
+      "type": "goblin",
       "x": 24,
       "y": 10
     },
@@ -41,7 +41,7 @@
       "y": 8
     },
     {
-      "type": "rat",
+      "type": "goblin_pup",
       "x": 12,
       "y": 12
     },
@@ -51,7 +51,7 @@
       "y": 8
     },
     {
-      "type": "rat",
+      "type": "goblin_pup",
       "x": 21,
       "y": 12
     },
@@ -71,7 +71,7 @@
       "y": 6
     },
     {
-      "type": "bowman",
+      "type": "goblin_slinger",
       "x": 34,
       "y": 14
     }

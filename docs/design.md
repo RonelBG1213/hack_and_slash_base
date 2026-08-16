@@ -149,6 +149,14 @@ the same way act IV does not — two acts of new creatures is enough per half, a
 an act that taught something new at the end would be teaching it at the moment
 the player can least afford to learn.
 
+**A new face is not a new enemy**, and the distinction is deliberate. Most stages
+field *variants* — a goblin, an orc, a beastman — that are byte-identical to the
+grunt, brute and revenant they stand in for. They exist so eight creatures can
+carry forty stages without the campaign looking like eight creatures, and because
+they carry no numbers of their own they teach the player nothing false: a body
+the size of a brute hits like a brute, whatever colour it is. What an act
+introduces is still one *idea*, and the count of ideas has not moved.
+
 Health carries between stages and you recover a fixed amount on clearing one. How
 much is the class's own number, and for the Priest it is most of the class. So a
 run is a single arc rather than forty separate fights, and a bad stage costs you
