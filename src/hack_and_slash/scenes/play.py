@@ -79,15 +79,19 @@ BANNER_FRAMES = 110
 #: only trying to shut a panel on.
 SHOP_EXIT_KEYS = (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE, pygame.K_ESCAPE)
 
-#: Keys that close the promotion panel without promoting. The same set as the
-#: shop's, and deliberately so: this panel appears in the same slot, and a player
-#: who has learned that Enter dismisses the between-stage screen should not have
-#: that stop being true on the one stage where the screen matters most.
+#: The promotion panel has no exit key, which makes it the only screen in the
+#: game that a player cannot dismiss.
 #:
-#: Declining is a real option rather than a way out of a menu. A promoted class
-#: is a class nothing has measured, and staying what you have played for nineteen
-#: stages is a defensible answer to that.
-JOB_DECLINE_KEYS = SHOP_EXIT_KEYS
+#: It used to take the shop's set. That was right while promotion was a capstone
+#: on the way into the last fight: one stage as an unmeasured class was a thing
+#: to be able to say no to. It stopped being right when twenty stages moved in
+#: behind the fork -- declining now means playing acts V-VIII with a kit those
+#: acts are not tuned for, which is not a choice so much as a way to break a run
+#: with one keypress by habit, on the transition where Enter has meant "go" for
+#: the previous nineteen.
+#:
+#: So the arena stays paused until 1 or 2. Esc still leaves to the menu nowhere
+#: here, exactly as it does behind the shop.
 
 
 class PlayScene(Scene):
@@ -138,11 +142,11 @@ class PlayScene(Scene):
         #: up behind you is a decision taken badly.
         self.shopping = False
 
-        #: Open once per run, on the way into the final stage, and ahead of the
-        #: shop on that one transition. Ordered that way so the Poultice clamps
-        #: against the *promoted* maximum health -- buying 30 health and having
-        #: it clipped away by a class change a moment later is the only ordering
-        #: that would surprise anybody.
+        #: Open once per run, on the way into `jobs.PROMOTION_STAGE`, and ahead
+        #: of the shop on that one transition. Ordered that way so the Poultice
+        #: clamps against the *promoted* maximum health -- buying 30 health and
+        #: having it clipped away by a class change a moment later is the only
+        #: ordering that would surprise anybody.
         self.promoting = False
         self._enter_stage()
 
@@ -207,21 +211,15 @@ class PlayScene(Scene):
         return None
 
     def _handle_job_event(self, event: pygame.event.Event) -> Optional[Scene]:
-        """Choose a path, or press on as what you already are.
+        """Choose a path. There is no third answer.
 
-        Closing on either outcome, because this is asked once per run and a
-        panel that stayed up after a choice would have nothing left to offer --
-        `jobs.offers_for` is empty the moment a promotion lands.
-
-        Escape declines rather than leaving to the menu. It does that in the
-        shop too, and for a stronger reason here: this is the last stage of a
-        run somebody has spent twenty minutes on.
+        Every other key is swallowed, Escape included -- the note beside
+        SHOP_EXIT_KEYS says why this one screen refuses to close. Closing on a
+        choice, because it is asked once per run and a panel that stayed up
+        afterwards would have nothing left to offer: `jobs.offers_for` is empty
+        the moment a promotion lands.
         """
         if event.type != pygame.KEYDOWN:
-            return None
-
-        if event.key in JOB_DECLINE_KEYS:
-            self.promoting = False
             return None
 
         if event.key in CHOICE_KEYS:
@@ -247,7 +245,10 @@ class PlayScene(Scene):
             return None
 
         if event.key in ROW_KEYS:
-            goods = shop.stock()
+            # `available`, not `stock` -- the shelves this run can see. The
+            # panel draws the same list, so a row and its key are the same
+            # digit in both halves of the campaign.
+            goods = shop.available(self.run)
             index = ROW_KEYS.index(event.key)
             if index < len(goods):
                 shop.buy(self.run, goods[index])
@@ -358,13 +359,13 @@ class PlayScene(Scene):
                 # twenty-stage run means three of them with nothing to decide.
                 self.shopping = True
 
-                # And once per run, on the way into the last stage. Asked as a
-                # question about the campaign rather than about stage twenty --
-                # `on_final_stage` is already the property for "there is nothing
-                # after this", so a campaign of a different length still asks at
-                # the right moment. `jobs.can_promote` is what makes deleting the
+                # And once per run, on the way into the half of the campaign
+                # that is fought as an advanced class. The stage it happens on
+                # is `jobs.PROMOTION_STAGE`, named there because the bot has to
+                # promote on the same transition or it is measuring a game
+                # nobody plays. `jobs.can_promote` is what makes deleting the
                 # advanced classes from the JSON turn the whole feature off.
-                if self.run.on_final_stage and jobs.can_promote(self.run):
+                if self.run.at_promotion_point and jobs.can_promote(self.run):
                     self.promoting = True
                 break
 

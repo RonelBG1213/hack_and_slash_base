@@ -854,11 +854,22 @@
     "light, ultimate payload above heavy, cooldowns ascending. Treat every number",
     "here as a starting shape.",
     "",
-    "They are also aimed at one specific fight. Promotion happens on reaching the",
-    "final stage, so the only enemy any of these will ever be used against is the",
-    "Sovereign: a 210-degree arc up close, a committed lance at mid range, and",
-    "nine shots across a half-circle from far. Each pair is one branch that kills",
-    "it faster and one that survives it longer.",
+    "They were drafted for one specific fight, and it shows. Promotion used to",
+    "happen on the way into the final stage, so the Sovereign was the only enemy",
+    "any of these would ever meet: a 210-degree arc up close, a committed lance",
+    "at mid range, nine shots from far. Each pair is one branch that kills it",
+    "faster and one that survives it longer, and that framing is why every one",
+    "of these twenty is a burst rather than anything sustained.",
+    "",
+    "They now see twenty stages and four bosses. Nothing here has been re-drafted",
+    "for that, and it is the most obvious place to look for a number that feels",
+    "wrong -- an ultimate on a 1500-tick cooldown is a once-a-stage decision in a",
+    "campaign, where against a single boss it was the whole plan.",
+    "",
+    "What keeps that from being urgent: acts V-VIII are tuned against the light",
+    "attack these classes inherit, not against any of the twenty below. A number",
+    "here being generous makes a stage easier than the grid says; it cannot make",
+    "one unwinnable.",
     "",
     "None of them dashes, for the same reason none of the base skills do."
   ],
@@ -1266,6 +1277,298 @@
       "The full circle where Consecrate stops thirty degrees short, and knockback",
       "second only to the Holy Knight's. Nothing is standing next to you when it",
       "ends."
+    ]
+  },
+
+  "_acts_v_to_viii_comment": [
+    "Everything below is fought only after the fork, by a hero that has just",
+    "replaced two of its four attacks. That is the one thing that makes these",
+    "numbers different in kind from the four acts above: the hero's output",
+    "finally moved.",
+    "",
+    "It moved less than it looks, though, and the amount is worth knowing before",
+    "changing anything here. An advanced class keeps the light attack it was",
+    "promoted with -- the same greatsword, the same shortbow -- and the light is",
+    "the attack a fight is mostly made of. What promotion buys is a heavy and an",
+    "ultimate, which are a few presses a stage, plus a health number that moves",
+    "either way. So acts V-VIII are tuned as though the hero swings what it",
+    "always swung, and the new kit is upside rather than a requirement.",
+    "",
+    "The windups stay above twelve ticks throughout, which is the reference",
+    "bot's reaction time -- an attack that opens and lands inside that window is",
+    "not a tell, it is a tax, and it cannot be answered by any policy."
+  ],
+
+  "rend": {
+    "name": "Rend",
+    "damage": 12,
+    "variance": 2,
+    "arc_degrees": 90,
+    "reach": 22,
+    "windup": 22,
+    "active": 3,
+    "recovery": 24,
+    "knockback": 3.0,
+    "hitstop": 3,
+    "_comment": [
+      "The revenant. Sits between the claw and the maul on every dial, which is",
+      "the point of it: a grunt you cannot afford to leave and a brute you cannot",
+      "walk away from. The windup is two ticks longer than a claw and the reach",
+      "two pixels further, so it out-trades a grunt without ever reading like a",
+      "different question."
+    ]
+  },
+
+  "lunge": {
+    "name": "Lunge",
+    "damage": 15,
+    "variance": 3,
+    "arc_degrees": 110,
+    "reach": 22,
+    "windup": 26,
+    "active": 24,
+    "recovery": 24,
+    "knockback": 5.5,
+    "hitstop": 5,
+    "charge_speed": 4.0,
+    "_comment": [
+      "The stalker. A gore with six ticks shaved off the tell and a longer",
+      "commitment behind it -- 26 against the reference bot's twelve-tick",
+      "reaction leaves fourteen ticks to move, where the charger leaves twenty.",
+      "",
+      "That margin is the whole enemy, and it is the reason this is a charger",
+      "rather than another chaser: the promoted kit is built on commitment, and",
+      "the heavy and the ultimate it just gained are the longest commitments the",
+      "hero has ever had. Something has to punish spending one at the wrong",
+      "moment, or the new attacks are free."
+    ]
+  },
+
+  "_new_boss_comment": [
+    "Four more, one per act, in the same positional order every boss uses:",
+    "sweep close, charge at mid, projectile from far. See the boss comment in",
+    "entities.json -- declaring them in any other order makes a boss telegraph",
+    "one attack and land another, and a test catches it.",
+    "",
+    "None of them is dramatically tankier than the Sovereign, and that is a",
+    "measurement rather than a preference: boss health buys fight *length* and",
+    "little else, and both act III and act IV bosses were drafted far heavier",
+    "and were unwinnable on every seed. What separates these four is cadence,",
+    "reach and how much of the arena each one denies."
+  ],
+
+  "herald_scythe": {
+    "name": "Scythe",
+    "damage": 14,
+    "variance": 3,
+    "arc_degrees": 220,
+    "reach": 42,
+    "windup": 26,
+    "active": 6,
+    "recovery": 26,
+    "knockback": 6.5,
+    "hitstop": 7
+  },
+
+  "herald_charge": {
+    "name": "Herald's Charge",
+    "damage": 16,
+    "variance": 3,
+    "arc_degrees": 120,
+    "reach": 32,
+    "windup": 34,
+    "active": 26,
+    "recovery": 30,
+    "knockback": 7.5,
+    "hitstop": 8,
+    "charge_speed": 4.2
+  },
+
+  "herald_peal": {
+    "name": "Peal",
+    "damage": 7,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 28,
+    "active": 1,
+    "recovery": 24,
+    "knockback": 2.0,
+    "hitstop": 3,
+    "projectile": true,
+    "projectile_speed": 2.9,
+    "projectile_radius": 3.0,
+    "projectile_lifetime": 200,
+    "projectile_count": 7,
+    "spread_degrees": 80,
+    "_comment": [
+      "The Herald is the first fight after the fork and it is deliberately the",
+      "Houndmaster's question again -- everything short, everything quick -- so",
+      "that the first thing a promoted class meets is a pattern it already",
+      "knows. What is new is that it asks all three at a range the Warden never",
+      "reached to."
+    ]
+  },
+
+  "gaoler_chain": {
+    "name": "Chain",
+    "damage": 12,
+    "variance": 4,
+    "arc_degrees": 240,
+    "reach": 50,
+    "windup": 36,
+    "active": 8,
+    "recovery": 32,
+    "knockback": 7.5,
+    "hitstop": 8,
+    "_comment": [
+      "The longest reach in the game, on the longest tell of the four. Backing",
+      "out of it is not possible from inside; the answer is to already be",
+      "somewhere else when it opens."
+    ]
+  },
+
+  "gaoler_drag": {
+    "name": "Drag",
+    "damage": 14,
+    "variance": 4,
+    "arc_degrees": 120,
+    "reach": 34,
+    "windup": 42,
+    "active": 30,
+    "recovery": 34,
+    "knockback": 9.0,
+    "hitstop": 9,
+    "charge_speed": 3.8
+  },
+
+  "gaoler_shackles": {
+    "name": "Shackles",
+    "damage": 8,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 34,
+    "active": 1,
+    "recovery": 28,
+    "knockback": 2.5,
+    "hitstop": 3,
+    "projectile": true,
+    "projectile_speed": 2.3,
+    "projectile_radius": 3.5,
+    "projectile_lifetime": 210,
+    "projectile_count": 6,
+    "spread_degrees": 60,
+    "_comment": [
+      "Slow, fat and only six of them. The Gaoler's ranged attack is the one you",
+      "walk out of; the reason to respect it is where walking out of it puts",
+      "you, which is usually inside the chain."
+    ]
+  },
+
+  "choir_hymn": {
+    "name": "Hymn",
+    "damage": 12,
+    "variance": 3,
+    "arc_degrees": 200,
+    "reach": 38,
+    "windup": 26,
+    "active": 6,
+    "recovery": 26,
+    "knockback": 6.0,
+    "hitstop": 6
+  },
+
+  "choir_descant": {
+    "name": "Descant",
+    "damage": 15,
+    "variance": 3,
+    "arc_degrees": 110,
+    "reach": 32,
+    "windup": 34,
+    "active": 26,
+    "recovery": 30,
+    "knockback": 7.0,
+    "hitstop": 7,
+    "charge_speed": 4.0
+  },
+
+  "choir_chorus": {
+    "name": "Chorus",
+    "damage": 6,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 30,
+    "active": 1,
+    "recovery": 22,
+    "knockback": 1.8,
+    "hitstop": 3,
+    "projectile": true,
+    "projectile_speed": 3.0,
+    "projectile_radius": 2.5,
+    "projectile_lifetime": 220,
+    "projectile_count": 11,
+    "spread_degrees": 130,
+    "_comment": [
+      "Eleven shots across most of a half-circle, and the lightest hit of any",
+      "boss projectile -- the Choir is arithmetic rather than any single shot.",
+      "It is also the weakest of the four up close, on purpose: this is the one",
+      "fight where closing the distance is the answer, and its arena is built",
+      "with the pillars to make that survivable."
+    ]
+  },
+
+  "hollow_arc": {
+    "name": "Hollow Arc",
+    "damage": 15,
+    "variance": 3,
+    "arc_degrees": 230,
+    "reach": 46,
+    "windup": 26,
+    "active": 7,
+    "recovery": 26,
+    "knockback": 7.0,
+    "hitstop": 8
+  },
+
+  "hollow_ruin": {
+    "name": "Ruin",
+    "damage": 18,
+    "variance": 4,
+    "arc_degrees": 130,
+    "reach": 36,
+    "windup": 34,
+    "active": 28,
+    "recovery": 30,
+    "knockback": 8.5,
+    "hitstop": 9,
+    "charge_speed": 4.3
+  },
+
+  "hollow_dirge": {
+    "name": "Dirge",
+    "damage": 7,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 28,
+    "active": 1,
+    "recovery": 24,
+    "knockback": 2.0,
+    "hitstop": 3,
+    "projectile": true,
+    "projectile_speed": 2.9,
+    "projectile_radius": 3.0,
+    "projectile_lifetime": 215,
+    "projectile_count": 10,
+    "spread_degrees": 120,
+    "_comment": [
+      "The last fight, and nothing in it is new. Ten shots where the Sovereign",
+      "had nine, a shade more reach on the arc, a shade more speed on the ruin.",
+      "That is the intent: the fortieth stage should be the thing you have spent",
+      "the run learning to read, at the top of every dial at once, rather than a",
+      "final exam on a moveset introduced on the final stage."
     ]
   }
 }

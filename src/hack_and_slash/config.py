@@ -86,10 +86,15 @@ def window_to_internal(px: int, py: int, win_w: int, win_h: int) -> tuple[int, i
 #
 # Adding a sprite means appending here and painting it in tools/gen_art.py.
 #
-# Grouped by what the thing is -- terrain, the five playable classes, the
-# ordinary enemies, the four act bosses, then the two things that are not
-# bodies. The grouping is for whoever reads the PNG; only the order matters to
-# the code, and only because a cell is found by index.
+# Grouped by what the thing is -- terrain, the five playable classes, the ten
+# they promote into, the ordinary enemies, the eight act bosses, then the things
+# that are not bodies. The grouping is for whoever reads the PNG; only the order
+# matters to the code, and only because a cell is found by index.
+#
+# Append, never insert. A name added in the middle renumbers every cell after it
+# and silently invalidates an already-generated sprites.png -- which is why the
+# two enemies added for acts V-VIII sit after the mage rather than beside the
+# creatures they most resemble.
 SPRITE_ORDER = (
     "floor",
     "wall",
@@ -120,11 +125,18 @@ SPRITE_ORDER = (
     "brute",
     "bowman",
     "mage",
+    # and what it fights after the fork
+    "revenant",
+    "stalker",
     # one at the end of each act
     "boss",
     "houndmaster",
     "effigy",
     "sovereign",
+    "herald",
+    "gaoler",
+    "choir",
+    "hollow_king",
     # neither of these is a creature
     "arrow",
     "shadow",

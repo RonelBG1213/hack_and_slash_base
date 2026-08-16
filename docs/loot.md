@@ -65,47 +65,72 @@ Opens between every stage and pauses the game, which nothing else in a run does 
 the between-stage banner deliberately does not. Spending gold is a decision, and a
 decision taken while a grunt walks up behind you is a decision taken badly.
 
-| Good | Price | Effect | Cap |
-| --- | --- | --- | --- |
-| Poultice | 90g | +30 health now, clamped to your maximum | — |
-| Tonic | 260g | +6 health back after every stage, permanently | 4 |
-| Charm | 340g | +25% gold find, permanently | 3 |
+| Good | Price | Effect | Cap | From |
+| --- | --- | --- | --- | --- |
+| Poultice | 90g | +30 health now, clamped to your maximum | — | stage 1 |
+| Tonic | 260g | +6 health back after every stage, permanently | 5 | stage 1 |
+| Charm | 340g | +25% gold find, permanently | 4 | stage 1 |
+| Elixir | 2,400g | +10 health back after every stage, permanently | 4 | **stage 21** |
 
-The two permanent goods are capped because they compound. Four Tonics is +24
-health after every remaining stage; three Charms is +75% on everything that drops
-afterwards. Uncapped, the correct play is to buy nothing but Charms early, which
-is a strategy the shop should not have.
+The permanent goods are capped because they compound. Maxed, that is +70 health
+after every remaining stage and +100% on everything that drops. Uncapped, the
+correct play is to buy nothing but Charms early, which is a strategy the shop
+should not have.
 
-**None of the three touches what a class is** — no damage, no speed, no maximum
+**The Elixir is a shelf, not a mechanic.** It writes the same `bonus_heal` the
+Tonic does — more of it, nine times the price, and not stocked until the first
+stage after the fork.
+
+It exists because of arithmetic. A forty-stage run banks about **24,500 gold**
+where a twenty-stage run banked 4,700 — five times as much, because the floor
+multiplier compounds. Against the old three shelves, 2,060 bought every
+permanent in the game before the end of act II and left thirty stages with
+nothing to decide: the same failure the first draft's 45/120/150 prices had,
+arriving twenty-five stages later.
+
+**The early prices are deliberately untouched.** They were measured against
+4,700 gold and they still face 4,700 gold — the first half's economy did not
+change. Tripling the Tonic to soak up the new income would have priced the first
+one out of act I, which fixes a late-game problem by breaking an early-game one.
+So the whole sink is in the late shelf: 12,260 to max everything, about half a
+run, which is the same fraction 2,060 was of the run it was priced against.
+
+**None of the four touches what a class is** — no damage, no speed, no maximum
 health. That is load-bearing rather than squeamish; see
 [Limits](limits.md#almost-no-progression-that-makes-you-hit-harder) for why —
-and for the single exception, which is confined to the last stage.
+and for the single exception, which is [promotion](design.md#promotion).
 
-Keys `1` `2` `3` buy; Enter, Space or Esc leaves. The shop swallows every other
+Keys `1`–`4` buy; Enter, Space or Esc leaves. The shop draws three rows for the
+first twenty stages and four after, and the row a player reads is always the key
+they press — `shop.available()` is what both the panel and the key handler use. The shop swallows every other
 control while it is open, including Esc, which is "back to the menu" everywhere
-else — dropping somebody out of a twenty-stage run because they reached for
-Escape to shut a panel is not a trade worth making.
+else — dropping somebody out of a forty-stage run because they reached for
+Escape to shut a panel is not a trade worth making. The promotion panel goes
+further and has no exit key at all; see [Design](design.md#promotion).
 
 ---
 
 ## What is measured and what is not
 
-A full run banks about **4,700 gold** — around 33 on floor 1, rising to 400–550 on
-the late floors — measured with the same bot the rest of the [balance
+A full run banks about **24,500 gold** — around 33 on floor 1 and several hundred
+a stage on the late floors — measured with the same bot the rest of the [balance
 work](balance.md) uses.
 
-| Class | Run 1 | Run 2 |
-| --- | --- | --- |
-| Knight | 5,035 (won) | 4,696 (won) |
-| Rogue | 4,709 (won) | 4,601 (won) |
-| Archer | 4,726 (won) | 4,676 (won) |
-| Priest | 4,753 (won) | 4,646 (won) |
-| Magician | 1,740 (died, stage 12) | 1,662 (died, stage 12) |
+| Class | Run 1 | Run 2 | banked by stage 20 |
+| --- | --- | --- | --- |
+| Knight | 24,900 (won) | 24,664 (won) | 5,035 |
+| Rogue | 24,409 (won) | 23,709 (won) | 4,709 |
+| Archer | 25,561 (won) | 23,144 (won) | 4,726 |
+| Priest | 24,922 (won) | 24,451 (won) | 4,753 |
+| Magician | 1,740 (died, stage 12) | 1,662 (died, stage 12) | — |
 
-The prices are set against that. Maxing both permanents costs 2,060g, a little
-under half a run, and the first Tonic is out of reach until roughly floor 4. The
-first draft priced them at 45/120/150, which bought the whole shop out by about
-stage 5 and left nothing to decide for the remaining fifteen stages.
+The last column is worth more than it looks. Those four figures are identical to
+the ones recorded against the twenty-stage campaign, to the gold — the same
+seeds paying out the same amounts through the same twenty stages. It is the
+economy's half of the proof that acts I–IV were not touched.
+
+The prices are set against the full figure: 12,260 to max everything, about half
+a run, with all of the increase in a shelf that does not appear until stage 21.
 
 > [!WARNING]
 > **Nothing measures whether any of it is worth buying.** `autoplay` never spends
@@ -113,9 +138,28 @@ stage 5 and left nothing to decide for the remaining fifteen stages.
 > provably unmoved by the loot layer — and exactly why nobody knows whether four
 > Tonics trivialise act two.
 >
-> So the drop rates, the rarity worths and the three effects remain a first pass.
+> So the drop rates, the rarity worths and the four effects remain a first pass.
 > The suite pins only the relationships — rarer is worth more and drops less, a
 > deeper floor pays more, a bigger monster pays more — never the values.
+
+### What the ceiling *is* measured on, as of the forty-stage pass
+
+One thing that had never been checked in either direction: whether the caps allow
+a purse to buy its way out of the game. A run with **every permanent maxed from
+stage one** — +70 health a stage, +100% gold find — was played out against both
+reference policies:
+
+| | result |
+| --- | --- |
+| skilled hero, everything maxed | 6/6, worst finish **54** health |
+| skilled hero, buying nothing | 6/6, worst finish **53** health |
+| face-tank, everything maxed | 0/6, dying on stage 2 or 3 |
+
+One point of health between them. That is a real finding rather than a null one:
+past a certain point the hero dies **inside** a stage rather than to attrition
+between them, and healing between stages has nothing to say about that. It is
+also why the face-tank ceiling is unmoved by any amount of shopping — the bracket
+that says the arena still applies cannot be bought off.
 
 ## Turning it off
 

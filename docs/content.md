@@ -121,7 +121,51 @@ another. `tests/test_entities.py` pins that, along with the `sprite_scale: 2` th
 
 Two further constraints, both learned the expensive way and both in
 [Balance](balance.md#findings): escort a boss with melee, never ranged, and tune
-it by damage rather than health.
+it by damage rather than health. The escort rule is now a test —
+`test_no_boss_stage_is_escorted_by_anything_ranged` — rather than only advice.
+
+---
+
+## Adding a stage
+
+A stage is a literal in `STAGES` in `tools/make_level.py`: a size, a hero tile, a
+list of pillar rectangles and a list of enemies. Append it, run the tool, and the
+manifest, the stage files and everything that reads a campaign length follow. The
+loader, the run layer, the HUD, the menu and `--stage` are all driven by
+`len(campaign)` and need nothing.
+
+```sh
+python tools/make_level.py     # refuses to write a campaign it cannot play
+python -m pytest tests/test_level.py tests/test_playthrough.py -q
+```
+
+Four things the shape has to satisfy, all of them tested:
+
+- **Acts are five stages**, four that build and a boss on the fifth. Enemy counts
+  must rise strictly within an act and reset at the start of the next.
+- **A boss stage has exactly one boss**, no boss appears twice, and no boss stage
+  spawns anything with the `archer` brain.
+- **Every arena is bigger than a screen**, fully walled, and has more than fifteen
+  interior wall tiles — an empty box is not a stage.
+- **Which half it is in decides who fights it.** Stages before
+  `jobs.PROMOTION_STAGE` are fought by a base class and stages after it by an
+  advanced one, and the balance grid is split at that line.
+
+The one that is not tested, and the one that will cost you an afternoon:
+
+> [!WARNING]
+> **Nothing paths around walls, so an enemy can be placed somewhere it never
+> leaves.** A pillar that seals a lane strands whatever is behind it. Worse, an
+> `archer`-brained enemy tucked in a corner with no line of sight never shoots,
+> so it never becomes the nearest thing in the room, so the hero never goes to
+> it — the stage runs to the tick limit with the hero at full health and one
+> untouched mage in a pocket.
+>
+> Three stages in act VII and VIII were drafted with a mage two tiles from the
+> right wall behind the last pillar, and all three read as balance failures in
+> every table until somebody looked at what was still alive. If a stage fails
+> with the hero healthy and something *untouched*, it is this and not the
+> numbers.
 
 ---
 
@@ -129,18 +173,36 @@ it by damage rather than health.
 
 ```sh
 python tools/gen_art.py                          # rebuild assets/sprites.png
-python tools/make_level.py                       # rebuild the twenty stages
+python tools/make_level.py                       # rebuild the forty stages
 python tools/balance.py                          # where the fight sits, reference class
-python tools/balance.py --class all --seeds 8    # ...every class
+python tools/balance.py --class all --seeds 8    # ...every starting class
+python tools/balance.py --class advanced         # ...every class they promote into
+python tools/balance.py --class sage --stage 33  # one class, one arena: the tuning loop
 python tools/screenshot.py select out.png        # render a scene headlessly
-python tools/screenshot.py play out.png --stage 20 --class priest --ticks 240
+python tools/screenshot.py play out.png --stage 40 --class holy_priest --ticks 240
 ```
 
-`assets/sprites.png` and `levels/*.json` are **generated and gitignored**. A fresh
-clone must run the first two before the game will start; `tests/test_atlas.py`
-fails loudly with the command to run if the art is missing.
+`--class` takes an advanced class anywhere a starting one is accepted, and
+`--stage` narrows a sweep to a single arena. Both exist because the campaign is
+forty stages: a full sweep of ten advanced classes is minutes, and a tuning pass
+that has to wait minutes per number is a tuning pass nobody finishes.
+
+A sweep only covers the half of the campaign its class can reach — a base class
+stops at the fork, an advanced class starts there. Asking for the other half
+prints a wall of zeroes that looks exactly like a balance failure and is not one,
+which is why the tool does not offer it.
+
+`assets/sprites.png` is **generated and gitignored**; `levels/*.json` is
+generated and *committed*, which is an inconsistency nobody has settled — see
+[Architecture](architecture.md#layout). So a fresh clone must run
+`tools/gen_art.py` before the game will start, and `tests/test_atlas.py` fails
+loudly with the command to run if the art is missing.
 
 To swap in real art, replace `assets/sprites.png` with a PNG of the same cell
 layout: `config.ATLAS_COLUMNS` (8) cells across, `config.TILE` (16) pixels each,
-as many rows as `SPRITE_ORDER` needs — currently 21 sprites over 3 rows. The atlas
+as many rows as `SPRITE_ORDER` needs — currently 37 sprites over 5 rows. The atlas
 loader refuses a sheet too small for the order and says what size it wanted.
+
+Append to `SPRITE_ORDER`, never insert into it. A cell is found by index, so a
+name added in the middle renumbers every sprite after it and silently invalidates
+an already-generated PNG.

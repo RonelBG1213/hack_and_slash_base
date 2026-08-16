@@ -34,9 +34,12 @@ def test_every_shipped_type_loads() -> None:
         "knight", "rogue", "archer", "magician", "priest",
         # what it fights
         "grunt", "rat", "charger", "brute", "bowman", "mage",
+        # and what it fights after the fork
+        "revenant", "stalker",
         # one at the end of each act
         "boss", "houndmaster", "effigy", "sovereign",
-        # promoted on reaching the final stage, two per starting class
+        "herald", "gaoler", "choir", "hollow_king",
+        # promoted halfway, two per starting class
         "dark_knight", "holy_knight",
         "assassin", "shadow_rogue",
         "hunter", "magic_archer",
@@ -334,18 +337,28 @@ def test_no_class_is_worth_anything_to_kill() -> None:
         assert cls.level == 1, f"{cls.id} declares a level; only enemies should"
 
 
-def test_a_boss_outranks_everything_it_is_fought_beside() -> None:
+def test_the_top_of_the_level_ladder_is_a_boss() -> None:
     """The whole reason level is separate from floor.
 
-    A boss and the grunts around it share a stage, so a floor number alone
-    cannot tell them apart -- and a boss kill that pays a grunt's wage is the
-    exact thing this field exists to prevent.
+    This used to assert that the *weakest* boss outranked the strongest
+    ordinary enemy, which held for as long as the ladder was one act deep and
+    stopped holding at eight bosses: the Warden is a level 5 fought on stage 5,
+    and the stalker is a level 6 first met on stage 26. Nothing pays them out
+    on the same floor, and forcing every act V-VIII enemy under an act I boss
+    would flatten twenty stages of the scale to keep an ordering that no kill
+    ever observes.
+
+    The claim that survives -- and the one that has to -- is per stage:
+    `test_a_boss_outranks_its_own_escort` in the playthrough suite checks the
+    arenas as shipped, which is where a boss and a grunt actually share a floor
+    number. This is the content half of it: the scale is topped by a boss, so
+    the most valuable kill in the game is a fight rather than a chore.
     """
     bosses = [t for t in ENEMIES if t.brain == "boss"]
     rank_and_file = [t for t in ENEMIES if t.brain != "boss"]
 
     assert bosses and rank_and_file
-    assert min(b.level for b in bosses) > max(e.level for e in rank_and_file)
+    assert max(b.level for b in bosses) > max(e.level for e in rank_and_file)
 
 
 def test_level_is_not_just_health_wearing_a_hat() -> None:
@@ -439,18 +452,41 @@ def test_a_promotion_never_changes_the_size_of_the_body() -> None:
         )
 
 
-def test_no_promotion_differentiates_on_the_between_stage_heal() -> None:
-    """The dial that does nothing at this trigger, recorded so it stays that way.
+def test_the_fork_is_not_a_decision_about_healing() -> None:
+    """The two branches of a class recover the same amount between stages.
 
-    Promotion happens on the way into the final stage and there is no stage
-    after it, so `heal_between_stages` can never pay out again. It is inherited
-    unchanged to keep the number true to the class -- but a branch sold on
-    healing more would be a branch sold on nothing, and 'the healing one' is the
-    obvious and wrong design for half of these.
+    This used to be a stronger claim -- that no advanced class differed from its
+    *base* at all -- on the grounds that `heal_between_stages` could never pay
+    out: promotion happened on the way into the final stage and there was no
+    stage after it.
+
+    Twenty stages now follow the fork, and the measurement forced the issue. The
+    Knight line finishes 1/6 runs at the base class's 56 and 6/6 at 84; the
+    Rogue line goes 1/6 to 4/6 at 60. Acts V-VIII cost more health per stage
+    than acts I-IV do, and a heal that was right for the first half is not right
+    for the second. Those two lines were re-measured; the Archer, Magician and
+    Priest lines needed nothing and kept their inherited numbers.
+
+    **What has to stay true is the narrower thing, and it is the original point
+    of the rule:** the choice between two branches must never be a choice about
+    healing. "The healing one" is the obvious and wrong design for half of
+    these -- the Holy Priest and the Holy Knight would both collapse into it --
+    so a branch has to earn "outlasts it" from health, arc and knockback.
+
+    A tier may heal more than the tier below it. A branch may not heal more than
+    its twin.
     """
     for cls in ADVANCED:
-        base = BESTIARY[cls.promotes_from]
-        assert cls.heal_between_stages == base.heal_between_stages, (
-            f"{cls.id} changes the between-stage heal, which cannot pay out "
-            "after the stage it is chosen for"
+        twin = next(
+            other
+            for other in ADVANCED
+            if other.promotes_from == cls.promotes_from and other.id != cls.id
+        )
+        assert cls.heal_between_stages == twin.heal_between_stages, (
+            f"{cls.id} and {twin.id} recover different amounts between stages, "
+            "which makes the fork partly a decision about healing"
+        )
+        assert cls.heal_between_stages >= BESTIARY[cls.promotes_from].heal_between_stages, (
+            f"{cls.id} recovers less between stages than the {cls.promotes_from} "
+            "it was promoted from, which is a stealth nerf for taking the fork"
         )

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field, replace
 
 from ..core.collision import path_is_clear
 from ..core.vec2 import Vec2
-from . import actions, skills
+from . import actions, jobs, skills
 from .entities import ActionState, Entity
 from .intent import NOTHING, Intent
 from .sim import step
@@ -458,4 +458,38 @@ def play_out(world, policy=autoplay, limit: int = 9000) -> int:
         if world.outcome is not Outcome.RUNNING:
             return tick
         step(world, policy(world))
+    return limit
+
+
+def play_run_out(run, policy=autoplay, limit: int = 240000, job: str = "") -> int:
+    """Run a whole campaign to its conclusion. Returns the tick it ended on.
+
+    `play_out` is one arena; this is the layer above it, and it exists because
+    a run is no longer a loop anybody can write correctly in three lines. There
+    is a decision in the middle of one now, and both callers that drive a run
+    without a keyboard -- `tools/balance.py` and the playthrough suite -- have
+    to take it at the same moment and in the same way `scenes/play.py` does, or
+    they are measuring a game nobody plays.
+
+    `job` names the branch to take at `jobs.PROMOTION_STAGE`. Left empty, this
+    promotes into nothing and the run carries on as its base class: that is the
+    right default and not a lazy one, because it is what keeps the recorded
+    class x stage grid for the first half measuring the same game it always
+    measured. A caller that wants the second half has to ask for a branch by
+    name, which is also how the advanced grid gets one cell per class.
+
+    A branch that does not descend from the class being played raises out of
+    `jobs.promote` rather than being ignored -- a sweep quietly measuring the
+    wrong class is the failure worth being loud about.
+    """
+    for tick in range(limit):
+        if run.is_over:
+            return tick
+        step(run.world, policy(run.world))
+        run.settle()
+        # Mirrors the scene: the panel opens on the transition into the
+        # promotion stage, and `can_promote` is what makes an empty roster of
+        # advanced classes turn the whole thing off.
+        if run.just_advanced and job and run.at_promotion_point and jobs.can_promote(run):
+            jobs.promote(run, run.bestiary[job])
     return limit

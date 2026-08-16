@@ -284,11 +284,50 @@ def paint_mage(surface: pygame.Surface) -> None:
     _eyes(surface, rect, (168, 244, 232), gap=1)
 
 
+# --- and what it fights after the fork ---------------------------------------
+# Two more, and the harder brief: these arrive twenty stages in, into a room
+# that may already hold five things the player knows by shape. So each takes a
+# silhouette cue rather than only a colour -- the revenant is the only body with
+# a broken outline, the stalker the only one that leans.
+def paint_revenant(surface: pygame.Surface) -> None:
+    # Brute-sized and cold where the brute is warm: the point of it is that it
+    # takes a brute's beating and moves like a grunt, so it must not read as
+    # either. Nothing else in the game is this drowned blue-grey.
+    rect = _body(surface, (108, 128, 134), (44, 56, 62), (156, 180, 186), 12, 13)
+
+    # Ribs -- gaps cut out of the body, which is the one silhouette trick no
+    # other sprite uses. A shape with holes in it reads as dead at 1x.
+    for y in range(rect.y + 4, rect.bottom - 2, 3):
+        surface.set_at((rect.x + 2, y), (44, 56, 62))
+        surface.set_at((rect.right - 3, y), (44, 56, 62))
+
+    _eyes(surface, rect, (140, 250, 236), gap=3)
+
+
+def paint_stalker(surface: pygame.Surface) -> None:
+    # A charger that hunts. Narrower than the charger and much darker, because
+    # the charger's whole tell is that you can see it coming from across the
+    # arena and this one's is that you have less time when you do.
+    rect = _body(surface, (130, 54, 74), (56, 20, 32), (182, 92, 114), 10, 12)
+
+    # Swept back along one side: the only asymmetric body in the atlas, so it
+    # reads as leaning into a run even standing still.
+    pygame.draw.rect(surface, (56, 20, 32), (rect.right, rect.y + 3, 2, 5))
+    pygame.draw.rect(surface, (182, 92, 114), (rect.x - 1, rect.y + 1, 1, 4))
+
+    _eyes(surface, rect, (252, 226, 96), gap=2)
+
+
 # --- one at the end of each act ----------------------------------------------
-# All four fill their cell: the renderer draws them at 2x, and anything with a
+# All eight fill their cell: the renderer draws them at 2x, and anything with a
 # margin would float inside a 32px footprint. Each is a different temperature
 # from the ordinary enemies and from each other, so no boss ever reads as a
 # large version of something already on the screen.
+#
+# The four below the Sovereign close acts V-VIII. They have a colour problem the
+# first four did not: eight bosses is more distinct temperatures than a 16px
+# cell comfortably holds, so each of these leans on one structural mark -- wings,
+# bars, a scatter, a broken crown -- rather than on hue alone.
 def paint_boss(surface: pygame.Surface) -> None:
     # The Warden. Pale and cold against the warm red charger.
     rect = _body(surface, (188, 178, 214), (78, 72, 104), (232, 226, 244), 14, 14)
@@ -345,6 +384,75 @@ def paint_sovereign(surface: pygame.Surface) -> None:
     pygame.draw.rect(surface, (146, 128, 78), (rect.x + 2, rect.bottom - 4, rect.width - 4, 2))
     pygame.draw.rect(surface, (198, 60, 54), (rect.centerx - 5, rect.centery, 3, 3))
     pygame.draw.rect(surface, (198, 60, 54), (rect.centerx + 2, rect.centery, 3, 3))
+
+
+def paint_herald(surface: pygame.Surface) -> None:
+    # First after the fork, and the quick one. Cold cyan-white: the Warden is
+    # the only other pale boss and it is lilac, so these two never share a
+    # stage and never have to be told apart in motion.
+    rect = _body(surface, (150, 206, 214), (56, 96, 108), (206, 242, 248), 14, 14)
+
+    # Wings swept up and out -- the mark that says "this one is fast" before it
+    # has moved, the same job the Houndmaster's horns do.
+    for offset, direction in ((0, -1), (1, 1)):
+        edge = rect.x - 1 if direction < 0 else rect.right
+        pygame.draw.rect(surface, (206, 242, 248), (edge, rect.y + 1 + offset, 1, 5))
+        pygame.draw.rect(surface, (56, 96, 108), (edge, rect.y + 5, 1, 2))
+
+    pygame.draw.rect(surface, (252, 240, 140), (rect.centerx - 4, rect.centery, 3, 2))
+    pygame.draw.rect(surface, (252, 240, 140), (rect.centerx + 1, rect.centery, 3, 2))
+
+
+def paint_gaoler(surface: pygame.Surface) -> None:
+    # The slow one, and the heaviest thing in the game. Iron and rust -- the
+    # only boss with no light in it at all, which is what stops a body this
+    # large from reading as the Effigy at a glance.
+    rect = _body(surface, (92, 88, 96), (38, 36, 42), (132, 128, 138), 15, 15)
+
+    # Bars across the body. Vertical where the Effigy's grain is horizontal, so
+    # the two slow bosses differ in structure and not only in colour.
+    for x in range(rect.x + 2, rect.right - 1, 3):
+        pygame.draw.rect(surface, (38, 36, 42), (x, rect.y + 2, 1, rect.height - 4))
+
+    # Rust at the shoulders, the one warm note.
+    pygame.draw.rect(surface, (150, 84, 46), (rect.x, rect.y + 1, rect.width, 1))
+    pygame.draw.rect(surface, (198, 148, 92), (rect.centerx - 5, rect.centery, 3, 3))
+    pygame.draw.rect(surface, (198, 148, 92), (rect.centerx + 2, rect.centery, 3, 3))
+
+
+def paint_choir(surface: pygame.Surface) -> None:
+    # The ranged one, and the least solid. Pale rose, and scattered rather than
+    # built: it should look like several things agreeing rather than one body,
+    # because eleven shots at once is what it is.
+    rect = _body(surface, (206, 170, 220), (94, 66, 108), (238, 216, 246), 14, 14)
+
+    # A scatter of brighter motes across the body -- the structural mark, and
+    # the only sprite in the atlas that is deliberately noisy.
+    for step_y in range(rect.y + 2, rect.bottom - 2, 2):
+        for step_x in range(rect.x + 2, rect.right - 2, 4):
+            offset = 2 if (step_y // 2) % 2 else 0
+            if step_x + offset < rect.right - 2:
+                surface.set_at((step_x + offset, step_y), (248, 236, 252))
+
+    pygame.draw.rect(surface, (120, 84, 168), (rect.centerx - 5, rect.centery, 3, 3))
+    pygame.draw.rect(surface, (120, 84, 168), (rect.centerx + 2, rect.centery, 3, 3))
+
+
+def paint_hollow_king(surface: pygame.Surface) -> None:
+    # Stage forty. The Sovereign inverted on purpose -- that fight is the
+    # brightest sprite in the atlas and this one is the darkest, wearing the
+    # same crown with pieces missing from it.
+    rect = _body(surface, (58, 50, 86), (22, 18, 36), (110, 96, 152), 15, 15)
+
+    # A broken crown: the Sovereign's three points with the middle one gone.
+    pygame.draw.rect(surface, (216, 168, 74), (rect.x + 1, rect.y - 2, rect.width - 2, 2))
+    for x in (rect.x + 2, rect.right - 4):
+        pygame.draw.rect(surface, (216, 168, 74), (x, rect.y - 4, 2, 3))
+    pygame.draw.rect(surface, (22, 18, 36), (rect.centerx - 1, rect.y - 2, 2, 2))
+
+    pygame.draw.rect(surface, (22, 18, 36), (rect.x + 2, rect.bottom - 4, rect.width - 4, 2))
+    pygame.draw.rect(surface, (250, 78, 70), (rect.centerx - 5, rect.centery, 3, 3))
+    pygame.draw.rect(surface, (250, 78, 70), (rect.centerx + 2, rect.centery, 3, 3))
 
 
 def paint_arrow(surface: pygame.Surface) -> None:
@@ -406,10 +514,16 @@ PAINTERS = {
     "brute": paint_brute,
     "bowman": paint_bowman,
     "mage": paint_mage,
+    "revenant": paint_revenant,
+    "stalker": paint_stalker,
     "boss": paint_boss,
     "houndmaster": paint_houndmaster,
     "effigy": paint_effigy,
     "sovereign": paint_sovereign,
+    "herald": paint_herald,
+    "gaoler": paint_gaoler,
+    "choir": paint_choir,
+    "hollow_king": paint_hollow_king,
     "arrow": paint_arrow,
     "shadow": paint_shadow,
     "coin": paint_coin,

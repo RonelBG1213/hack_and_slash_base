@@ -1,11 +1,19 @@
 """What gold buys, between one stage and the next.
 
-Three goods, and every one of them is an integer on the `Run`. That is not a
+Four goods, and every one of them is an integer on the `Run`. That is not a
 limitation to be worked around later -- it is the whole design. `EntityType` is
 frozen content shared by every run of that class, so anything touching a hero's
 damage, speed or maximum health would need a per-`Entity` stat layer that every
 lookup in the game went through. The shop deliberately sells nothing that needs
 one.
+
+The fourth good does not appear until the second half of the campaign. A forty-
+stage run banks roughly three times what a twenty-stage run did, and against
+three capped goods that meant every permanent bought out around the halfway
+mark with twenty stages left to spend nothing on. A late shelf is the cheapest
+answer that keeps the shop a decision to the end -- and it is stocked by stage
+number rather than by gold, so it arrives at a point in the story rather than
+at a point in somebody's luck.
 
 Prices and amounts come from `data/loot.json`; what a good actually *does* is
 code, because it is a line of behaviour rather than a number. The two are
@@ -44,6 +52,13 @@ class Good:
     #: Already formatted with the amount, so the panel renders it as-is.
     blurb: str
 
+    #: The first stage this is on the shelf for, 1-based. 0 means always.
+    #:
+    #: A shelf rather than a fifth field on three goods that ignore it: what it
+    #: buys is a shop that still has something to decide in act VIII, without
+    #: making the early shop longer or the early decision harder.
+    unlocks_at: int = 0
+
 
 #: What each good does, and the line a player reads. Keyed by the id in
 #: `data/loot.json`.
@@ -78,10 +93,19 @@ def _charm(run, amount: int) -> bool:
     return True
 
 
+def _elixir(run, amount: int) -> bool:
+    # The same dial the Tonic writes, deliberately. A second effect that did
+    # something new would need somewhere new to live; what the late run is short
+    # of is not a mechanic, it is anything left worth buying.
+    run.bonus_heal += amount
+    return True
+
+
 EFFECTS = {
     "poultice": (_poultice, "+{amount} health, now"),
     "tonic": (_tonic, "+{amount} health back per stage"),
     "charm": (_charm, "+{amount}% gold from every drop"),
+    "elixir": (_elixir, "+{amount} health back per stage"),
 }
 
 
@@ -110,6 +134,7 @@ def stock() -> tuple[Good, ...]:
                 amount=amount,
                 limit=int(entry.get("limit", 0)),
                 blurb=template.format(amount=amount),
+                unlocks_at=int(entry.get("unlocks_at", 0)),
             )
         )
 
@@ -122,12 +147,30 @@ def stock() -> tuple[Good, ...]:
     return tuple(goods)
 
 
+def available(run) -> tuple[Good, ...]:
+    """The shelves as this run sees them, in stock order.
+
+    **This, not `stock()`, is what the panel draws and what the keys index
+    into.** The two agree for the first twenty stages and differ after, and a
+    caller that used `stock()` for one and this for the other would put a
+    player's key 4 on a row that is not there.
+    """
+    return tuple(
+        good for good in stock() if good.unlocks_at <= run.stage_number
+    )
+
+
 def bought(run, good: Good) -> int:
     return run.purchases.get(good.id, 0)
 
 
 def sold_out(run, good: Good) -> bool:
     return good.limit > 0 and bought(run, good) >= good.limit
+
+
+def stocked(run, good: Good) -> bool:
+    """Whether this run has reached the stage the good goes on sale."""
+    return good.unlocks_at <= run.stage_number
 
 
 def can_buy(run, good: Good) -> bool:
@@ -137,7 +180,7 @@ def can_buy(run, good: Good) -> bool:
     grey a row out -- so what a player is shown and what actually happens cannot
     disagree.
     """
-    if run.gold < good.price or sold_out(run, good):
+    if run.gold < good.price or sold_out(run, good) or not stocked(run, good):
         return False
     if good.id == "poultice":
         # The one good that can be useless rather than merely unaffordable.
@@ -154,7 +197,7 @@ def buy(run, good: Good) -> bool:
     and refunding it would work too, and would be one more place for the two
     numbers to disagree.
     """
-    if run.gold < good.price or sold_out(run, good):
+    if run.gold < good.price or sold_out(run, good) or not stocked(run, good):
         return False
 
     effect, _ = EFFECTS[good.id]

@@ -1,8 +1,10 @@
-"""Promotion: swapping the class on a live body, once, on the last stage.
+"""Promotion: swapping the class on a live body, once, halfway through a run.
 
 What these pin is the *mechanism*, not the ten classes' numbers. The numbers are
-a first pass that nothing measures -- the reference bot plays light-only and
-never promotes -- so asserting any of them would be pinning a guess. What is
+a first pass -- the reference bot plays light-only, and an advanced class's
+light is the one it inherited, so a sweep of acts V-VIII still cannot see a
+heavy or an ultimate -- and asserting any of them would be pinning a guess.
+What is
 asserted is everything that would be a bug rather than a balance question: the
 body keeps its identity, health carries as a proportion, and a run can only do
 this once.
@@ -254,3 +256,68 @@ def test_every_promoted_class_can_actually_swing_all_four_slots() -> None:
                 step(run.world)
 
         assert hero.is_alive, f"the {advanced.id} died to its own kit"
+
+
+# --- the bot takes the same decision, at the same moment ---------------------
+# Promotion used to be something only a keyboard could do, which was fine while
+# it bought one fight. Half the campaign is fought promoted now, so a driver
+# that cannot promote cannot measure any of it -- and one that promotes at a
+# different moment than the scene does is measuring a game nobody plays.
+def a_long_run(hero: str = "knight") -> Run:
+    """Parked one stage short of the fork, on a campaign just long enough.
+
+    `at_stage` rather than a real campaign so this costs two stages of ticks
+    instead of twenty-one: what is under test is where the driver promotes, not
+    whether a trivial arena can be cleared.
+    """
+    return Run.start(
+        campaign(jobs.PROMOTION_STAGE),
+        BESTIARY,
+        seed=5,
+        hero_type_id=hero,
+        at_stage=jobs.PROMOTION_STAGE - 2,
+    )
+
+
+def test_the_driver_promotes_into_the_branch_it_was_given() -> None:
+    from hack_and_slash.game.autoplay import play_run_out
+
+    run = a_long_run()
+    play_run_out(run, job="holy_knight")
+
+    assert run.job_id == "holy_knight"
+    assert run.world.hero.type.id == "holy_knight"
+
+
+def test_the_driver_leaves_the_class_alone_when_given_no_branch() -> None:
+    """The default, and the reason the first half of the grid still measures
+    what it always measured: a sweep has to ask for a branch by name."""
+    from hack_and_slash.game.autoplay import play_run_out
+
+    run = a_long_run()
+    play_run_out(run)
+
+    assert run.job_id == ""
+    assert run.world.hero.type.id == "knight"
+
+
+def test_the_driver_promotes_at_the_stage_the_scene_would() -> None:
+    """Not on the first transition it sees, and not on the last one."""
+    from hack_and_slash.game.autoplay import play_run_out
+
+    run = a_long_run()
+    assert run.stage_number == jobs.PROMOTION_STAGE - 1
+    assert not run.at_promotion_point
+
+    play_run_out(run, job="dark_knight")
+    assert run.stage_number == jobs.PROMOTION_STAGE
+
+
+def test_a_branch_from_another_class_is_refused_rather_than_ignored() -> None:
+    """A sweep quietly measuring the wrong class is the failure worth being
+    loud about -- it produces numbers, and they look fine."""
+    from hack_and_slash.game.autoplay import play_run_out
+
+    run = a_long_run("rogue")
+    with pytest.raises(ValueError):
+        play_run_out(run, job="dark_knight")

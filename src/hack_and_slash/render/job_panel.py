@@ -1,4 +1,4 @@
-"""The promotion, drawn over a paused arena on the way into the last stage.
+"""The promotion, drawn over a paused arena halfway through the campaign.
 
 Same slot and the same reasoning as `shop_panel.py`: the scene decides *when* a
 thing is on screen, this decides what it looks like, and neither has to hold the
@@ -9,10 +9,13 @@ by the scene when a key arrives -- so the panel cannot get out of step with what
 a choice actually does, because it does none of it.
 
 What a player needs from this screen is the *difference*, not two stat blocks.
-Both branches inherit the light and neutral attacks they have been using for
-nineteen stages, so those are not shown at all; what changes is health, the
-heavy and the ultimate, and health is shown as a delta because "115" means
-nothing without "you had 130".
+Both branches inherit the light and neutral attacks they have been using all
+run, so those are not shown at all; what changes is health, the heavy and the
+ultimate, and health is shown as a delta because "115" means nothing without
+"you had 130".
+
+There is no way out of this panel and so no key listed for one. That is a
+change from when promotion was a capstone; `scenes/play.py` holds the reasoning.
 """
 
 from __future__ import annotations
@@ -70,17 +73,25 @@ class JobPanel:
         surface.blit(heading, ((config.INTERNAL_W - heading.get_width()) // 2, TITLE_Y))
 
         base = run.bestiary[run.hero_type_id]
+        # Both halves counted off the campaign rather than written out, because
+        # the panel used to say "nineteen stages" and "one fight left" and both
+        # were wrong the moment the campaign changed length. `stage_number` is
+        # the stage this panel is standing on, so the stages behind it are one
+        # fewer and the stages ahead include it.
+        behind = run.stage_number - 1
+        ahead = run.stage_count - behind
         sub = self.small.render(
-            f"nineteen stages as the {base.name}. one fight left.", False, config.GREY
+            f"{behind} stages as the {base.name}. {ahead} to go.", False, config.GREY
         )
         surface.blit(sub, ((config.INTERNAL_W - sub.get_width()) // 2, SUBTITLE_Y))
 
         for index, advanced in enumerate(offers[: len(COLUMN_X)]):
             self._column(surface, atlas, base, advanced, index)
 
-        hint = self.small.render(
-            f"1-2 to choose    Enter to stay a {base.name}", False, config.GREY
-        )
+        # No decline, so no key for one. See `scenes/play.py` -- with half a
+        # campaign behind the fork, "stay as you are" is a run broken by habit
+        # rather than a choice.
+        hint = self.small.render("1-2 to choose", False, config.GREY)
         surface.blit(hint, ((config.INTERNAL_W - hint.get_width()) // 2, HINT_Y))
 
     def _wash(self, surface: pygame.Surface) -> None:

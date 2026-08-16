@@ -1,4 +1,4 @@
-"""Writes the twenty stages and the campaign manifest that orders them.
+"""Writes the forty stages and the campaign manifest that orders them.
 
 There is no level editor -- that was a deliberate scope cut. This script is the
 compromise: a stage is described here as a size, a list of pillar rectangles and
@@ -8,26 +8,45 @@ the file directly without coming back here.
 
     python tools/make_level.py
 
-**The shape.** Four acts of five. Each act opens by introducing one enemy, spends
-three stages combining it with what came before, and ends on a boss:
+**The shape.** Eight acts of five. Each act opens by introducing one enemy,
+spends three stages combining it with what came before, and ends on a boss:
 
     act I    1-4   grunt, bowman, charger, rat        5   The Warden
     act II   6-9   the brute                         10   The Houndmaster
     act III  11-14 the mage                          15   The Effigy
     act IV   16-19 everything at once                20   The Sovereign
+    ------------------------------------------- the class forks here -------
+    act V    21-24 the revenant                      25   The Herald
+    act VI   26-29 the stalker                       30   The Gaoler
+    act VII  31-34 both of them, together            35   The Choir
+    act VIII 36-39 everything at once                40   The Hollow King
 
 Enemy counts rise inside an act and reset at the start of the next one, because
 an act opens on a new idea and a new idea deserves room. That is why the
 difficulty test checks the curve per act rather than across the campaign.
 
+**The line after stage 20 is the important one.** Clearing the Sovereign forks
+the class in two, so every stage from 21 on is fought by an advanced class --
+one with more health or less, and two attacks it has never used before. That is
+the only place in the campaign where the hero's own numbers move, and it is why
+acts V-VIII can ask for more than act IV does without any of it being a scaling
+multiplier.
+
+What it does *not* license is enemies that are simply bigger. The hero's light
+attack is unchanged across the fork -- an advanced class inherits it -- and the
+light is most of what a fight is made of. So the second half is built the same
+way the first was: out of count, placement, cadence and reach, with two new
+creatures that ask questions the first twenty stages never do.
+
 Stages 1-3 are the originals and are kept at their original indices. That is not
 sentiment: stage 3 ("The Gauntlet") is the arena the whole game was first tuned
 around and the only stage whose numbers are on record, which makes it the one
 thing the balance harness can be checked against. Moving it would throw that
-reference away.
+reference away. Stages 1-20 are likewise untouched by the extension, so every
+number recorded against them still means what it meant.
 
-Health carries between stages, so these are not twenty independent fights -- they
-are one run, and stage 20 is fought at whatever you have left.
+Health carries between stages, so these are not forty independent fights -- they
+are one run, and stage 40 is fought at whatever you have left.
 """
 
 from __future__ import annotations
@@ -61,6 +80,29 @@ class Stage:
     pushing into a wall. Keep pillars clear of the lanes between the hero spawn
     and the enemies, especially on the sparse early stages where one stuck enemy
     is the difference between a stage ending and not.
+
+    **Three more, all learned building acts V-VIII, all of which produced stages
+    that read as balance failures in every table:**
+
+    1. *Nothing on an extreme row.* A spawn on row 3 of a thirty-tall arena is
+       twelve tiles from the band the hero actually walks -- 192px against a
+       grunt's 220px aggro. It engages only if the player happens to pass near
+       its column, and otherwise sits at full health until the tick limit. Keep
+       spawns inside the middle band.
+    2. *No ranged enemy in a pocket.* An `archer` brain with no line of sight
+       does not shoot, so it never becomes the nearest thing in the room, so
+       nothing ever goes to it. Same outcome as (1), different cause.
+    3. *Ranged enemies are a tax proportional to how late they die,* and the
+       archer brain retreats, so on a big crowded stage they die last by
+       construction. One mage on a twenty-enemy stage shoots for the entire
+       fight. Acts V-VIII carry at most one, and the largest stages carry none
+       -- which is the ranged-escort finding from the act III boss stage,
+       arriving again once the rooms got big enough.
+
+    The symptom for (1) and (2) is a stage that ends on the tick limit with the
+    hero *healthy* and something *untouched*. `why_not()` in the playthrough
+    suite reports exactly that, because three of these shipped and cost an
+    afternoon of tuning the wrong dial.
     """
 
     name: str
@@ -705,6 +747,747 @@ STAGES = [
             ("sovereign", 32, 13),
             ("grunt", 20, 6),
             ("grunt", 20, 20),
+        ),
+    ),
+    # =========================================================================
+    # ACT V -- the revenant. Everything below this line is fought by an advanced
+    # class: the Sovereign is cleared, the fork is taken, and the hero walking
+    # into stage 21 is not the one that walked out of stage 20.
+    #
+    # The revenant is the answer to the one habit twenty stages have taught. A
+    # brute can be left alone -- it is slow enough to ignore for as long as you
+    # like, and its danger is the attention it costs rather than the damage it
+    # does. The revenant has most of a brute's health at a grunt's walking pace,
+    # so it cannot be left, and its health has to be spent instead of avoided.
+    #
+    # Counts restart at 12 rather than continuing from act IV's 17. A new idea
+    # deserves room, and this is the first stage of the campaign's second half.
+    # =========================================================================
+    # --- 21 ------------------------------------------------------------------
+    # Three revenants, spread wide, with the ordinary roster thinned out around
+    # them so the new thing is legible. The two bowmen are parked at the far end
+    # deliberately: crossing the room to deal with them is exactly the errand a
+    # revenant is designed to make expensive.
+    Stage(
+        name="The Descent",
+        filename="stage21.json",
+        width=46,
+        height=28,
+        hero=(3, 14),
+        pillars=[
+            (10, 4, 4, 4),
+            (10, 20, 4, 4),
+            (19, 12, 4, 4),
+            (28, 4, 4, 4),
+            (28, 20, 4, 4),
+            (37, 12, 3, 4),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 8),
+            ("revenant", 16, 20),
+            ("revenant", 25, 14),
+            ("grunt", 21, 5),
+            ("grunt", 21, 23),
+            ("grunt", 34, 9),
+            ("grunt", 34, 19),
+            ("rat", 15, 14),
+            ("rat", 24, 6),
+            ("rat", 24, 22),
+            ("bowman", 42, 8),
+            ("bowman", 42, 20),
+        ),
+    ),
+    # --- 22 ------------------------------------------------------------------
+    # Chargers return alongside the revenants, top and bottom in the open lanes
+    # where their telegraph is readable. The point of the pairing: a charger is
+    # answered by moving, and a revenant is what makes moving cost something.
+    Stage(
+        name="The Ossuary",
+        filename="stage22.json",
+        width=48,
+        height=28,
+        hero=(3, 14),
+        pillars=[
+            (9, 3, 4, 5),
+            (9, 20, 4, 5),
+            (18, 11, 4, 5),
+            (27, 3, 4, 5),
+            (27, 20, 4, 5),
+            (36, 11, 4, 5),
+            (42, 4, 3, 4),
+        ],
+        enemies=spawns(
+            ("revenant", 15, 9),
+            ("revenant", 15, 19),
+            ("revenant", 24, 14),
+            ("grunt", 20, 5),
+            ("grunt", 20, 23),
+            ("grunt", 33, 8),
+            ("grunt", 33, 20),
+            ("rat", 14, 14),
+            ("rat", 23, 9),
+            ("rat", 23, 19),
+            ("rat", 31, 14),
+            ("charger", 25, 3),
+            ("charger", 25, 25),
+            ("bowman", 45, 14),
+        ),
+    ),
+    # --- 23 ------------------------------------------------------------------
+    # A fourth revenant and the act's first mage. Two rows of pillars down the
+    # middle, so the mage at the far end has something to hide behind and the
+    # player has something to break line of sight with -- the same pillar doing
+    # both jobs is what makes the walk down this room a decision.
+    Stage(
+        name="The Wake",
+        filename="stage23.json",
+        width=48,
+        height=30,
+        hero=(3, 15),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 21, 4, 5),
+            (19, 12, 5, 5),
+            (29, 4, 4, 5),
+            (29, 21, 4, 5),
+            (38, 12, 4, 5),
+            (43, 4, 3, 4),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 10),
+            ("revenant", 16, 20),
+            ("revenant", 26, 15),
+            ("revenant", 35, 15),
+            ("grunt", 21, 6),
+            ("grunt", 21, 24),
+            ("grunt", 34, 9),
+            ("grunt", 34, 22),
+            ("rat", 15, 15),
+            ("rat", 25, 7),
+            ("rat", 25, 23),
+            ("charger", 27, 3),
+            ("charger", 27, 27),
+            ("grunt", 37, 10),
+            ("bowman", 45, 20),
+        ),
+    ),
+    # --- 24 ------------------------------------------------------------------
+    # The act's largest, and the brute's reappearance -- deliberately at the far
+    # end, behind everything else. A brute you can walk away from and a revenant
+    # you cannot, in the same room, is the whole act stated once.
+    Stage(
+        name="The Long Vigil",
+        filename="stage24.json",
+        width=50,
+        height=30,
+        hero=(3, 15),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 21, 4, 5),
+            (19, 12, 4, 5),
+            (27, 4, 4, 5),
+            (27, 21, 4, 5),
+            (35, 12, 4, 5),
+            (43, 4, 4, 5),
+            (43, 21, 4, 5),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 10),
+            ("revenant", 16, 20),
+            ("revenant", 24, 15),
+            ("revenant", 33, 15),
+            ("grunt", 21, 6),
+            ("grunt", 21, 24),
+            ("grunt", 32, 10),
+            ("grunt", 32, 20),
+            ("grunt", 41, 15),
+            ("rat", 15, 15),
+            ("rat", 25, 7),
+            ("rat", 25, 23),
+            ("rat", 40, 8),
+            ("charger", 24, 3),
+            ("charger", 24, 27),
+            ("brute", 45, 15),
+            ("mage", 39, 10),
+        ),
+    ),
+    # --- 25 -- ACT V BOSS ----------------------------------------------------
+    # The Herald: the Houndmaster's shape at the Sovereign's reach. Quick body,
+    # short tells, a seven-shot peal.
+    #
+    # Arena and escorts follow the act I template on purpose. This is the first
+    # fight after the fork, and everything unfamiliar about it should be in the
+    # player's own hands rather than in the room -- a class they have used for
+    # five minutes against a pattern they have read four times.
+    #
+    # Escorts are melee, as on every boss stage in the game. See stage 15.
+    Stage(
+        name="The Herald's Gate",
+        filename="stage25.json",
+        width=40,
+        height=26,
+        hero=(3, 13),
+        pillars=[(11, 4, 4, 5), (11, 17, 4, 5), (19, 11, 4, 4), (27, 4, 4, 5), (27, 17, 4, 5)],
+        enemies=spawns(
+            ("herald", 32, 13),
+            ("grunt", 20, 6),
+            ("grunt", 20, 20),
+            ("revenant", 24, 13),
+        ),
+    ),
+    # =========================================================================
+    # ACT VI -- the stalker. A charger that commits from 210 where a charger
+    # commits from 150, with a 26-tick tell against the charger's 32.
+    #
+    # It is here because of what the fork handed the player. An advanced class's
+    # heavy and ultimate are the longest commitments the hero has ever had, and
+    # a room with nothing in it that punishes spending one at the wrong moment
+    # makes them free. The stalker is that punishment, and the act is built to
+    # make sure it is never the only thing asking for attention.
+    # =========================================================================
+    # --- 26 ------------------------------------------------------------------
+    # Deliberately open through the middle. The stalker's tell is short enough
+    # that a first meeting in a cluttered room would read as being hit from
+    # nowhere -- so it arrives where it can be seen coming, and the act tightens
+    # the arena from here.
+    Stage(
+        name="The Snare",
+        filename="stage26.json",
+        width=46,
+        height=28,
+        hero=(3, 14),
+        pillars=[(11, 4, 4, 4), (11, 20, 4, 4), (30, 4, 4, 4), (30, 20, 4, 4), (20, 12, 5, 4)],
+        enemies=spawns(
+            ("stalker", 18, 8),
+            ("stalker", 18, 20),
+            ("stalker", 27, 14),
+            ("grunt", 22, 6),
+            ("grunt", 22, 22),
+            ("grunt", 36, 9),
+            ("grunt", 36, 19),
+            ("rat", 17, 14),
+            ("rat", 26, 7),
+            ("rat", 26, 21),
+            ("revenant", 34, 14),
+            ("revenant", 40, 10),
+            ("bowman", 43, 20),
+        ),
+    ),
+    # --- 27 ------------------------------------------------------------------
+    # The same three stalkers in a corridor of pillars, which is the version of
+    # the fight the last stage was preparing for: a committed dash is far worse
+    # when the room decides where you can dodge to.
+    Stage(
+        name="The Culverts",
+        filename="stage27.json",
+        width=48,
+        height=28,
+        hero=(3, 14),
+        pillars=[
+            (9, 3, 4, 5),
+            (9, 20, 4, 5),
+            (18, 11, 4, 5),
+            (27, 3, 4, 5),
+            (27, 20, 4, 5),
+            (36, 11, 4, 5),
+            (42, 20, 3, 4),
+        ],
+        enemies=spawns(
+            ("stalker", 15, 9),
+            ("stalker", 24, 14),
+            ("revenant", 21, 7),
+            ("grunt", 33, 14),
+            ("grunt", 23, 4),
+            ("grunt", 23, 25),
+            ("grunt", 34, 8),
+            ("grunt", 34, 20),
+            ("grunt", 16, 18),
+            ("grunt", 26, 10),
+            ("rat", 14, 14),
+            ("rat", 25, 18),
+            ("rat", 31, 9),
+            ("grunt", 40, 8),
+            ("grunt", 40, 18),
+        ),
+    ),
+    # --- 28 ------------------------------------------------------------------
+    # Eight pillars, four rats and a brute at the back. The stalkers are spread
+    # rather than grouped: three arriving together is one decision, three
+    # arriving from three places is three.
+    Stage(
+        name="The Gallows Walk",
+        filename="stage28.json",
+        width=50,
+        height=30,
+        hero=(3, 15),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 21, 4, 5),
+            (19, 12, 4, 5),
+            (28, 4, 4, 5),
+            (28, 21, 4, 5),
+            (37, 12, 4, 5),
+            (44, 4, 4, 5),
+            (44, 21, 4, 5),
+        ],
+        enemies=spawns(
+            ("stalker", 16, 10),
+            ("stalker", 16, 20),
+            ("stalker", 25, 15),
+            ("revenant", 23, 6),
+            ("revenant", 23, 24),
+            ("revenant", 34, 15),
+            ("grunt", 21, 6),
+            ("grunt", 21, 24),
+            ("grunt", 33, 9),
+            ("grunt", 33, 21),
+            ("rat", 15, 15),
+            ("rat", 26, 8),
+            ("rat", 26, 22),
+            ("rat", 42, 15),
+            ("brute", 41, 10),
+            ("mage", 41, 9),
+        ),
+    ),
+    # --- 29 ------------------------------------------------------------------
+    # The act's largest: four stalkers, and the last stage before the slowest
+    # boss in the game. Ends on eighteen, which is the most the campaign has
+    # asked for anywhere.
+    Stage(
+        name="The Black Ford",
+        filename="stage29.json",
+        width=50,
+        height=30,
+        hero=(3, 15),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 21, 4, 5),
+            (18, 12, 4, 5),
+            (26, 4, 4, 5),
+            (26, 21, 4, 5),
+            (34, 12, 4, 5),
+            (42, 4, 4, 5),
+            (42, 21, 4, 5),
+        ],
+        enemies=spawns(
+            ("stalker", 16, 10),
+            ("stalker", 16, 20),
+            ("rat", 24, 15),
+            ("revenant", 22, 7),
+            ("revenant", 40, 15),
+            ("grunt", 20, 6),
+            ("grunt", 20, 24),
+            ("grunt", 31, 9),
+            ("grunt", 31, 21),
+            ("grunt", 46, 15),
+            ("rat", 15, 15),
+            ("rat", 23, 11),
+            ("rat", 23, 19),
+            ("rat", 39, 8),
+            ("rat", 33, 20),
+            ("rat", 33, 10),
+            ("charger", 30, 6),
+            ("grunt", 38, 10),
+        ),
+    ),
+    # --- 30 -- ACT VI BOSS ---------------------------------------------------
+    # The Gaoler: the slowest body in the game swinging the longest reach in it.
+    # A 50px chain across 240 degrees denies more floor than anything else, so
+    # the arena is wide and the pillars are pushed out to the edges -- there has
+    # to be somewhere to be that is not inside the swing.
+    #
+    # Escorts are melee. See stage 15.
+    Stage(
+        name="The Gaoler's Yard",
+        filename="stage30.json",
+        width=42,
+        height=28,
+        hero=(3, 14),
+        pillars=[(12, 4, 4, 5), (12, 19, 4, 5), (21, 12, 4, 4), (30, 4, 4, 5), (30, 19, 4, 5)],
+        enemies=spawns(
+            ("gaoler", 34, 14),
+            ("grunt", 22, 6),
+            ("grunt", 22, 21),
+            ("revenant", 26, 14),
+        ),
+    ),
+    # =========================================================================
+    # ACT VII -- no new enemy. Both of act V's and act VI's ideas in the same
+    # rooms, which is the combination the two of them were separated to teach.
+    #
+    # The same shape act IV has, and for the same reason: an act that introduced
+    # something here would be asking the player to learn at the point they are
+    # least able to. Two acts of new creatures is enough for one campaign half.
+    # =========================================================================
+    # --- 31 ------------------------------------------------------------------
+    Stage(
+        name="The Antechamber",
+        filename="stage31.json",
+        width=48,
+        height=30,
+        hero=(3, 15),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 21, 4, 5),
+            (19, 12, 4, 5),
+            (28, 4, 4, 5),
+            (28, 21, 4, 5),
+            (37, 12, 4, 5),
+            (43, 5, 3, 4),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 10),
+            ("revenant", 25, 15),
+            ("stalker", 23, 7),
+            ("stalker", 34, 15),
+            ("mage", 35, 8),
+            ("mage", 35, 22),
+            ("grunt", 21, 4),
+            ("grunt", 21, 26),
+            ("grunt", 33, 9),
+            ("grunt", 17, 20),
+            ("grunt", 27, 17),
+            ("rat", 15, 15),
+            ("rat", 30, 12),
+            ("bowman", 41, 15),
+        ),
+    ),
+    # --- 32 ------------------------------------------------------------------
+    # Two mages at the very back, behind eight pillars and everything else in
+    # the room. The act's recurring problem: the things worth killing first are
+    # the things furthest away, and the room is full of reasons not to cross it.
+    Stage(
+        name="The Nave",
+        filename="stage32.json",
+        width=50,
+        height=30,
+        hero=(3, 15),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 21, 4, 5),
+            (18, 12, 4, 5),
+            (26, 4, 4, 5),
+            (26, 21, 4, 5),
+            (34, 12, 4, 5),
+            (42, 4, 4, 5),
+            (42, 21, 4, 5),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 10),
+            ("revenant", 24, 15),
+            ("stalker", 22, 7),
+            ("stalker", 32, 15),
+            ("grunt", 20, 6),
+            ("grunt", 20, 24),
+            ("grunt", 31, 9),
+            ("grunt", 31, 21),
+            ("rat", 15, 15),
+            ("rat", 23, 12),
+            ("rat", 23, 18),
+            ("rat", 33, 11),
+            ("rat", 33, 19),
+            ("mage", 38, 9),
+            ("rat", 38, 21),
+            ("brute", 40, 15),
+        ),
+    ),
+    # --- 33 ------------------------------------------------------------------
+    Stage(
+        name="The Undercroft",
+        filename="stage33.json",
+        width=50,
+        height=30,
+        hero=(3, 15),
+        pillars=[
+            (9, 4, 4, 5),
+            (9, 21, 4, 5),
+            (17, 12, 4, 5),
+            (25, 4, 4, 5),
+            (25, 21, 4, 5),
+            (33, 12, 4, 5),
+            (41, 4, 4, 5),
+            (41, 21, 4, 5),
+        ],
+        enemies=spawns(
+            ("revenant", 15, 10),
+            ("revenant", 23, 15),
+            ("revenant", 31, 15),
+            ("stalker", 21, 7),
+            ("stalker", 39, 15),
+            ("grunt", 19, 6),
+            ("grunt", 19, 24),
+            ("grunt", 30, 9),
+            ("grunt", 30, 21),
+            ("grunt", 15, 20),
+            ("grunt", 37, 10),
+            ("rat", 14, 15),
+            ("rat", 22, 12),
+            ("rat", 22, 18),
+            ("rat", 38, 8),
+            ("grunt", 37, 9),
+            ("charger", 29, 6),
+        ),
+    ),
+    # --- 34 ------------------------------------------------------------------
+    # Nineteen, the most in the campaign so far, in the longest room in it. The
+    # two stalkers on the top and bottom edges have the whole length of the
+    # arena to build up in, which is the worst version of that enemy.
+    Stage(
+        name="The Tribune",
+        filename="stage34.json",
+        width=52,
+        height=30,
+        hero=(3, 15),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 21, 4, 5),
+            (18, 12, 4, 5),
+            (26, 4, 4, 5),
+            (26, 21, 4, 5),
+            (34, 12, 4, 5),
+            (42, 4, 4, 5),
+            (42, 21, 4, 5),
+            (48, 12, 3, 4),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 10),
+            ("revenant", 24, 15),
+            ("revenant", 32, 15),
+            ("stalker", 22, 7),
+            ("stalker", 30, 6),
+            ("stalker", 30, 24),
+            ("grunt", 20, 6),
+            ("grunt", 20, 24),
+            ("grunt", 31, 9),
+            ("grunt", 31, 21),
+            ("grunt", 40, 15),
+            ("rat", 15, 15),
+            ("rat", 23, 12),
+            ("rat", 23, 18),
+            ("rat", 39, 8),
+            ("rat", 33, 20),
+            ("rat", 17, 20),
+            ("brute", 46, 15),
+            ("mage", 44, 15),
+        ),
+    ),
+    # --- 35 -- ACT VII BOSS --------------------------------------------------
+    # The Choir: eleven shots across 130 degrees from 165 away, and the weakest
+    # of the eight bosses up close. The fight is closing the distance, so this
+    # is the most heavily pillared arena in the game -- eight of them in two
+    # staggered rows, so there is always a next piece of cover rather than one
+    # sprint through an open fan.
+    #
+    # Least health of the four late bosses on purpose: a long fight at range
+    # against this one is the failure state rather than the fight.
+    #
+    # Escorts are melee. See stage 15.
+    Stage(
+        name="The Choir Loft",
+        filename="stage35.json",
+        width=44,
+        height=28,
+        hero=(3, 14),
+        pillars=[
+            (11, 4, 3, 4),
+            (11, 19, 3, 4),
+            (17, 11, 3, 4),
+            (23, 4, 3, 4),
+            (23, 19, 3, 4),
+            (29, 11, 3, 4),
+            (35, 4, 3, 4),
+            (35, 19, 3, 4),
+        ],
+        enemies=spawns(
+            ("choir", 38, 14),
+            ("grunt", 21, 9),
+            ("grunt", 21, 18),
+            ("revenant", 27, 14),
+        ),
+    ),
+    # =========================================================================
+    # ACT VIII -- everything the game has, in the largest arenas it has, at
+    # whatever health the last thirty-five stages left you. The same argument
+    # act IV makes, one campaign half later.
+    # =========================================================================
+    # --- 36 ------------------------------------------------------------------
+    Stage(
+        name="The Outer Ward",
+        filename="stage36.json",
+        width=50,
+        height=30,
+        hero=(3, 15),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 21, 4, 5),
+            (18, 12, 4, 5),
+            (26, 4, 4, 5),
+            (26, 21, 4, 5),
+            (34, 12, 4, 5),
+            (42, 4, 4, 5),
+            (42, 21, 4, 5),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 10),
+            ("revenant", 24, 15),
+            ("stalker", 22, 7),
+            ("stalker", 32, 15),
+            ("grunt", 20, 6),
+            ("grunt", 20, 24),
+            ("grunt", 31, 9),
+            ("grunt", 17, 19),
+            ("grunt", 25, 12),
+            ("rat", 15, 15),
+            ("rat", 23, 12),
+            ("rat", 23, 18),
+            ("brute", 40, 15),
+            ("mage", 38, 10),
+            ("charger", 30, 21),
+        ),
+    ),
+    # --- 37 ------------------------------------------------------------------
+    Stage(
+        name="The Inner Ward",
+        filename="stage37.json",
+        width=52,
+        height=30,
+        hero=(3, 15),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 21, 4, 5),
+            (18, 12, 4, 5),
+            (26, 4, 4, 5),
+            (26, 21, 4, 5),
+            (34, 12, 4, 5),
+            (42, 4, 4, 5),
+            (42, 21, 4, 5),
+            (48, 12, 3, 4),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 10),
+            ("revenant", 24, 15),
+            ("revenant", 32, 15),
+            ("stalker", 22, 7),
+            ("stalker", 40, 15),
+            ("grunt", 20, 6),
+            ("grunt", 20, 24),
+            ("grunt", 31, 9),
+            ("grunt", 31, 21),
+            ("rat", 15, 15),
+            ("rat", 23, 12),
+            ("rat", 23, 18),
+            ("rat", 33, 20),
+            ("rat", 17, 20),
+            ("brute", 46, 15),
+            ("mage", 44, 15),
+            ("charger", 30, 6),
+        ),
+    ),
+    # --- 38 ------------------------------------------------------------------
+    # The tallest arena in the game. Four stalkers, two of them on the long
+    # edges where they have the whole room to run at you through.
+    Stage(
+        name="The Hollow Stair",
+        filename="stage38.json",
+        width=52,
+        height=32,
+        hero=(3, 16),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 23, 4, 5),
+            (18, 13, 4, 5),
+            (26, 4, 4, 5),
+            (26, 23, 4, 5),
+            (34, 13, 4, 5),
+            (42, 4, 4, 5),
+            (42, 23, 4, 5),
+            (48, 13, 3, 4),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 11),
+            ("revenant", 24, 16),
+            ("revenant", 32, 16),
+            ("stalker", 22, 8),
+            ("stalker", 30, 6),
+            ("stalker", 30, 26),
+            ("grunt", 20, 6),
+            ("grunt", 20, 26),
+            ("grunt", 31, 10),
+            ("grunt", 31, 22),
+            ("grunt", 16, 21),
+            ("grunt", 25, 13),
+            ("rat", 15, 16),
+            ("rat", 23, 13),
+            ("rat", 23, 19),
+            ("brute", 40, 16),
+            ("mage", 38, 9),
+            ("grunt", 38, 23),
+        ),
+    ),
+    # --- 39 ------------------------------------------------------------------
+    # Twenty enemies, the most the campaign ever asks for, and the last stage
+    # before the throne. Everything in the game is in this room.
+    Stage(
+        name="The King's Approach",
+        filename="stage39.json",
+        width=52,
+        height=32,
+        hero=(3, 16),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 23, 4, 5),
+            (18, 13, 4, 5),
+            (26, 4, 4, 5),
+            (26, 23, 4, 5),
+            (34, 13, 4, 5),
+            (42, 4, 4, 5),
+            (42, 23, 4, 5),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 11),
+            ("revenant", 24, 16),
+            ("revenant", 32, 16),
+            ("stalker", 22, 8),
+            ("stalker", 30, 6),
+            ("stalker", 30, 26),
+            ("grunt", 20, 6),
+            ("grunt", 20, 26),
+            ("grunt", 31, 10),
+            ("grunt", 31, 22),
+            ("grunt", 40, 16),
+            ("grunt", 16, 21),
+            ("rat", 15, 16),
+            ("rat", 23, 13),
+            ("rat", 23, 19),
+            ("rat", 39, 9),
+            ("rat", 33, 21),
+            ("brute", 47, 16),
+            ("grunt", 38, 10),
+            ("charger", 38, 24),
+        ),
+    ),
+    # --- 40 -- FINAL BOSS ----------------------------------------------------
+    # The Hollow King, and the same arena logic as the Sovereign's Hall twenty
+    # stages earlier: pillars placed for cover rather than for shape, because
+    # ten shots across 120 degrees have no answer at range except a wall.
+    #
+    # A revenant among the escorts rather than a third grunt. The Sovereign's
+    # two grunts were there so the room was not silent; this one is the last
+    # fight of a forty-stage run and gets something that has to be dealt with.
+    #
+    # Escorts are melee. See stage 15.
+    Stage(
+        name="The Hollow Throne",
+        filename="stage40.json",
+        width=42,
+        height=28,
+        hero=(3, 14),
+        pillars=[(12, 4, 4, 5), (12, 19, 4, 5), (20, 11, 4, 4), (28, 4, 4, 5), (28, 19, 4, 5)],
+        enemies=spawns(
+            ("hollow_king", 34, 14),
+            ("grunt", 21, 6),
+            ("grunt", 21, 21),
+            ("revenant", 25, 14),
         ),
     ),
 ]

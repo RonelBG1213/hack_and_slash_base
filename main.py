@@ -91,10 +91,17 @@ def main(argv: list[str] | None = None) -> int:
 
     bestiary = load_bestiary(config.ENTITIES_DATA, config.WEAPONS_DATA)
 
+    # Advanced classes are accepted here and nowhere else. They are kept out of
+    # `hero_classes` on purpose -- that is what keeps them off the character
+    # select, which is laid out for five columns -- but half the campaign is
+    # fought as one, and `--stage 36` is useless if the only way to reach that
+    # stage as the hero who belongs there is to play thirty-five stages first.
+    # A tuning flag, like `--stage` beside it.
     roster = [c.id for c in bestiary.hero_classes]
-    if args.hero is not None and args.hero not in roster:
+    playable = roster + [c.id for c in bestiary.advanced_classes]
+    if args.hero is not None and args.hero not in playable:
         print(
-            f"--class must be one of: {', '.join(roster)}",
+            f"--class must be one of: {', '.join(playable)}",
             file=sys.stderr,
         )
         return 1

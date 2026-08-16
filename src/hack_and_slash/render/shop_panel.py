@@ -17,13 +17,24 @@ import pygame
 from .. import config
 from ..game import shop
 
-#: Keys 1, 2, 3 in the order the shop stocks them. The row number a player reads
+#: Keys 1..4 in the order the shop stocks them. The row number a player reads
 #: and the key they press are the same digit, which is the whole reason the
 #: stock order is content rather than something sorted at load.
-ROW_KEYS = (pygame.K_1, pygame.K_2, pygame.K_3)
+#:
+#: Four keys for a shop that shows three rows for the first twenty stages. The
+#: fourth is a late shelf, and both the rows and the hint line are counted from
+#: `shop.available(run)` rather than assumed -- so the panel is right in both
+#: halves of the campaign without knowing which half it is in.
+ROW_KEYS = (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4)
 
 TITLE_Y = 26
-ROW_Y = 68
+
+#: Was 68, when the shop had three rows for the whole game. A fourth row put the
+#: hint line one pixel under the HUD -- `test_the_shop_rows_and_hint_fit_above_
+#: the_hud` measures the tallest the panel ever gets rather than the version
+#: that happens to be on screen, which is why that was a failing test and not a
+#: bug report from somebody playing act V.
+ROW_Y = 62
 ROW_H = 24
 LEFT = 40
 
@@ -54,14 +65,16 @@ class ShopPanel:
         purse = self.font.render(f"{run.gold}g", False, config.GOLD)
         surface.blit(purse, ((config.INTERNAL_W - purse.get_width()) // 2, TITLE_Y + 20))
 
-        for index, good in enumerate(shop.stock()):
+        rows = shop.available(run)
+        for index, good in enumerate(rows):
             self._row(surface, run, good, index, ROW_Y + index * ROW_H)
 
         hint = self.small.render(
-            "1-3 to buy    Enter to press on", False, config.GREY
+            f"1-{len(rows)} to buy    Enter to press on", False, config.GREY
         )
         surface.blit(
-            hint, ((config.INTERNAL_W - hint.get_width()) // 2, ROW_Y + 3 * ROW_H + 12)
+            hint,
+            ((config.INTERNAL_W - hint.get_width()) // 2, ROW_Y + len(rows) * ROW_H + 12),
         )
 
     def _wash(self, surface: pygame.Surface) -> None:

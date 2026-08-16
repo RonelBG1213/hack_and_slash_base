@@ -1,10 +1,24 @@
 # Testing
 
 ```sh
-python -m pytest              # 429 tests, headless, no window
+python -m pytest              # 678 tests, headless, no window
 python -m pytest tests/test_loot.py
 python main.py --smoke        # pixel fidelity: every sprite upscales with hard edges
 ```
+
+> [!NOTE]
+> **The suite is slow now, and it is `test_playthrough.py` that is slow.** Two
+> class×stage grids over a forty-stage campaign is a few hundred simulated
+> fights, and the whole-run brackets play forty stages end to end several times
+> over. Everything else in the suite finishes in seconds.
+>
+> ```sh
+> python -m pytest --ignore=tests/test_playthrough.py   # the fast gate
+> python -m pytest -k "not stage" tests/test_playthrough.py
+> ```
+>
+> The gate before a commit is still the whole thing. These are for the edit
+> loop, not for the merge.
 
 `pyproject.toml` sets `pythonpath = ["src"]` and `testpaths = ["tests"]`, so
 pytest needs no `PYTHONPATH` and no editable install. `tests/conftest.py` forces
@@ -37,17 +51,17 @@ That only matters for the handful of render tests; everything under `core/` and
 
 | File | Tests | What it guards |
 | --- | --- | --- |
-| `test_playthrough.py` | 111 | the [balance brackets](balance.md) and the 5×20 class×stage grid |
-| `test_run.py` | 30 | carry-over: health, gold, banking across stages |
-| `test_render.py` | 29 | drawing, the HUD, the shop panel — headless |
+| `test_playthrough.py` | 313 | the [balance brackets](balance.md) and both class×stage grids |
+| `test_run.py` | 34 | carry-over: health, gold, banking across stages, and that a promotion survives one |
+| `test_render.py` | 41 | drawing, the HUD, the shop and promotion panels — headless |
 | `test_loot.py` | 28 | the gold formula, rarity weights, the sweep, the RNG split |
-| `test_entities.py` | 21 | content validity: levels, boss weapon order, sprite scale |
+| `test_entities.py` | 27 | content validity: levels, boss weapon order, sprite scale |
 | `test_collision.py` | 20 | movement against walls, separation, swept paths |
 | `test_actions.py` | 19 | the WINDUP → ACTIVE → RECOVERY state machine |
 | `test_ai.py`, `test_boss.py`, `test_sim.py` | 17 each | brains, the boss positional brain, one tick |
 | `test_combat.py` | 16 | hit resolution and damage rolls |
 | `test_campaign.py` | 15 | act structure, stage ordering, playability |
-| `test_shop.py` | 14 | prices, caps, refusal when short |
+| `test_shop.py` | 19 | prices, caps, the late shelf, refusal when short |
 | `test_level.py` | 13 | tiles, solidity, spawns |
 | `test_effects.py` | 11 | that the feel pass changes nothing |
 | `test_skills.py` | 11 | slot indices and the cooldown contract |
@@ -106,22 +120,55 @@ Three properties make this work:
   suite goes red and somebody has to decide: was it fixed, or did the test rot?
 - **The reason string is the documentation**, and it appears in every run's short
   summary. It says what has been *ruled out*, not just that something is wrong.
-- **The count is the gate.** "Exactly three xfails, the same three" is the
+- **The count is the gate.** "Exactly *two* xfails, the same two" is the
   acceptance criterion for any change to this repo. A new one appearing is as much
   a failure as a regression, and it catches the class of change that breaks
   something without breaking an assertion.
+
+> [!NOTE]
+> **It was three until the campaign doubled, and the third one was removed by
+> being fixed.** `test_twitchiness_is_not_skill` was xfailed because the
+> artifact it pinned had faded — at twenty stages both policies finished 6/6 and
+> the strict `>` failed. At forty stages the twitchy policy finishes **0/6**,
+> five of the six runs ending on stage 25, so the assertion holds again and the
+> marker came off.
+>
+> That is the strict xfail working exactly as designed. It went red the day the
+> claim became true, forced the question *was it fixed or did the test rot*, and
+> the answer was "fixed". Two hundred new grid cells were added in the same
+> change and every one of them was tuned rather than recorded — a fourth entry
+> would have been the first crack in the only rule keeping this suite honest.
 
 One test per grid cell rather than a loop over all of them: a loop stops at the
 first failure and hides everything after it, so one class failing three stages
 would surface as an intermittent run-level flake instead of three named cells.
 
-### The three currently recorded
+### A failing cell tells you which kind of failure it is
+
+The grid assertions call `why_not()` in their message, which replays the failing
+seeds and reports whether the hero **died** or **ran out of ticks while healthy
+with something still untouched**. Those look identical in a win count and are
+nothing alike: the first is a balance question, the second is an enemy parked
+where nothing reaches it, which no amount of tuning will fix. Three late stages
+shipped with the second fault and cost an afternoon of tuning the wrong dial.
+
+It is inside the assertion message, so Python only evaluates it when the
+assertion has already failed — the hundreds of passing cells pay nothing.
+
+### The two currently recorded
 
 | Test | Why |
 | --- | --- |
 | `test_every_stage_is_clearable_by_every_class[magician-stage12]` | clears The Terraces on 2/3 seeds — open balance work |
 | `test_every_class_can_finish_the_campaign[magician]` | completes 1/3 runs, dying on stage 12 both times |
-| `test_twitchiness_is_not_skill` | the artifact it pinned has stopped holding — both policies now finish 6/6, so the strict `>` fails. The assertion message asks the right question (*reconsider which policy is the reference*), so it is a live question rather than a broken test |
+
+Both are the Magician, both are in acts I–IV, and neither moved when the
+campaign doubled — the second half cannot help a class that dies on stage 12.
+Extending the run made the diagnosis sharper, though: across six seeds the
+Magician's losses land on stages 12, 12, 17 and 18 and **raising its
+between-stage heal by half changes none of them**, which rules the run layer out
+and points back at commitment, exactly where `UNTUNED_STAGES` already says the
+fix has to come from.
 
 ## Adding a test
 

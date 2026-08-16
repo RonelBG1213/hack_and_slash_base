@@ -453,6 +453,12 @@ def test_no_shop_row_overflows_the_panel(atlas) -> None:
 
 
 def test_the_shop_rows_and_hint_fit_above_the_hud(atlas) -> None:
+    """Measured against the fullest the shop ever gets, which is the late shelf.
+
+    `stock()` rather than `available(run)` on purpose: the panel grows a row in
+    the second half of the campaign, and the layout has to hold for the tallest
+    version rather than the one that happens to be on screen first.
+    """
     from hack_and_slash.game import shop
     from hack_and_slash.render import shop_panel as panel
 
@@ -460,15 +466,42 @@ def test_the_shop_rows_and_hint_fit_above_the_hud(atlas) -> None:
     assert bottom <= config.VIEWPORT_H, "the shop's hint line is drawn under the HUD"
 
 
-# --- promotion ---------------------------------------------------------------
-def final_stage_scene(atlas, hero: str = "knight") -> PlayScene:
-    """A scene sitting on the last stage with the choice still open.
+def test_the_shop_has_a_key_for_every_row_it_can_draw(atlas) -> None:
+    """The half of the row/key contract that lives with the keys.
 
-    `start_stage` is 0-based, so 19 is stage twenty. Built this way rather than
-    by clearing nineteen stages because what is under test is the panel, not the
-    campaign.
+    A good added to `data/loot.json` without a key here is a row a player can
+    read and cannot buy, and nothing else would say so.
     """
-    scene = PlayScene(campaign(), BESTIARY, atlas, start_stage=19, hero_type_id=hero)
+    from hack_and_slash.game import shop
+    from hack_and_slash.render import shop_panel as panel
+
+    assert len(shop.stock()) <= len(panel.ROW_KEYS), (
+        f"the shop stocks {len(shop.stock())} goods and the panel has "
+        f"{len(panel.ROW_KEYS)} keys"
+    )
+
+
+# --- promotion ---------------------------------------------------------------
+def promotion_scene(atlas, hero: str = "knight") -> PlayScene:
+    """A scene sitting on the stage the fork opens onto, choice still open.
+
+    `start_stage` is 0-based and `PROMOTION_STAGE` is 1-based, hence the offset.
+    Taken from the constant rather than written out: this used to say 19 for
+    "stage twenty", which was a number that had to be found and changed by hand
+    every time the campaign moved.
+
+    Built by starting there rather than by clearing twenty stages, because what
+    is under test is the panel, not the campaign.
+    """
+    from hack_and_slash.game import jobs
+
+    scene = PlayScene(
+        campaign(),
+        BESTIARY,
+        atlas,
+        start_stage=jobs.PROMOTION_STAGE - 1,
+        hero_type_id=hero,
+    )
     scene.promoting = True
     return scene
 
@@ -478,7 +511,7 @@ def test_the_job_panel_draws_for_every_class(atlas) -> None:
     could be the one with a name too long or a sprite that does not exist."""
     surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
     for cls in BESTIARY.hero_classes:
-        scene = final_stage_scene(atlas, cls.id)
+        scene = promotion_scene(atlas, cls.id)
         scene.draw(surface)
         assert not is_blank(surface), f"the {cls.id}'s promotion panel drew nothing"
 
@@ -489,7 +522,7 @@ def test_the_job_panel_draws_nothing_when_there_is_nothing_to_choose(atlas) -> N
     from hack_and_slash.game import jobs
     from hack_and_slash.render.job_panel import JobPanel
 
-    scene = final_stage_scene(atlas)
+    scene = promotion_scene(atlas)
     jobs.promote(scene.run, jobs.offers_for(scene.run)[0])
     assert jobs.offers_for(scene.run) == ()
 
@@ -500,7 +533,7 @@ def test_the_job_panel_draws_nothing_when_there_is_nothing_to_choose(atlas) -> N
 
 
 def test_a_number_key_takes_that_path(atlas) -> None:
-    scene = final_stage_scene(atlas, "rogue")
+    scene = promotion_scene(atlas, "rogue")
     hero = scene.world.hero
 
     scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_2))
@@ -510,34 +543,50 @@ def test_a_number_key_takes_that_path(atlas) -> None:
     assert not scene.promoting, "the panel stayed up after a choice was made"
 
 
-def test_enter_declines_and_leaves_the_class_alone(atlas) -> None:
-    """Declining is a real answer, not a way out of a menu: a promoted class is
-    one nothing has measured."""
-    scene = final_stage_scene(atlas)
+def test_enter_does_not_dismiss_the_choice(atlas) -> None:
+    """The one screen in the game with no way out.
+
+    Enter has meant "go" on the previous twenty transitions, so it is the key
+    most likely to be pressed here by habit -- and half a campaign now sits
+    behind this panel, tuned for a class the player would be declining to
+    become. It used to close this panel, back when the answer only had to hold
+    for one fight.
+    """
+    scene = promotion_scene(atlas)
 
     scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
 
-    assert not scene.promoting
+    assert scene.promoting, "Enter dismissed the promotion panel"
     assert scene.run.job_id == ""
     assert scene.world.hero.type is BESTIARY["knight"]
 
 
-def test_escape_declines_rather_than_leaving_the_run(atlas) -> None:
-    """Same override the shop makes, and for a stronger reason -- this is the
-    last stage of a run somebody has spent twenty minutes on."""
+def test_escape_neither_declines_nor_leaves_the_run(atlas) -> None:
+    """Escape is swallowed here exactly as it is behind the shop.
+
+    Two separate wrong outcomes to rule out: dropping somebody out of a run they
+    were only trying to shut a panel on, and declining a fork there is no
+    declining.
+    """
+    from hack_and_slash.game import jobs
+
     exited = []
     scene = PlayScene(
-        campaign(), BESTIARY, atlas, start_stage=19, on_exit=lambda: exited.append(True)
+        campaign(),
+        BESTIARY,
+        atlas,
+        start_stage=jobs.PROMOTION_STAGE - 1,
+        on_exit=lambda: exited.append(True),
     )
     scene.promoting = True
 
     assert scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)) is None
-    assert not scene.promoting
+    assert scene.promoting, "Escape dismissed the promotion panel"
     assert not exited
 
 
 def test_the_panel_pauses_the_world_and_swallows_the_controls(atlas) -> None:
-    scene = final_stage_scene(atlas)
+    scene = promotion_scene(atlas)
     before = scene.world.tick
 
     scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_f))
@@ -553,7 +602,7 @@ def test_the_panel_takes_keys_ahead_of_the_shop(atlas) -> None:
     Poultice in the shop underneath."""
     from hack_and_slash.game import shop
 
-    scene = final_stage_scene(atlas)
+    scene = promotion_scene(atlas)
     scene.shopping = True
     scene.run.gold = 100000
     scene.world.hero.hp = 10
@@ -564,21 +613,33 @@ def test_the_panel_takes_keys_ahead_of_the_shop(atlas) -> None:
     assert shop.bought(scene.run, shop.stock()[0]) == 0, "the shop took the keypress too"
 
 
-def test_the_choice_is_offered_on_the_way_into_the_last_stage(atlas) -> None:
-    """And not before. Clearing stage one opens the shop and nothing else."""
-    scene = PlayScene(campaign(), BESTIARY, atlas)
-    for enemy in scene.world.enemies():
-        enemy.hp = 0
-    scene.update(1.0)
-    assert scene.shopping
-    assert not scene.promoting, "promotion was offered on the way into stage two"
+def test_the_choice_is_offered_on_one_transition_and_no_other(atlas) -> None:
+    """Clearing stage one opens the shop and nothing else; clearing the stage
+    before the fork opens both.
 
-    late = PlayScene(campaign(), BESTIARY, atlas, start_stage=len(campaign()) - 2)
-    for enemy in late.world.enemies():
-        enemy.hp = 0
-    late.update(1.0)
-    assert late.run.on_final_stage
-    assert late.promoting, "the last stage did not offer a promotion"
+    The three cases are the whole contract: too early, the transition itself,
+    and any transition after it -- the last one matters because `just_advanced`
+    fires on all of them and only `at_promotion_point` tells them apart.
+    """
+    from hack_and_slash.game import jobs
+
+    def cleared(start: int) -> PlayScene:
+        scene = PlayScene(campaign(), BESTIARY, atlas, start_stage=start)
+        for enemy in scene.world.enemies():
+            enemy.hp = 0
+        scene.update(1.0)
+        return scene
+
+    early = cleared(0)
+    assert early.shopping
+    assert not early.promoting, "promotion was offered on the way into stage two"
+
+    fork = cleared(jobs.PROMOTION_STAGE - 2)
+    assert fork.run.stage_number == jobs.PROMOTION_STAGE
+    assert fork.promoting, "the fork did not offer a promotion"
+
+    after = cleared(jobs.PROMOTION_STAGE)
+    assert not after.promoting, "promotion was offered a second time"
 
 
 def test_no_job_column_overflows_its_half_of_the_panel(atlas) -> None:

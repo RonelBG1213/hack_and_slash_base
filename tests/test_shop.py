@@ -48,7 +48,7 @@ def good(good_id: str) -> shop.Good:
 
 # --- the shelves -------------------------------------------------------------
 def test_the_shop_stocks_what_the_data_says() -> None:
-    assert [g.id for g in shop.stock()] == ["poultice", "tonic", "charm"]
+    assert [g.id for g in shop.stock()] == ["poultice", "tonic", "charm", "elixir"]
 
 
 def test_every_good_has_a_price_an_amount_and_something_to_say() -> None:
@@ -78,11 +78,13 @@ def test_stock_and_effects_are_checked_against_each_other(monkeypatch) -> None:
     broken = loot.LootTable(
         gold_base=1.0, floor_step=0.0, variance=0.0, item_chance=0.0, scatter=0.0,
         tiers=loot.table().tiers,
-        shop={"elixir": {"name": "Elixir", "price": 10, "amount": 1, "limit": 0}},
+        # A name nothing in EFFECTS knows. It used to be "elixir", which became
+        # a real good -- so this now names something no shelf will ever hold.
+        shop={"philtre": {"name": "Philtre", "price": 10, "amount": 1, "limit": 0}},
     )
     monkeypatch.setattr(loot, "_TABLE", broken)
 
-    with pytest.raises(KeyError, match="elixir"):
+    with pytest.raises(KeyError, match="philtre"):
         shop.stock()
 
 
@@ -182,3 +184,64 @@ def test_what_is_bought_carries_but_a_restart_does_not_keep_it() -> None:
     assert fresh.purchases == {}
     assert fresh.bonus_heal == 0
     assert fresh.gold_find == 0.0
+
+
+# --- the late shelf ----------------------------------------------------------
+# A forty-stage run banks roughly three times what a twenty-stage one did, so
+# the three original goods were bought out around the halfway mark and left
+# twenty stages with nothing to decide. The Elixir is the answer, and it is
+# stocked by stage number rather than by gold -- so it arrives at a point in the
+# campaign rather than at a point in somebody's luck.
+def run_on_stage(stage_number: int, gold: int = 100000) -> Run:
+    run = Run.start(campaign(40), BESTIARY, at_stage=stage_number - 1)
+    run.gold = gold
+    return run
+
+
+def test_the_late_good_is_not_on_the_shelves_early() -> None:
+    early = shop.available(run_on_stage(1))
+    assert [g.id for g in early] == ["poultice", "tonic", "charm"]
+
+
+def test_the_late_good_appears_on_the_stage_its_data_names() -> None:
+    unlocks = good("elixir").unlocks_at
+    assert unlocks > 1, "an unlock of 0 or 1 means the good is simply always stocked"
+
+    assert "elixir" not in [g.id for g in shop.available(run_on_stage(unlocks - 1))]
+    assert "elixir" in [g.id for g in shop.available(run_on_stage(unlocks))]
+
+
+def test_the_late_good_cannot_be_bought_before_it_is_stocked() -> None:
+    """The panel would not draw a row for it, but nothing stops a caller.
+
+    Worth pinning rather than assuming: `available` is what the panel and the
+    key handler agree on, and a `buy` that ignored it would make the shelf
+    cosmetic.
+    """
+    run = run_on_stage(1)
+    assert not shop.can_buy(run, good("elixir"))
+    assert not shop.buy(run, good("elixir"))
+    assert run.bonus_heal == 0
+
+
+def test_the_late_good_adds_to_the_heal_the_tonic_writes() -> None:
+    """The same dial on purpose. What the late run is short of is not a
+    mechanic, it is anything left worth buying."""
+    run = run_on_stage(good("elixir").unlocks_at)
+
+    assert shop.buy(run, good("tonic"))
+    assert shop.buy(run, good("elixir"))
+    assert run.bonus_heal == good("tonic").amount + good("elixir").amount
+
+
+def test_available_is_stock_filtered_by_where_the_run_is() -> None:
+    """What `available` exists to guarantee.
+
+    The panel draws this list and the key handler indexes into it, so a row and
+    its key are the same digit in both halves of the campaign. The other half of
+    that contract -- that the panel has a key for every row it can draw -- is in
+    `test_render.py`, where the keys live.
+    """
+    for stage_number in (1, good("elixir").unlocks_at, 40):
+        rows = shop.available(run_on_stage(stage_number))
+        assert rows == tuple(g for g in shop.stock() if g.unlocks_at <= stage_number)

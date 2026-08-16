@@ -18,11 +18,13 @@ import pytest
 from hack_and_slash import config
 from hack_and_slash.core import campaign_io
 from hack_and_slash.core.vec2 import Vec2
+from hack_and_slash.game import jobs
 from hack_and_slash.game.autoplay import (
     REACTION_SLOPPY,
     Autoplay,
     autoplay,
     play_out,
+    play_run_out,
     reckless,
 )
 from hack_and_slash.game.intent import NOTHING, Intent
@@ -39,11 +41,12 @@ from .helpers import BESTIARY, HERO, open_room
 #: hanging the suite.
 TICK_LIMIT = 9000
 
-#: A whole run is twenty stages, so it needs headroom the single-stage limit
-#: does not. Still a guard, not a target -- a healthy run finishes in well under
-#: half of it, and the value exists so a run that has stopped being winnable
-#: fails the suite instead of hanging it.
-RUN_TICK_LIMIT = 120000
+#: A whole run is forty stages, so it needs headroom the single-stage limit does
+#: not. Still a guard, not a target -- a healthy run finishes in well under half
+#: of it, and the value exists so a run that has stopped being winnable fails
+#: the suite instead of hanging it. Doubled with the campaign; it was 120000 at
+#: twenty stages and the same fraction of a real run either way.
+RUN_TICK_LIMIT = 240000
 
 #: Enough seeds that a bracket assertion is about the balance rather than about
 #: one lucky fight. The sim is deterministic, so each is a fixed outcome.
@@ -58,15 +61,55 @@ CLASS_SEEDS = range(3)
 
 #: The stage the game was originally tuned around, and the only one whose
 #: numbers are on record. Index 2 -- "The Gauntlet". Deliberately unmoved by the
-#: expansion to twenty stages: it is the single fixed point the balance harness
-#: can be checked against, and it is only worth anything if it stays put.
+#: expansion to twenty stages and again by the expansion to forty: it is the
+#: single fixed point the balance harness can be checked against, and it is only
+#: worth anything if it stays put.
 RECORDED_STAGE = 2
 
-#: Bosses close acts. Zero-based indices, so stages 5, 10, 15 and 20.
-BOSS_STAGES = (4, 9, 14, 19)
+#: The shape of the campaign, derived from one number rather than written out
+#: three times. Eight acts of five: four stages that build and a boss on the
+#: fifth. Written this way because the four separate literals it replaced --
+#: boss indices, act starts, a stage count and a boss count -- could disagree
+#: with each other, and three of them were bare tuples that had to be found by
+#: hand when the campaign doubled.
+STAGES_PER_ACT = 5
+ACT_COUNT = 8
+STAGE_COUNT = STAGES_PER_ACT * ACT_COUNT
+
+#: Where each act begins. Zero-based, so act I starts at 0 and act VIII at 35.
+ACT_STARTS = tuple(act * STAGES_PER_ACT for act in range(ACT_COUNT))
+
+#: Bosses close acts. Zero-based indices, so stages 5, 10, 15, 20, 25, 30, 35
+#: and 40 -- and note stage 20 is the one the fork follows, so the four after it
+#: are fought by an advanced class and the four before it are not.
+BOSS_STAGES = tuple(start + STAGES_PER_ACT - 1 for start in ACT_STARTS)
+
+#: The two halves of the campaign, split at the fork, as zero-based indices.
+#:
+#: This is the single most important line in the file for anyone extending it.
+#: A stage is not "hard" or "easy" in the abstract -- it is hard *for the hero
+#: that fights it*, and which hero that is changes exactly once, at
+#: `jobs.PROMOTION_STAGE`. Sweeping a base class over stage 30 measures a
+#: matchup the game cannot produce, and every failure it reports is a fiction.
+BASE_STAGES = range(jobs.PROMOTION_STAGE - 1)
+ADVANCED_STAGES = range(jobs.PROMOTION_STAGE - 1, STAGE_COUNT)
+
+#: Two seeds for the advanced grid rather than the three the base grid uses.
+#:
+#: The shape of the cost is what decides this. The base grid is four classes
+#: over twenty stages; the advanced grid is *ten* over twenty, because a
+#: promotion doubles the roster, and at three seeds it would be six hundred
+#: stage plays on every run of the suite.
+#:
+#: What two seeds buys and what it costs is on record for the base grid at
+#: three: the Magician also fails stages 14 and 17 at six seeds and neither
+#: shows up in the suite. Expect the same here -- this catches a class that
+#: cannot clear a stage, not one that clears it half the time.
+#: `tools/balance.py` is where the exhaustive version lives.
+ADVANCED_SEEDS = range(2)
 
 
-#: Read once. Twenty stages off the disk, on every one of several hundred calls,
+#: Read once. Forty stages off the disk, on every one of several hundred calls,
 #: was the slowest thing in the suite by a wide margin -- and the campaign is
 #: immutable, so there is nothing to be gained by rereading it.
 _CAMPAIGN = campaign_io.load(config.LEVELS_DIR / "campaign.json")
@@ -99,20 +142,83 @@ def wins_across_seeds(
     return won
 
 
-def play_run(policy, seed: int, hero: str = DEFAULT_HERO) -> Run:
-    """A whole run, stage one to the end, with health carrying between."""
+def play_run(policy, seed: int, hero: str = DEFAULT_HERO, job: str = "") -> Run:
+    """A whole run, stage one to the end, with health carrying between.
+
+    `job` is the branch taken at the fork. Left empty the run never promotes,
+    which is what every bracket recorded before acts V-VIII existed assumes --
+    so those brackets keep measuring what they measured.
+    """
     run = Run.start(campaign(), BESTIARY, seed=seed, hero_type_id=hero)
-    for _ in range(RUN_TICK_LIMIT):
-        if run.is_over:
-            break
-        step(run.world, policy(run.world))
-        run.settle()
+    play_run_out(run, policy, RUN_TICK_LIMIT, job)
     return run
 
 
-def runs_won(policy, hero: str = DEFAULT_HERO, seeds=SEEDS) -> int:
+def why_not(index: int, hero: str, seeds=SEEDS) -> str:
+    """Why a stage did not clear, in the terms that tell the two causes apart.
+
+    Only ever called from inside a failing assertion's message, which Python
+    does not evaluate unless the assertion fails -- so this costs nothing on the
+    hundreds of cells that pass.
+
+    It exists because the two causes look identical in a win count and are
+    nothing alike:
+
+      * The hero died. That is a balance question, and the levers are in
+        `docs/balance.md` in the order to reach for them.
+      * The hero ran out of ticks while healthy, with something still at full
+        health. That is not difficulty at all -- it is an enemy parked outside
+        its own aggro radius or in a pocket with no line of sight, which nothing
+        paths around because nothing in this game paths. The stage cannot be
+        finished by anybody and no amount of tuning will fix it.
+
+    Three late stages shipped with the second fault during the acts V-VIII pass
+    and cost an afternoon before somebody counted what was still alive.
+    """
+    lines = []
+    for seed in seeds:
+        world = stage_world(index, seed, hero)
+        ticks = play(world, autoplay)
+        if world.outcome is Outcome.WON:
+            continue
+        alive = [e for e in world.enemies() if e.is_alive]
+        untouched = [e for e in alive if e.hp == e.type.hp]
+        hero_hp = world.hero.hp if world.hero else 0
+        if world.hero is None or hero_hp <= 0:
+            lines.append(f"seed {seed}: died on tick {ticks}, {len(alive)} still up")
+        else:
+            kinds = sorted({e.type.id for e in untouched})
+            lines.append(
+                f"seed {seed}: ran out of ticks on {hero_hp} hp with "
+                f"{len(alive)} alive and {len(untouched)} NEVER TOUCHED "
+                f"({', '.join(kinds) or 'none'}) -- likely a spawn nothing "
+                "reaches rather than a difficulty problem"
+            )
+    return "\n    " + "\n    ".join(lines)
+
+
+def first_branch(hero: str) -> str:
+    """The promotion on key 1 for this class, or "" if it has none.
+
+    Every whole-run bracket takes this one. It has to take *something* -- a run
+    that declines cannot happen at a keyboard either, and half the campaign is
+    tuned for a promoted hero -- and picking by index rather than by name keeps
+    the choice out of this file: index 0 is what `data/entities.json` lists
+    first, which is what the panel puts on key 1.
+
+    The other branch is not left unmeasured; it is covered per stage by the
+    advanced grid below, which runs all ten. What is not covered is a *run*
+    through the second branch, and that is the affordable half of the trade --
+    a whole forty-stage run is a hundred times the work of one stage.
+    """
+    offers = BESTIARY.promotions_for(hero)
+    return offers[0].id if offers else ""
+
+
+def runs_won(policy, hero: str = DEFAULT_HERO, seeds=SEEDS, job: str | None = None) -> int:
+    branch = first_branch(hero) if job is None else job
     return sum(
-        play_run(policy, seed, hero).outcome is RunOutcome.WON for seed in seeds
+        play_run(policy, seed, hero, branch).outcome is RunOutcome.WON for seed in seeds
     )
 
 
@@ -193,16 +299,6 @@ def test_reaction_time_is_not_what_decides_this_fight() -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the artifact this pins has stopped holding: both policies now finish "
-        "6/6 runs, so the strict > fails. That is the outcome the assertion "
-        "message itself asks for -- reconsider which policy is the reference -- "
-        "and it is a live question rather than a broken test, so it is recorded "
-        "here instead of deleted."
-    ),
-)
 def test_twitchiness_is_not_skill() -> None:
     """Why the reference hero is not the one with the fastest reflexes.
 
@@ -210,6 +306,22 @@ def test_twitchiness_is_not_skill() -> None:
     a hero that answers every telegraph instantly never gets a swing in. It is a
     property of the policy, not of the player it stands in for, and it is pinned
     here so nobody "improves" the reference hero by making it twitchier.
+
+    **This was a strict xfail and is not any more.** At twenty stages the
+    artifact had faded out: both policies finished 6/6 runs, the strict `>`
+    failed, and rather than delete the test it was recorded as a live question
+    -- *reconsider which policy is the reference*.
+
+    Forty stages answered it, emphatically. The twitchy policy now finishes
+    **0/6** where the reference finishes 6/6, and five of its six runs end on
+    stage 25 -- the Herald, the first boss on the far side of the fork. That is
+    the artifact in its purest form: a hero that rolls at every telegraph
+    against a boss that is telegraphing half the time never swings back, and
+    the four extra bosses gave it four more places to prove it.
+
+    The xfail was doing its job the whole time. It went red the moment the claim
+    became true again, which is the entire argument for `strict=True`, and the
+    decision it forced was "it was fixed" rather than "the test rotted".
     """
     from hack_and_slash.game.autoplay import twitchy
 
@@ -244,13 +356,22 @@ def test_every_stage_is_clearable_on_its_own() -> None:
     A run can be winnable overall while one stage in the middle is a wall the
     player only gets past because the two before it were generous. Each stage is
     checked from full health, which is the fairest reading each can get.
+
+    The reference class only covers the stages it can actually reach. Nobody
+    fights stage 21 as a Knight -- the fork is compulsory and it is behind them
+    by then -- so checking those twenty with a base class would be measuring a
+    hero the game never produces, and failing on it would be reporting a
+    difficulty problem that does not exist. `BASE_STAGES` is that boundary, and
+    `test_every_late_stage_is_clearable_by_every_advanced_class` is the other
+    side of it.
     """
     stages = campaign().stages
-    for index, stage in enumerate(stages):
+    for index in BASE_STAGES:
         won = wins_across_seeds(autoplay, index)
         assert won == len(SEEDS), (
-            f"stage {index + 1} ({stage.name}) is clearable on only "
+            f"stage {index + 1} ({stages[index].name}) is clearable on only "
             f"{won}/{len(SEEDS)} seeds from full health"
+            + why_not(index, DEFAULT_HERO)
         )
 
 
@@ -316,7 +437,7 @@ def _marks(reason: str | None):
 
 
 def _stage_grid():
-    """Every non-reference class against every stage, one test each.
+    """Every non-reference class against every stage it can reach, one test each.
 
     One case per cell rather than a loop over all of them, so a class that
     fails on one stage reports as that one cell rather than stopping the sweep
@@ -324,14 +445,49 @@ def _stage_grid():
     this grid exists to fix: the reference-class version above walks the stages
     in a loop, and until this was added a class could fail three separate
     stages and surface only as an intermittent run-level failure.
+
+    `BASE_STAGES` rather than the whole campaign -- a base class never fights
+    past the fork. See the note on that constant.
     """
     for hero in OTHER_CLASSES:
-        for index in range(len(campaign())):
+        for index in BASE_STAGES:
             yield pytest.param(
                 hero,
                 index,
                 marks=_marks(UNTUNED_STAGES.get((hero, index))),
                 id=f"{hero}-stage{index + 1}",
+            )
+
+
+def _advanced_stage_grid():
+    """Every advanced class against every stage after the fork.
+
+    The other half of the grid, and the half that did not exist while promotion
+    bought one fight. Ten classes rather than five, because a fork doubles the
+    roster, and twenty stages rather than forty, because none of these ten is
+    ever the hero before stage 21.
+
+    No promotion machinery is involved and none is needed: `World` takes a
+    `hero_type_id`, the bestiary holds the advanced classes, so a cell is just
+    that class dropped into that arena at full health. Promotion only has to
+    actually happen for the run-level bracket, where the carry between stages
+    is the thing under test.
+
+    What this measures is narrower than it looks, and the narrowness is the
+    point. The reference bot presses the light attack and nothing else, and an
+    advanced class's light is the one it inherited -- so this is the *base*
+    class's swing with the advanced class's health and body. The twenty new
+    heavies and ultimates are still unmeasured, exactly as the first fifteen
+    attacks are, which is deliberate: it means acts V-VIII are clearable
+    without them, and the new kit is upside rather than a requirement.
+    """
+    for advanced in BESTIARY.advanced_classes:
+        for index in ADVANCED_STAGES:
+            yield pytest.param(
+                advanced.id,
+                index,
+                marks=_marks(UNTUNED_STAGES.get((advanced.id, index))),
+                id=f"{advanced.id}-stage{index + 1}",
             )
 
 
@@ -349,6 +505,25 @@ def test_every_stage_is_clearable_by_every_class(hero: str, index: int) -> None:
     assert won == len(CLASS_SEEDS), (
         f"the {hero} clears stage {index + 1} ({campaign()[index].name}) on only "
         f"{won}/{len(CLASS_SEEDS)} seeds from full health"
+        + why_not(index, hero, CLASS_SEEDS)
+    )
+
+
+@pytest.mark.parametrize("hero,index", list(_advanced_stage_grid()))
+def test_every_late_stage_is_clearable_by_every_advanced_class(
+    hero: str, index: int
+) -> None:
+    """The same question for the half of the campaign nothing used to reach.
+
+    A branch that cannot clear act VII is not a choice, it is a run ended by a
+    keypress twenty stages earlier -- and the promotion panel gives no warning
+    and takes no refusals. Ten of these ship; ten of them have to work.
+    """
+    won = wins_across_seeds(autoplay, index, hero, ADVANCED_SEEDS)
+    assert won == len(ADVANCED_SEEDS), (
+        f"the {hero} clears stage {index + 1} ({campaign()[index].name}) on only "
+        f"{won}/{len(ADVANCED_SEEDS)} seeds from full health"
+        + why_not(index, hero, ADVANCED_SEEDS)
     )
 
 
@@ -426,10 +601,11 @@ def test_a_run_carries_damage_forward() -> None:
     Without this, a run is four separate fights and the whole layer is
     decoration.
     """
-    run = play_run(autoplay, seed=3)
+    run = play_run(autoplay, seed=3, job=first_branch(DEFAULT_HERO))
     assert run.outcome is RunOutcome.WON
-    # Finishing a twenty-stage run on full health would mean nothing ever stuck.
-    assert run.world.hero.hp < HERO.hp
+    # Finishing a forty-stage run on full health would mean nothing ever stuck.
+    # Measured against the promoted maximum, which is the hero that finishes.
+    assert run.world.hero.hp < run.hero_type.hp
 
 
 def test_the_heal_between_stages_is_the_class_s_own() -> None:
@@ -473,15 +649,15 @@ def test_the_difficulty_curve_rises_within_each_act() -> None:
     excluded entirely: they are deliberately the sparsest in the game.
     """
     stages = campaign().stages
-    for act, start in enumerate((0, 5, 10, 15), start=1):
-        build = stages[start : start + 4]
+    for act, start in enumerate(ACT_STARTS, start=1):
+        build = stages[start : start + STAGES_PER_ACT - 1]
         counts = [len(stage.enemy_spawns) for stage in build]
         assert counts == sorted(counts), f"act {act} enemy counts do not rise: {counts}"
         assert counts[0] < counts[-1], f"act {act} does not build: {counts}"
 
 
 def test_every_act_ends_on_a_boss_and_nothing_else_does() -> None:
-    """Four acts of five, and the shape has to be real rather than intended.
+    """Eight acts of five, and the shape has to be real rather than intended.
 
     A boss turning up mid-act is the loud failure; the quiet one is an act
     ending on an ordinary stage because a `Stage` entry was inserted rather than
@@ -490,7 +666,9 @@ def test_every_act_ends_on_a_boss_and_nothing_else_does() -> None:
     bosses = {t.id for t in BESTIARY.types.values() if t.brain == "boss"}
     stages = campaign().stages
 
-    assert len(stages) == 20, f"the campaign is {len(stages)} stages, not 20"
+    assert len(stages) == STAGE_COUNT, (
+        f"the campaign is {len(stages)} stages, not {STAGE_COUNT}"
+    )
 
     for index, stage in enumerate(stages):
         has_boss = any(spawn.type_id in bosses for spawn in stage.enemy_spawns)
@@ -501,7 +679,7 @@ def test_every_act_ends_on_a_boss_and_nothing_else_does() -> None:
 
 
 def test_no_boss_is_used_twice() -> None:
-    """Four acts, four bosses. Reusing one would make an act's ending a repeat
+    """Eight acts, eight bosses. Reusing one would make an act's ending a repeat
     of an earlier one, which is the single thing a boss stage cannot be."""
     bosses = {t.id for t in BESTIARY.types.values() if t.brain == "boss"}
     used = [
@@ -510,7 +688,64 @@ def test_no_boss_is_used_twice() -> None:
         for spawn in stage.enemy_spawns
         if spawn.type_id in bosses
     ]
-    assert len(used) == len(set(used)) == 4, f"bosses used: {used}"
+    assert len(used) == len(set(used)) == len(BOSS_STAGES), f"bosses used: {used}"
+
+
+def test_no_boss_stage_is_escorted_by_anything_ranged() -> None:
+    """A standing constraint on level design, enforced for the first time here.
+
+    A ranged escort never becomes the nearest thing in the room, so it is never
+    what the player is fighting, so it never dies -- it is a damage tax for the
+    length of the fight with no answer available. The act III boss stage was
+    drafted with two bowmen and was unwinnable on every seed.
+
+    It has been a comment in three files and a rule in nobody's way since. Eight
+    boss stages is four more chances to get it wrong than the rule survived the
+    first time, and the failure is a stage that is simply impossible rather than
+    one that is merely hard.
+    """
+    ranged = {t.id for t in BESTIARY.types.values() if t.brain == "archer"}
+    stages = campaign().stages
+
+    assert ranged, "no ranged enemies found -- this test has stopped checking anything"
+
+    for index in BOSS_STAGES:
+        stage = stages[index]
+        offenders = sorted({s.type_id for s in stage.enemy_spawns if s.type_id in ranged})
+        assert not offenders, (
+            f"stage {index + 1} ({stage.name}) escorts its boss with {offenders}; "
+            "boss stages take melee escorts only"
+        )
+
+
+def test_a_boss_outranks_its_own_escort() -> None:
+    """The per-stage half of the level ladder, and the one loot actually sees.
+
+    A boss and the grunts around it share a floor number, so depth cannot tell
+    them apart -- `level` is the only thing that can, and a boss kill paying an
+    escort's wage is the exact failure the field exists to prevent.
+
+    Checked per stage rather than across the bestiary because that is the only
+    place the comparison means anything: the Warden is a level 5 fought on stage
+    5 and the stalker a level 6 first met on stage 26, and no kill ever weighs
+    those two against each other.
+    """
+    stages = campaign().stages
+
+    for index in BOSS_STAGES:
+        stage = stages[index]
+        levels = [BESTIARY[s.type_id].level for s in stage.enemy_spawns]
+        boss = max(
+            BESTIARY[s.type_id].level
+            for s in stage.enemy_spawns
+            if BESTIARY[s.type_id].brain == "boss"
+        )
+        escort = [lvl for lvl in levels if lvl != boss]
+        assert escort, f"stage {index + 1} ({stage.name}) has no escort at all"
+        assert boss > max(escort), (
+            f"stage {index + 1} ({stage.name}): the boss ranks {boss} and its "
+            f"escort ranks up to {max(escort)}"
+        )
 
 
 def test_standing_still_gets_you_killed() -> None:

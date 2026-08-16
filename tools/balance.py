@@ -61,11 +61,12 @@ from hack_and_slash.game.autoplay import (  # noqa: E402
     Autoplay,
     autoplay,
     play_out,
+    play_run_out,
     reckless,
 )
+from hack_and_slash.game import jobs  # noqa: E402
 from hack_and_slash.game.entities import DEFAULT_HERO, load_bestiary  # noqa: E402
 from hack_and_slash.game.run import Run, RunOutcome  # noqa: E402
-from hack_and_slash.game.sim import step  # noqa: E402
 from hack_and_slash.game.world import Outcome, World  # noqa: E402
 
 LATENCIES = [
@@ -75,9 +76,9 @@ LATENCIES = [
     ("asleep", 40),
 ]
 
-#: Twenty stages, four of them bosses. Three times the old four-stage guard,
+#: Forty stages, eight of them bosses. Six times the old four-stage guard,
 #: which a healthy run still finishes in well under half of.
-RUN_TICK_LIMIT = 120000
+RUN_TICK_LIMIT = 240000
 
 HEADER = f"{'':>16}  {'won':>7}  {'median':>7}  {'median hp':>9}  {'worst hp':>8}"
 RULE = "  " + "-" * 56
@@ -106,17 +107,19 @@ def measure_stage(level, bestiary, policy, seeds: range, hero: str = DEFAULT_HER
     return summarise(wins, len(seeds), seconds, hp_left)
 
 
-def measure_run(campaign, bestiary, policy, seeds: range, hero: str = DEFAULT_HERO) -> dict:
-    """A whole run, with health carrying between stages."""
+def measure_run(
+    campaign, bestiary, policy, seeds: range, hero: str = DEFAULT_HERO, job: str = ""
+) -> dict:
+    """A whole run, with health carrying between stages.
+
+    `job` is the branch taken at the fork. Empty means the run never promotes --
+    which is what every number recorded before acts V-VIII was measured with,
+    and is why the first half of the campaign still reads the same here.
+    """
     wins, seconds, hp_left = 0, [], []
     for seed in seeds:
         run = Run.start(campaign, bestiary, seed=seed, hero_type_id=hero)
-        ticks = 0
-        for ticks in range(RUN_TICK_LIMIT):
-            if run.is_over:
-                break
-            step(run.world, policy(run.world))
-            run.settle()
+        ticks = play_run_out(run, policy, RUN_TICK_LIMIT, job)
         if run.outcome is RunOutcome.WON:
             wins += 1
             seconds.append(ticks / config.TICKS_PER_SEC)
@@ -124,21 +127,19 @@ def measure_run(campaign, bestiary, policy, seeds: range, hero: str = DEFAULT_HE
     return summarise(wins, len(seeds), seconds, hp_left)
 
 
-def furthest_stage(campaign, bestiary, policy, seeds: range, hero: str) -> tuple[int, str]:
+def furthest_stage(
+    campaign, bestiary, policy, seeds: range, hero: str, job: str = ""
+) -> tuple[int, str]:
     """Where the worst run of the set died, for a class that cannot finish.
 
-    A row reading 0/8 says a class is broken but not where, and with twenty
-    stages "somewhere" is not a useful answer. This gives the tuning pass the
-    stage to look at first.
+    A row reading 0/8 says a class is broken but not where, and with forty
+    stages "somewhere" is even less of an answer than it was with twenty. This
+    gives the tuning pass the stage to look at first.
     """
     worst, name = len(campaign), ""
     for seed in seeds:
         run = Run.start(campaign, bestiary, seed=seed, hero_type_id=hero)
-        for _ in range(RUN_TICK_LIMIT):
-            if run.is_over:
-                break
-            step(run.world, policy(run.world))
-            run.settle()
+        play_run_out(run, policy, RUN_TICK_LIMIT, job)
         if run.outcome is not RunOutcome.WON and run.index < worst:
             worst, name = run.index, run.level.name
     return worst + 1, name
@@ -154,7 +155,11 @@ def row(label: str, data: dict) -> str:
     )
 
 
-def verdict(stages: list[tuple[str, dict]], run_skilled: dict, run_tank: dict) -> list[str]:
+def verdict(
+    stages: list[tuple[str, dict]], run_skilled: dict | None, run_tank: dict | None
+) -> list[str]:
+    """What is out of balance. The run halves are None when no run was measured
+    -- `--stage N` asks about one arena and does not pay for two campaigns."""
     notes = []
 
     for name, data in stages:
@@ -163,6 +168,9 @@ def verdict(stages: list[tuple[str, dict]], run_skilled: dict, run_tank: dict) -
                 f"{name} is clearable on only {data['wins']}/{data['total']} seeds "
                 "from full health -- that stage is a wall, not a difficulty step"
             )
+
+    if run_skilled is None or run_tank is None:
+        return notes
 
     if run_skilled["wins"] < run_skilled["total"]:
         notes.append(
@@ -188,31 +196,90 @@ def verdict(stages: list[tuple[str, dict]], run_skilled: dict, run_tank: dict) -
     return notes
 
 
-def measure_class(campaign, bestiary, hero: str, seeds: range, full: bool) -> list[str]:
+def run_identity(bestiary, hero: str) -> tuple[str, str]:
+    """How to drive a whole run for this class: (class to start as, branch).
+
+    **Every run promotes**, and getting this wrong measures a hero the game
+    cannot produce -- in either direction:
+
+      * An advanced class cannot *start* a run. A run measured "as the Dark
+        Knight" is a run started as the Knight that takes that branch at the
+        fork. Started as a Dark Knight on stage 1 it is a different run
+        entirely, and the ladder's sharp(12) row disagreed with the skilled row
+        above it that uses the identical policy.
+      * A base class cannot *finish* one. The fork is compulsory, so a Knight
+        that plays all forty stages is nobody -- and it reports 1/6, because
+        acts V-VIII are tuned for the class it refused to become.
+
+    A base class takes the branch on key 1, which is what `data/entities.json`
+    lists first. The other branch is covered per stage rather than per run; a
+    forty-stage run is a hundred times the work of one stage.
+    """
+    advanced = bestiary[hero].promotes_from
+    if advanced:
+        return advanced, hero
+    offers = bestiary.promotions_for(hero)
+    return hero, offers[0].id if offers else ""
+
+
+def stages_for(campaign, bestiary, hero: str, only: int | None) -> list[int]:
+    """Which stage indices are worth sweeping for this class.
+
+    A base class is never the hero after the fork and an advanced class is never
+    the hero before it, so sweeping the whole campaign for either measures a
+    matchup the game cannot produce -- and prints a wall of zeroes that looks
+    exactly like a balance failure. `--stage N` overrides it, because the point
+    of naming a stage is to look at that stage.
+    """
+    if only is not None:
+        return [only - 1]
+
+    fork = jobs.PROMOTION_STAGE - 1
+    if bestiary[hero].promotes_from:
+        return list(range(fork, len(campaign)))
+    return list(range(min(fork, len(campaign))))
+
+
+def measure_class(
+    campaign, bestiary, hero: str, seeds: range, full: bool, only: int | None = None
+) -> list[str]:
     """One class, top to bottom. Returns whatever is out of balance about it."""
     name = bestiary[hero].name
     print(f"\n{'=' * 60}\n{name}  ({hero})\n{'=' * 60}")
+
+    indices = stages_for(campaign, bestiary, hero, only)
 
     stage_rows = []
     if full:
         print("\nper stage, skilled, entered at full health")
         print(HEADER)
         print(RULE)
-        for index, level in enumerate(campaign.stages, start=1):
+        for index in indices:
+            level = campaign[index]
             data = measure_stage(level, bestiary, autoplay, seeds, hero)
-            stage_rows.append((f"stage {index} ({level.name})", data))
-            print(row(f"{index}. {level.name}", data))
+            stage_rows.append((f"stage {index + 1} ({level.name})", data))
+            print(row(f"{index + 1}. {level.name}", data))
+
+    if only is not None:
+        # A single stage is a tuning question about that arena. Running two
+        # forty-stage campaigns to answer it is a minute of waiting for numbers
+        # nobody asked for.
+        return [f"[{hero}] {note}" for note in verdict(stage_rows, None, None)]
+
+    base, branch = run_identity(bestiary, hero)
 
     print("\nwhole run, health carrying between stages")
     print(HEADER)
     print(RULE)
-    run_skilled = measure_run(campaign, bestiary, autoplay, seeds, hero)
-    run_tank = measure_run(campaign, bestiary, reckless, seeds, hero)
+    run_skilled = measure_run(campaign, bestiary, autoplay, seeds, base, branch)
+    run_tank = measure_run(campaign, bestiary, reckless, seeds, base, branch)
     print(row("skilled", run_skilled))
     print(row("face-tank", run_tank))
 
     if run_skilled["wins"] < run_skilled["total"]:
-        stage, stage_name = furthest_stage(campaign, bestiary, autoplay, seeds, hero)
+        stage, stage_name = furthest_stage(
+            campaign, bestiary, autoplay, seeds, base, branch
+        )
         print(f"\n  worst run ended on stage {stage} ({stage_name})")
 
     return [f"[{hero}] {note}" for note in verdict(stage_rows, run_skilled, run_tank)]
@@ -236,20 +303,42 @@ def main() -> int:
         "Slow, and only worth it when a class is failing and you need to know "
         "which stage did it",
     )
+    parser.add_argument(
+        "--stage",
+        type=int,
+        default=None,
+        help="measure this one stage (1-based) and nothing else. The tuning "
+        "loop: a single arena answers in seconds where a full sweep takes "
+        "minutes, and at forty stages that is the difference between trying "
+        "six numbers and trying one",
+    )
     args = parser.parse_args()
 
     campaign = campaign_io.load(config.LEVELS_DIR / "campaign.json")
     bestiary = load_bestiary(config.ENTITIES_DATA, config.WEAPONS_DATA)
     seeds = range(args.seeds)
 
+    if args.stage is not None and not 1 <= args.stage <= len(campaign):
+        print(f"--stage must be between 1 and {len(campaign)}", file=sys.stderr)
+        return 1
+
+    # Advanced classes are measurable here and nowhere else in the tools. They
+    # are deliberately absent from `hero_classes` -- that property feeds the
+    # character select and the base half of the balance grid, and widening it
+    # would put fifteen columns on a screen laid out for five. So they are
+    # named explicitly, and 'all' still means the five you can start a run as.
     roster = [c.id for c in bestiary.hero_classes]
+    advanced = [c.id for c in bestiary.advanced_classes]
     if args.hero == "all":
         heroes = roster
-    elif args.hero in roster:
+    elif args.hero == "advanced":
+        heroes = advanced
+    elif args.hero in roster or args.hero in advanced:
         heroes = [args.hero]
     else:
         print(
-            f"unknown class '{args.hero}'; pick one of: {', '.join(roster)}, or 'all'",
+            f"unknown class '{args.hero}'; pick one of: {', '.join(roster + advanced)}, "
+            "or 'all' for the starting five, or 'advanced' for the ten they promote into",
             file=sys.stderr,
         )
         return 1
@@ -266,9 +355,16 @@ def main() -> int:
         # the others it is opt-in, since what usually matters about them is
         # whether they can finish at all.
         full = args.stages or hero == DEFAULT_HERO or len(heroes) == 1
-        notes += measure_class(campaign, bestiary, hero, seeds, full)
+        notes += measure_class(campaign, bestiary, hero, seeds, full, args.stage)
 
-    if len(heroes) == 1:
+    if len(heroes) == 1 and args.stage is None:
+        # Driven exactly as `measure_class` drives its own run, base class and
+        # branch, or the ladder is not comparable with the table above it. Asked
+        # for an advanced class it used to start the run *as* that class on
+        # stage 1 -- a hero the game cannot produce, and a whole different run --
+        # which showed up as the ladder's sharp(12) row disagreeing with the
+        # skilled row that uses the identical policy.
+        base, branch = run_identity(bestiary, heroes[0])
         print("\nreaction ladder on the run -- informational; see the docstring")
         print(HEADER)
         print(RULE)
@@ -276,7 +372,7 @@ def main() -> int:
             print(
                 row(
                     f"{name} ({ticks})",
-                    measure_run(campaign, bestiary, Autoplay(ticks), seeds, heroes[0]),
+                    measure_run(campaign, bestiary, Autoplay(ticks), seeds, base, branch),
                 )
             )
 

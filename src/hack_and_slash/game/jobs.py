@@ -1,6 +1,6 @@
 """Promotion: the second and last decision a run asks for.
 
-The character select picks one of five. On reaching the final stage, that class
+The character select picks one of five. Halfway through the campaign that class
 forks into two advanced ones, and this is what happens when one is chosen.
 
 **Promotion swaps the type on the live hero rather than building a new world.**
@@ -28,6 +28,19 @@ from __future__ import annotations
 
 from . import skills
 from .entities import EntityType
+
+#: The first stage fought as an advanced class -- so the fork is offered on
+#: clearing the one before it, which is the Sovereign at the end of act IV.
+#:
+#: One number rather than a condition spelled out in the scene, because three
+#: places need to agree about it: the scene that opens the panel, the run that
+#: answers "are we there yet", and the bot that has to promote at the same
+#: moment a player would or it is measuring a different game.
+#:
+#: A stage number, 1-based, matching `Run.stage_number` and everything a player
+#: reads. Moving it is a re-tune of everything after it, not a free choice: the
+#: campaign either side of this line is balanced against a different hero.
+PROMOTION_STAGE = 21
 
 
 def offers_for(run) -> tuple[EntityType, ...]:

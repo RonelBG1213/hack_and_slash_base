@@ -10,22 +10,33 @@ with the same information.
 
 ### Almost no progression that makes you hit harder
 
-For nineteen of the twenty stages, none at all. The shop sells health now, health
-per stage, and gold find; nothing it stocks touches damage, speed or maximum
-health.
+The shop sells health now, health per stage, and gold find; nothing it stocks
+touches damage, speed or maximum health, on any of the forty stages.
 
 That is load-bearing rather than squeamish. Because the hero's **output** does not
 grow across a run, health on a later boss buys fight *length* and nothing else —
 so the act bosses are not much tougher than the first and take their difficulty
-from reach, cadence and arena instead. Both later bosses were drafted far tankier
-and were unwinnable on every seed.
+from reach, cadence and arena instead. Both act III and act IV bosses were
+drafted far tankier and were unwinnable on every seed; the four late bosses were
+built inside that finding rather than rediscovering it, and the heaviest of them
+is twenty health above the Sovereign.
 
-**The one exception is [promotion](design.md#promotion), and it is confined to the
-last stage on purpose.** An advanced class changes maximum health and replaces two
-attacks, which is exactly the kind of change the paragraph above says the game
-cannot absorb. It is survivable here only because there is no stage after it: no
-later fight has to be re-tuned around a hero that hits harder, because there is no
-later fight. Moving the trigger earlier is one condition in `play.py` and a
+**The one exception is [promotion](design.md#promotion), and it is the seam the
+campaign is built around rather than a hole in this rule.** An advanced class
+changes maximum health and replaces two attacks. This document used to argue
+that it was survivable *only* because there was no stage after it. That argument
+was true of the trigger it described and it is no longer the trigger: the fork
+sits after stage 20, and twenty stages follow it.
+
+What makes it survivable now is narrower and more useful. **An advanced class
+inherits its light attack**, and the light is most of what a fight is made of —
+so the hero's damage per swing does not jump at the fork. What changes is a
+health number and two attacks on long cooldowns. Acts V–VIII are tuned against
+the inherited light alone, which means the new heavy and ultimate are upside
+rather than something a stage assumes; that is what keeps the second half from
+needing a scaling multiplier under it.
+
+Moving the trigger again is still one condition in `jobs.PROMOTION_STAGE` and a
 re-tune of everything after it.
 
 What still has no answer is equipment. Selling a damage upgrade would need a
@@ -78,19 +89,30 @@ The reference bot plays light-only by design, so it cannot see the neutral, heav
 or ultimate slots. The suite pins the relationships between slots, not the values.
 See [Balance](balance.md#what-is-not-measured).
 
-### The ten advanced classes, and the twenty attacks they bring
+### The twenty attacks the advanced classes bring
 
-The largest unmeasured surface in the project. `autoplay` plays light-only *and*
-never promotes, so it cannot see any of this — not the classes, not their heavies,
-not their ultimates. Every number was reasoned about and none was measured.
+Half of what this section used to say has been fixed and half of it is worse than
+before.
 
-That is also what keeps the balance grid honest: promotion is offered by the
-scene, never by the bot, so the recorded 5×20 grid measures the same game it
-measured before any of this existed. The two facts are the same fact.
+**Fixed:** the bot promotes now. All ten advanced classes are swept against all
+twenty stages after the fork, one cell each, and a branch that cannot clear act
+VII fails the suite. When this was a capstone, none of that existed and a branch
+could only ever be judged against the Sovereign.
 
-One further hole specific to the trigger: because promotion happens on the way
-into the last stage, a branch can only ever be judged against the Sovereign. No
-data exists on whether any of them would be sane for fifteen stages.
+**Still true, and now the largest unmeasured surface in the project:** `autoplay`
+plays light-only, and an advanced class's light is the one it inherited. So the
+grid measures each branch's *health and body* against the late campaign, and the
+twenty heavies and ultimates are as unmeasured as they ever were. What separates
+the Dark Knight from the Holy Knight in a sweep is fifteen points of health;
+what separates them at a keyboard is Black Tide and Sanctuary, and nothing has
+an opinion about those.
+
+That is deliberate rather than neglected, and it is the same trade the original
+fifteen attacks are on: a light-only reference is what keeps every recorded
+number comparable across every change since. The consequence to be honest about
+is that acts V–VIII are tuned to be clearable *without* the new kit, so a player
+who uses it has an easier time than the grid says. `tools/balance.py` can be
+pointed at the `skilful` policy to ask how much easier; nobody has.
 
 ### The dodge's worth is measured, not settled
 
@@ -152,8 +174,13 @@ sweeping a circle rather than a segment.
 
 `tools/make_level.py` describes each stage as a border plus a list of pillar
 rectangles and writes the JSON. An editor is roughly half a project on its own; a
-short script is still the honest trade at twenty stages, though it is nearer the
-line than it was at four.
+short script is still the trade being made at forty stages, and it is well past
+the line it was near at twenty. Forty hand-written `Stage` literals is where the
+absence of an editor is felt: placing a pillar means picturing a rectangle, and
+placing an enemy means checking by eye that it is not inside one. The generator
+refuses to write an unplayable campaign, which catches the second mistake but
+not the interesting one — an enemy stranded in a pocket it never leaves is a
+perfectly playable stage that nobody can finish.
 
 ### No CI
 

@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from ..core.campaign import Campaign
+from . import jobs
 from .entities import DEFAULT_HERO, Bestiary, EntityType
 from .world import Outcome, Purse, World
 
@@ -184,6 +185,21 @@ class Run:
         return self.campaign.is_final(self.index)
 
     @property
+    def at_promotion_point(self) -> bool:
+        """Standing on the first stage that is fought as an advanced class.
+
+        True for the whole of that stage rather than only on the tick it began,
+        which is what the caller wants: the scene pairs it with `just_advanced`
+        to open the panel once, and `jobs.can_promote` closes the offer for good
+        once a choice is taken.
+
+        Says nothing about whether there is a choice to make -- a campaign
+        shorter than the trigger never reaches it, and a class with no
+        promotions declared has nothing to offer wherever it stands.
+        """
+        return self.stage_number == jobs.PROMOTION_STAGE
+
+    @property
     def level(self):
         return self.campaign[self.index]
 
@@ -260,7 +276,13 @@ class Run:
             self.bestiary,
             seed=self._stage_seed(self.seed, self.index),
             carry_hp=carried,
-            hero_type_id=self.hero_type_id,
+            # `hero_type`, not `hero_type_id` -- the next stage is fought as
+            # whatever the run is now, which is the advanced class once one has
+            # been chosen. Passing the base id here builds the next body out of
+            # the class the run *started* as, silently undoing the promotion on
+            # the transition after it; it read correctly only for as long as
+            # there was never a stage after the fork.
+            hero_type_id=self.hero_type.id,
             purse=Purse(floor=self.index + 1, gold_find=self.gold_find),
         )
         self.just_advanced = True

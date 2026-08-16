@@ -18,13 +18,13 @@ logic is kept engine-agnostic, and porting means rewriting `render/` and
 src/hack_and_slash/
   core/     vectors, level, campaign, collision, spatial index   <- no pygame
   game/     entities, actions, combat, AI, run, the tick          <- no pygame
-  render/   atlas, camera, renderer, HUD, effects, shop panel
+  render/   atlas, camera, renderer, HUD, effects, shop and job panels
   scenes/   menu, select, play, smoke
 data/       entities.json, weapons.json, loot.json   -- content, not code
-levels/     stage1..20.json, campaign.json           -- generated
+levels/     stage1..40.json, campaign.json           -- generated
 assets/     sprites.png                              -- generated
 tools/      art generator, level builder, balance sweep, screenshots
-tests/      429 tests, all headless
+tests/      678 tests, all headless
 ```
 
 | Module | What it is |
@@ -36,9 +36,19 @@ tests/      429 tests, all headless
 | `game/skills.py` | Names the four attack-slot indices, so they are not bare integers in three places |
 | `core/spatial.py` | Broadphase hash. `World` builds it with cell 48 — a little wider than the longest reach in the game, so a swing query sweeps four buckets at worst |
 
-`levels/` and `assets/` are **generated and not committed**. A fresh clone runs
-`tools/make_level.py` and `tools/gen_art.py` before anything works; see
-[Content](content.md#tools).
+Both are **generated**, and they are treated differently on the way into git:
+`assets/*.png` is gitignored, `levels/*.json` is committed. A fresh clone must
+run `tools/gen_art.py` before anything works; `tools/make_level.py` only has to
+be rerun after editing a stage. See [Content](content.md#tools).
+
+> [!NOTE]
+> This is an inconsistency rather than a decision anybody wrote down, and the
+> forty-stage extension made it visible: twenty new `levels/stage*.json` files
+> show up untracked in `git status` beside twenty tracked ones. Either they all
+> belong in the repo or none of them do. Committing them means a clone can be
+> played without running a tool and diffs show what a stage edit did to the
+> arena; ignoring them means one less generated artifact to keep in step. It has
+> not been settled.
 
 ---
 
@@ -134,7 +144,7 @@ twice.
 >
 > `combat.roll_damage` draws from `world.rng` on every hit. One interleaved loot
 > draw shifts every subsequent damage roll for the rest of the run — which would
-> move all 100 cells of the recorded class×stage grid **without a single balance
+> move all 280 cells of the recorded class×stage grids **without a single balance
 > number changing, and nothing would report it.**
 >
 > `test_loot_rolls_do_not_disturb_the_damage_stream` runs the same seeded fight

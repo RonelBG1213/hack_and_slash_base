@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from hack_and_slash.core.campaign import Campaign
 from hack_and_slash.core.level import EnemySpawn, Level
+from hack_and_slash.game import jobs
 from hack_and_slash.game.run import Run, RunOutcome
 from hack_and_slash.game.sim import step
 from hack_and_slash.game.world import Outcome, World
@@ -326,6 +327,74 @@ def test_gold_find_reaches_the_next_stage() -> None:
 
     clear_current_stage(run)
     assert run.world.purse.gold_find == 0.5
+
+
+# --- a promotion has to survive the stage after it ---------------------------
+# These matter because a promotion used to be the last thing that ever happened
+# in a run. With twenty stages behind the fork, everything `_advance` rebuilds
+# has to be rebuilt as the class the run became rather than the one it started
+# as -- and the two are only ever different after a promotion, which is why
+# nothing noticed for as long as there was no stage after one.
+def test_a_promotion_survives_the_next_stage() -> None:
+    """The body the next stage builds is the advanced class, not the base one.
+
+    `_advance` constructs a fresh `World` for every transition. Handing it
+    `hero_type_id` -- the class the run was *started* as -- silently un-promotes
+    the hero on the very next stage boundary and leaves `job_id` claiming
+    otherwise.
+    """
+    run = Run.start(campaign(4), BESTIARY, hero_type_id="knight")
+    jobs.promote(run, BESTIARY["dark_knight"])
+    assert run.world.hero.type.id == "dark_knight"
+
+    clear_current_stage(run)
+
+    assert run.world.hero.type.id == "dark_knight"
+    assert run.job_id == "dark_knight"
+
+
+def test_the_between_stage_heal_is_the_promoted_class_s_own() -> None:
+    """The heal is read off the class being played now, maximum included.
+
+    Inert at the old trigger, live at this one: every stage after the fork pays
+    out, and it pays out against the advanced class's ceiling.
+    """
+    advanced = BESTIARY["dark_knight"]
+    run = Run.start(campaign(4), BESTIARY, hero_type_id="knight")
+    jobs.promote(run, advanced)
+    run.world.hero.hp = 20
+
+    clear_current_stage(run)
+    assert run.world.hero.hp == 20 + advanced.heal_between_stages
+
+
+def test_a_promoted_hero_is_not_healed_above_the_advanced_maximum() -> None:
+    """A smaller advanced class must not inherit the base class's ceiling.
+
+    The Dark Knight is 115 to the Knight's 130, so a carry clamped against the
+    wrong maximum would hand it fifteen health it does not have.
+    """
+    advanced = BESTIARY["dark_knight"]
+    run = Run.start(campaign(4), BESTIARY, hero_type_id="knight")
+    jobs.promote(run, advanced)
+    run.world.hero.hp = advanced.hp - 2
+
+    clear_current_stage(run)
+    assert run.world.hero.hp == advanced.hp
+
+
+def test_restarting_after_a_promotion_returns_to_the_base_class() -> None:
+    """`R` is a second attempt at the run, so it starts where the run started.
+
+    `job_id` sits beside `hero_type_id` rather than overwriting it precisely so
+    that this needs no knowledge of promotion to be correct.
+    """
+    run = Run.start(campaign(4), BESTIARY, hero_type_id="knight")
+    jobs.promote(run, BESTIARY["dark_knight"])
+
+    fresh = run.restart()
+    assert fresh.job_id == ""
+    assert fresh.hero_type.id == "knight"
 
 
 def test_restarting_empties_the_purse_and_everything_bought_with_it() -> None:
