@@ -18,7 +18,13 @@ from ..core.vec2 import Vec2
 class EventKind(str, Enum):
     SWING = "swing"  # a swing's active window opened
     HIT = "hit"  # damage landed
-    BLOCKED = "blocked"  # a hit was eaten by i-frames
+    #: A hit arrived and did nothing -- eaten by i-frames, or by an evasion
+    #: roll. One kind for both, because to a player they are the same event and
+    #: the renderer already draws it.
+    BLOCKED = "blocked"
+    #: Accompanies the HIT it belongs to rather than replacing it, so anything
+    #: counting damage stays right whether or not it knows crits exist.
+    CRIT = "crit"
     DEATH = "death"
     DODGE = "dodge"
     SHOOT = "shoot"

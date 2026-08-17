@@ -83,12 +83,12 @@ def test_health_carries_as_a_proportion_never_as_a_number() -> None:
     wound. The choice must cost and grant nothing on its own."""
     run = a_run("knight")
     hero = run.world.hero
-    hero.hp = hero.type.hp // 2  # 65 of 130
+    hero.hp = hero.max_hp // 2  # 65 of 130
 
     dark_knight = BESTIARY["dark_knight"]  # 115 max, fewer than the Knight's 130
     assert jobs.promote(run, dark_knight)
 
-    assert hero.type.hp == 115
+    assert hero.max_hp == 115
     assert hero.hp == round(0.5 * 115)
     assert hero.health_fraction == pytest.approx(0.5, abs=0.01)
 
@@ -96,10 +96,10 @@ def test_health_carries_as_a_proportion_never_as_a_number() -> None:
 def test_promoting_at_full_health_arrives_at_full_health() -> None:
     run = a_run("knight")
     hero = run.world.hero
-    assert hero.hp == hero.type.hp
+    assert hero.hp == hero.max_hp
 
     assert jobs.promote(run, BESTIARY["holy_knight"])  # 150, up from 130
-    assert hero.hp == hero.type.hp == 150
+    assert hero.hp == hero.max_hp == 150
 
 
 def test_a_sliver_of_health_never_rounds_away_to_death() -> None:

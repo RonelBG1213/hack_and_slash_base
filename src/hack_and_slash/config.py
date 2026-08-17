@@ -12,6 +12,7 @@ LEVELS_DIR = ROOT / "levels"
 ENTITIES_DATA = DATA_DIR / "entities.json"
 WEAPONS_DATA = DATA_DIR / "weapons.json"
 LOOT_DATA = DATA_DIR / "loot.json"
+PROGRESSION_DATA = DATA_DIR / "progression.json"
 SPRITE_ATLAS = ASSETS_DIR / "sprites.png"
 
 # --- simulation --------------------------------------------------------------

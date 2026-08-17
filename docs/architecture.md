@@ -99,7 +99,7 @@ results of the last, and moving any of them changes the game.
 
 | # | Phase | What it does |
 | --- | --- | --- |
-| 1 | timers | i-frames, cooldowns and stagger expire before anything consults them |
+| 1 | timers | i-frames, cooldowns and stagger expire before anything consults them, and health regeneration accrues |
 | 2 | decide | the hero's intent arrives from outside; enemies produce theirs |
 | 3 | begin | new swings and dodges start, committing facing |
 | 4 | move | walking, dashes and knockback, resolved against walls |
@@ -130,14 +130,15 @@ stage would draw the same rolls in the same order, which is both duller and a
 worse test — a bug that only shows up on a particular sequence would never appear
 twice.
 
-### Two random streams, not one
+### Three random streams, not one
 
-`World` holds **two** seeded generators, both derived from the one seed:
+`World` holds **three** seeded generators, all derived from the one seed:
 
 | Stream | Seeded | Draws for |
 | --- | --- | --- |
 | `world.rng` | `seed` | the fight — damage rolls, and nothing else |
 | `world.loot_rng` | `seed ^ 0x10071` | what a kill leaves behind |
+| `world.attr_rng` | `seed ^ 0x2A771` | crit and dodge |
 
 > [!IMPORTANT]
 > This split is the load-bearing guarantee of the whole loot layer.
@@ -153,6 +154,24 @@ twice.
 
 Any future subsystem that rolls dice gets its own offset, for the same reason. Two
 generators seeded identically are one generator — the offset *is* the mechanism.
+
+> [!NOTE]
+> **The attribute layer is the rule being followed rather than restated.** Crit
+> and dodge are dice; both draw from `attr_rng`, and
+> `test_attributes.py::test_attribute_rolls_do_not_disturb_the_damage_stream`
+> is the loot test's sibling — the same seeded fight run twice, once neutral and
+> once with a crit that fires on every hit and multiplies by exactly one, so the
+> two are arithmetically identical while only one of them rolls.
+>
+> Two details worth copying next time. **Zero takes an early return and draws
+> nothing**, mirroring `roll_damage` at zero variance, so a switched-off
+> attribute costs the stream nothing at all. And the guard uses *crit* rather
+> than dodge: an evaded hit changes the fight rather than the arithmetic, so the
+> two runs would legitimately diverge and prove nothing.
+>
+> Experience needed **no** stream. It is `xp_base * monster_level` and rolls
+> nothing, which is why the progression layer cannot disturb a damage roll
+> however it is tuned.
 
 One related trap: the weighted rarity draw is written long-hand as a single
 `random()` against a cumulative sum rather than with `random.choices`, because

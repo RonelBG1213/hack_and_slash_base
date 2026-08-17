@@ -101,7 +101,13 @@ def promote(run, advanced: EntityType) -> bool:
     fraction = hero.health_fraction
 
     hero.type = advanced
-    hero.hp = max(1, min(advanced.hp, round(fraction * advanced.hp)))
+    # Both maxima come from `Entity.max_hp` rather than from `advanced.hp`, so
+    # whatever the run has earned is carried across the fork instead of being
+    # quietly left behind with the old class. `hero.bonus` survives the swap --
+    # it lives on the body, not on the type -- so this reads the new ceiling
+    # only after `type` has already been reassigned above.
+    ceiling = hero.max_hp
+    hero.hp = max(1, min(ceiling, round(fraction * ceiling)))
 
     # The heavy and ultimate at these indices are different attacks now, so a
     # cooldown left over from the old kit would gate a weapon that never fired.

@@ -204,7 +204,7 @@ class CharacterSelectScene(Scene):
         # about how a class plays than any of them.
         stats = "   ".join(
             (
-                f"hp {chosen.hp}",
+                f"hp {chosen.full_hp}",
                 f"speed {chosen.speed:g}",
                 f"heal {chosen.heal_between_stages}",
                 chosen.weapon.name.lower(),

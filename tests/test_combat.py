@@ -53,7 +53,7 @@ def test_a_swing_deals_nothing_during_its_windup() -> None:
     with enemies_idle():
         for _ in range(SWORD.windup):
             step(world, intents.swing_at(RIGHT))
-    assert enemy.hp == enemy.type.hp
+    assert enemy.hp == enemy.max_hp
     assert hero.state is ActionState.ACTIVE, "should be about to connect"
 
 
@@ -61,7 +61,7 @@ def test_the_first_active_tick_deals_exactly_the_seeded_damage() -> None:
     world, hero, enemy = duel()
     with enemies_idle():
         run(world, SWORD.windup + 1, intents.swing_at(RIGHT))
-    assert enemy.hp == enemy.type.hp - expected_first_hit()
+    assert enemy.hp == enemy.max_hp - expected_first_hit()
 
 
 def test_one_swing_hits_a_body_once_however_long_it_stays_open() -> None:
@@ -70,7 +70,7 @@ def test_one_swing_hits_a_body_once_however_long_it_stays_open() -> None:
     world, hero, enemy = duel()
     with enemies_idle():
         run(world, SWORD.windup + SWORD.active + 1, intents.swing_at(RIGHT))
-    assert enemy.hp == enemy.type.hp - expected_first_hit()
+    assert enemy.hp == enemy.max_hp - expected_first_hit()
 
 
 def test_a_second_swing_can_hit_the_same_body_again() -> None:
@@ -84,7 +84,7 @@ def test_a_second_swing_can_hit_the_same_body_again() -> None:
     press_forward = intents.Intent(move=RIGHT, aim=RIGHT, attack=True)
     with enemies_idle():
         run(world, SWORD.total_ticks * 2 + 4, press_forward)
-    assert enemy.hp < enemy.type.hp - expected_first_hit(), "only one swing ever landed"
+    assert enemy.hp < enemy.max_hp - expected_first_hit(), "only one swing ever landed"
 
 
 # --- the cone ----------------------------------------------------------------
@@ -92,14 +92,14 @@ def test_a_swing_misses_what_is_behind_you() -> None:
     world, hero, enemy = duel(distance=20.0)
     with enemies_idle():
         run(world, SWORD.windup + SWORD.active + 2, intents.swing_at(Vec2(-1, 0)))
-    assert enemy.hp == enemy.type.hp
+    assert enemy.hp == enemy.max_hp
 
 
 def test_a_swing_misses_what_is_out_of_reach() -> None:
     world, hero, enemy = duel(distance=SWORD.reach + 40)
     with enemies_idle():
         run(world, SWORD.windup + SWORD.active + 2, intents.swing_at(RIGHT))
-    assert enemy.hp == enemy.type.hp
+    assert enemy.hp == enemy.max_hp
 
 
 def test_facing_is_committed_when_the_swing_starts() -> None:
@@ -108,7 +108,7 @@ def test_facing_is_committed_when_the_swing_starts() -> None:
     with enemies_idle():
         step(world, intents.swing_at(Vec2(-1, 0)))  # commit to facing away
         run(world, SWORD.windup + SWORD.active + 2, intents.swing_at(RIGHT))
-    assert enemy.hp == enemy.type.hp, "the swing turned to follow the aim"
+    assert enemy.hp == enemy.max_hp, "the swing turned to follow the aim"
 
 
 # --- consequences ------------------------------------------------------------
@@ -152,7 +152,7 @@ def test_a_hit_announces_how_much_it_was_for() -> None:
             hits += [e for e in world.events if e.kind is EventKind.HIT]
     assert len(hits) == 1
     assert hits[0].amount == expected_first_hit()
-    assert enemy.hp == enemy.type.hp - hits[0].amount
+    assert enemy.hp == enemy.max_hp - hits[0].amount
 
 
 def test_nothing_can_hit_its_own_faction() -> None:
@@ -164,7 +164,7 @@ def test_nothing_can_hit_its_own_faction() -> None:
 
         actions.begin_attack(enemy)
         run(world, enemy.type.weapon.total_ticks + 2)
-    assert friend.hp == friend.type.hp
+    assert friend.hp == friend.max_hp
 
 
 # --- interruption ------------------------------------------------------------

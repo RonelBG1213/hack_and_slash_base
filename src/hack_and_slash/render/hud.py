@@ -96,7 +96,7 @@ class Hud:
         if width > 0:
             pygame.draw.rect(surface, color, (BAR_X, y, width, BAR_H))
 
-        label = self.small.render(f"{hero.hp}/{hero.type.hp}", False, config.WHITE)
+        label = self.small.render(f"{hero.hp}/{hero.max_hp}", False, config.WHITE)
         surface.blit(label, (BAR_X + BAR_W + 6, y - 1))
 
     # --- cooldowns -----------------------------------------------------------
@@ -186,6 +186,28 @@ class Hud:
         amount = run.gold_total if run is not None else world.gold
         label = self.small.render(f"{amount}g", False, config.GOLD)
         surface.blit(label, (BAR_X, top + BAR_Y_OFFSET + 2))
+
+        # The level, beside the purse and only once there is one to show.
+        #
+        # Hidden at level 1 rather than drawn as "Lv 1", and that is not
+        # tidiness: while `data/progression.json` ships `xp_base: 0` the hero is
+        # level 1 for the whole game, so this strip stays pixel-identical to the
+        # one that was there before the attribute layer existed -- which is the
+        # same claim the arithmetic makes, made in the one place a player looks.
+        # An unspent point is worth interrupting for; a permanent "Lv 1" is the
+        # sort of noise this HUD is explicitly built to keep out.
+        if run is not None and run.hero_level > 1:
+            level = self.small.render(f"Lv {run.hero_level}", False, config.ACCENT)
+            surface.blit(level, (BAR_X + label.get_width() + 8, top + BAR_Y_OFFSET + 2))
+            if run.unspent_points:
+                pip = self.small.render("+", False, config.GOOD)
+                surface.blit(
+                    pip,
+                    (
+                        BAR_X + label.get_width() + 10 + level.get_width(),
+                        top + BAR_Y_OFFSET + 2,
+                    ),
+                )
 
     # --- progress ------------------------------------------------------------
     def _draw_remaining(

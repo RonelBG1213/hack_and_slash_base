@@ -150,7 +150,7 @@ def test_every_attack_telegraphs_for_its_full_windup() -> None:
         with enemies_idle():
             run(world, weapon.windup - 1)
             assert boss.state is ActionState.WINDUP, f"{weapon.id} opened early"
-            assert hero.hp == hero.type.hp, f"{weapon.id} dealt damage during its tell"
+            assert hero.hp == hero.max_hp, f"{weapon.id} dealt damage during its tell"
 
 
 def test_an_attack_keeps_the_weapon_it_started_with() -> None:

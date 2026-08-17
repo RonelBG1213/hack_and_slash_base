@@ -377,10 +377,10 @@ def test_a_promoted_hero_is_not_healed_above_the_advanced_maximum() -> None:
     advanced = BESTIARY["dark_knight"]
     run = Run.start(campaign(4), BESTIARY, hero_type_id="knight")
     jobs.promote(run, advanced)
-    run.world.hero.hp = advanced.hp - 2
+    run.world.hero.hp = advanced.full_hp - 2
 
     clear_current_stage(run)
-    assert run.world.hero.hp == advanced.hp
+    assert run.world.hero.hp == advanced.full_hp
 
 
 def test_restarting_after_a_promotion_returns_to_the_base_class() -> None:

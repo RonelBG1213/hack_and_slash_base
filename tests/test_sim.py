@@ -9,6 +9,7 @@ import pytest
 from hack_and_slash import config
 from hack_and_slash.core.vec2 import Vec2
 from hack_and_slash.game import intent as intents
+from hack_and_slash.game.attributes import Attributes
 from hack_and_slash.game.sim import Accumulator, step
 from hack_and_slash.game.world import Outcome
 
@@ -180,3 +181,56 @@ def test_a_steady_frame_rate_averages_the_right_number_of_ticks() -> None:
     accumulator = Accumulator(dt=1 / 60, max_frame=0.25)
     total = sum(accumulator.ticks_for(1 / 60) for _ in range(600))
     assert total == pytest.approx(600, abs=1)
+
+
+# --- regeneration ------------------------------------------------------------
+def test_regen_pays_out_whole_points_on_a_schedule_it_banks_for() -> None:
+    """Hundredths per tick, banked and paid whole -- so nothing anywhere in the
+    game ever holds a fractional hit point."""
+    world = make_world()
+    hero = world.hero
+    hero.bonus = Attributes(regen=25)  # a quarter point a tick: one per four
+    hero.hp = 10
+
+    run(world, 3)
+    assert hero.hp == 10, "paid out before it had banked a whole point"
+    run(world, 1)
+    assert hero.hp == 11
+
+
+def test_regen_stops_at_full_health_and_banks_nothing_while_there() -> None:
+    """Otherwise a hero who spends a quiet stage untouched arrives at the next
+    one holding a reservoir of instant healing."""
+    world = make_world()
+    hero = world.hero
+    hero.bonus = Attributes(regen=50)
+
+    run(world, 400)
+    assert hero.hp == hero.max_hp
+    assert hero.regen_bank == 0
+
+    hero.hp -= 1
+    run(world, 1)
+    assert hero.hp == hero.max_hp - 1, "a banked reservoir paid out at once"
+
+
+def test_regen_never_brings_a_corpse_back() -> None:
+    """The phase-1 loop has no liveness filter and `_settle` culls a body one
+    tick after it dies, so there is a window where this could un-lose a run."""
+    world = make_world()
+    enemy = add_enemy(world, "grunt", world.hero.pos + Vec2(90, 0))
+    enemy.bonus = Attributes(regen=500)
+    enemy.hp = 0
+
+    step(world, intents.NOTHING)
+    assert enemy.hp == 0
+
+
+def test_regen_respects_the_maximum_the_attributes_gave_it() -> None:
+    world = make_world()
+    hero = world.hero
+    hero.bonus = Attributes(max_hp=20, regen=100)
+    hero.hp = hero.max_hp - 5
+
+    run(world, 40)
+    assert hero.hp == hero.max_hp == HERO.hp + 20

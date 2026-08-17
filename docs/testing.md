@@ -55,6 +55,8 @@ That only matters for the handful of render tests; everything under `core/` and
 | `test_run.py` | 34 | carry-over: health, gold, banking across stages, and that a promotion survives one |
 | `test_render.py` | 41 | drawing, the HUD, the shop and promotion panels — headless |
 | `test_loot.py` | 28 | the gold formula, rarity weights, the sweep, the RNG split |
+| `test_progression.py` | 14 | experience, the curve, spending, and **that the layer ships off** |
+| `test_attributes.py` | 9 | the seven attributes, and **that they moved nothing** |
 | `test_entities.py` | 27 | content validity: levels, boss weapon order, sprite scale |
 | `test_collision.py` | 20 | movement against walls, separation, swept paths |
 | `test_actions.py` | 19 | the WINDUP → ACTIVE → RECOVERY state machine |
@@ -69,7 +71,7 @@ That only matters for the handful of render tests; everything under `core/` and
 | others | | vectors, camera, spatial hash, level IO |
 | `test_architecture.py` | 1 | **the rule the project rests on** |
 
-## The three tests that are load-bearing
+## The four tests that are load-bearing
 
 Each of these guards something that would otherwise fail **silently** — no
 assertion anywhere else would notice.
@@ -92,9 +94,26 @@ never reads back; this is what keeps that true.
 
 Runs the same seeded fight with a deliberately generous loot table and a silent
 one, and asserts the damage lists are identical. Written before the code it
-guards. See [Architecture](architecture.md#two-random-streams-not-one) for why a
-single shared generator would have invalidated every recorded number without
+guards. See [Architecture](architecture.md#three-random-streams-not-one) for why
+a single shared generator would have invalidated every recorded number without
 anything failing.
+
+### `test_attributes.py::test_attribute_rolls_do_not_disturb_the_damage_stream`
+
+The same test a second time, for the same reason, against `attr_rng` — crit and
+dodge are dice and the third stream is what keeps them out of the fight's.
+
+The shape is worth copying rather than the code. The fight runs twice: once
+neutral, once with a crit that fires on **every** hit and multiplies by
+**exactly one**. Both are arithmetically the same fight; only one of them rolls.
+Using dodge here instead would prove nothing, because an evaded hit changes the
+fight rather than the arithmetic and the two runs would legitimately diverge.
+
+Its quieter sibling, `test_neutral_attributes_reproduce_todays_arithmetic`, is
+what makes "the attribute layer moved none of the 280 cells" a structural fact
+rather than the result of a sweep somebody remembered to run — and
+`test_progression.py::test_the_shipped_table_ships_switched_off` is what keeps
+it true.
 
 ---
 

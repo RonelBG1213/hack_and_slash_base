@@ -10,6 +10,18 @@ with the same information.
 
 ### Almost no progression that makes you hit harder
 
+> [!NOTE]
+> **This section was written when it was true of the whole game, and it is now
+> true only of the shipped configuration.** A seven-attribute layer and a
+> level-up system landed underneath it — crit rate, crit damage, health,
+> damage, defense, dodge and health regen — and they ship **switched off**
+> (`xp_base: 0` in [`data/progression.json`](../data/progression.json)).
+>
+> Nothing below has changed as a *fact about what you can play today*. What
+> changed is that it is now a dial rather than an absence, and the paragraph
+> further down claiming equipment "has no answer" has been overtaken. See
+> [The attribute layer](#the-attribute-layer) at the end of this section.
+
 The shop sells health now, health per stage, and gold find; nothing it stocks
 touches damage, speed or maximum health, on any of the forty stages.
 
@@ -39,11 +51,52 @@ needing a scaling multiplier under it.
 Moving the trigger again is still one condition in `jobs.PROMOTION_STAGE` and a
 re-tune of everything after it.
 
-What still has no answer is equipment. Selling a damage upgrade would need a
+~~What still has no answer is equipment.~~ Selling a damage upgrade would need a
 per-`Entity` stat layer that every lookup in the game went through, and would
 invalidate the whole recorded balance grid on the day it shipped. Promotion sits
 in `EntityType`, which is frozen content — it swaps which type a body points at
 rather than adding a layer under it.
+
+### The attribute layer
+
+The refusal above was correct about the cost and wrong about the conclusion, and
+the half that survives is worth keeping: **the layer is what invalidates the
+grid, so the layer had to be able to prove it hadn't.**
+
+Seven attributes — crit rate, crit damage, health, damage, defense, dodge and
+health regen — in two halves. `EntityType.attributes` is content, frozen and
+shared, and is where an enemy's armour would live. `Entity.bonus` is what one
+run earned, and it dies with the run. `Entity.attrs` is the sum and the only
+thing the sim reads. Every field defaults to the identity of its own operation,
+so a neutral block makes `combat.resolve_damage` reduce to `combat.roll_damage`
+and the arithmetic is exactly the arithmetic that was measured.
+
+Three things made it affordable, and all three are the project's own recorded
+patterns pointed at a new problem:
+
+- **A third RNG stream.** Crit and dodge are dice, and a die drawn from
+  `world.rng` shifts every damage roll after the first hit — all 280 cells,
+  silently. `world.attr_rng` is seeded `seed ^ ATTR_STREAM`, and
+  `test_attribute_rolls_do_not_disturb_the_damage_stream` was written before the
+  code it guards, exactly as the loot one was.
+- **One field on `EntityType`, not seven.** `test_a_variant_is_stat_identical_to_what_it_varies`
+  iterates `dataclasses.fields`, so all nine variants were held to the whole
+  block with no test edit — and an eighth attribute is covered the day it lands.
+- **The claim is settled structurally, not by a sweep.**
+  `test_neutral_attributes_reproduce_todays_arithmetic` checks every weapon in
+  the content files in milliseconds. `tools/balance.py` takes minutes and proves
+  less.
+
+**What is not answered is whether any of it is any good.** The values in
+`data/progression.json` are a first pass and the file says so. Worse than that,
+and stated plainly because it is the trap: `autoplay` does not spend points.
+Unlike gold — which a player might reasonably not spend — levels are always
+spent, so a sweep run against an unlevelled hero measures a game nobody plays
+and reports it in the same units as difficulty. That is the
+[flanker demon](balance.md#findings) again. **Teach the bot to allocate before
+turning `xp_base` up, not after.**
+
+Setting `xp_base` back to 0 is the rollback, and it is the state it ships in.
 
 ### The bosses have one phase change and no second moveset
 

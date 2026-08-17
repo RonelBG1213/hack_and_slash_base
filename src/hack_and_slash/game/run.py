@@ -15,6 +15,13 @@ three integers below: health now, health per stage from now on, and a better
 share of what drops. All of them live on the run rather than on the hero,
 because `EntityType` is frozen content and a class is a class for the whole run.
 
+A third thing carries now: what levelling bought. `earned` is an `Attributes`
+block rather than an integer, and it is the one value here that has to reach the
+sim -- which reads attributes off the body and knows nothing about a run. So the
+run stays the owner and each new stage's `World` is handed a copy, the same
+way `Purse` carries gold find across the same seam. A class is still a class for
+the whole run; what changed is that a hero is no longer only its class.
+
 Pure Python -- no pygame.
 """
 
@@ -24,7 +31,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from ..core.campaign import Campaign
-from . import jobs
+from . import jobs, progression
+from .attributes import NEUTRAL, Attributes
 from .entities import DEFAULT_HERO, Bestiary, EntityType
 from .world import Outcome, Purse, World
 
@@ -78,6 +86,27 @@ class Run:
     #: is a fraction, so 0.5 means half as much again from every drop.
     bonus_heal: int = 0
     gold_find: float = 0.0
+
+    #: What levelling has bought, and the one thing here that is *not* a plain
+    #: integer on the run. It is handed to every `World` this run builds, which
+    #: puts it on the hero's `Entity.bonus` -- the sim reads attributes off the
+    #: body and knows nothing about a run.
+    #:
+    #: The module docstring above used to say there was nothing to equip. That
+    #: is no longer true, and the reasoning that made it true is worth keeping:
+    #: this is deliberately still a value on the *run*, and the body is handed a
+    #: copy rather than being the owner of it, so a world built for a stage is
+    #: still built from a class plus a number and nothing has to be unwound.
+    earned: Attributes = NEUTRAL
+
+    #: Levelling. `xp` is progress towards the *next* level, not a lifetime
+    #: total -- the cost is subtracted on each level gained, so this is always
+    #: the number a progress bar wants and never needs the curve re-walked to
+    #: work out. All three stay at zero for the whole run while the shipped
+    #: table has `xp_base: 0`, which is how the layer ships switched off.
+    xp: int = 0
+    hero_level: int = 1
+    unspent_points: int = 0
 
     #: How many of each good has been bought, for the ones that are capped.
     #: Counted rather than inferred from `bonus_heal` and `gold_find`: those are
@@ -256,6 +285,11 @@ class Run:
         self.gold += self.world.gold
         self.world.gold = 0
 
+        # Experience travels the same road for the same reason -- the sim knows
+        # nothing about a run, so a stage accumulates and this collects.
+        progression.bank(self, self.world.xp)
+        self.world.xp = 0
+
     def _advance(self) -> None:
         hero = self.world.hero
         # A cleared stage always leaves the hero alive -- the run would be lost
@@ -265,7 +299,7 @@ class Run:
         heal = hero_type.heal_between_stages + self.bonus_heal
 
         before = surviving
-        carried = min(surviving + heal, hero_type.hp)
+        carried = min(surviving + heal, self.max_hp)
 
         # Before the world is replaced, or the stage's takings go with it.
         self._bank()
@@ -284,6 +318,23 @@ class Run:
             # there was never a stage after the fork.
             hero_type_id=self.hero_type.id,
             purse=Purse(floor=self.index + 1, gold_find=self.gold_find),
+            # Handed to the constructor rather than written on afterwards. The
+            # `carry_hp` clamp inside `World` measures against the hero's
+            # maximum, and the maximum is not known until the attributes are on
+            # the body -- so a hero carrying 154 with +24 earned would have it
+            # clipped back to the bare class's 130 by the line meant to keep it.
+            hero_bonus=self.earned,
         )
         self.just_advanced = True
         self.healed = carried - before
+
+    @property
+    def max_hp(self) -> int:
+        """The hero's full health for this run: class, plus what it has earned.
+
+        Kept here as well as on `Entity` because `_advance` needs the ceiling at
+        a moment when the body it applies to has not been built yet -- the heal
+        is computed against the *next* stage's hero, and the next stage's hero
+        does not exist until four lines later.
+        """
+        return self.hero_type.full_hp + self.earned.max_hp

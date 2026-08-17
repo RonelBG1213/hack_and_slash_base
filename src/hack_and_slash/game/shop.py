@@ -1,11 +1,21 @@
 """What gold buys, between one stage and the next.
 
-Four goods, and every one of them is an integer on the `Run`. That is not a
-limitation to be worked around later -- it is the whole design. `EntityType` is
-frozen content shared by every run of that class, so anything touching a hero's
+Four goods, and every one of them is an integer on the `Run`.
+
+That used to be the whole design, on the argument that `EntityType` is frozen
+content shared by every run of that class -- so anything touching a hero's
 damage, speed or maximum health would need a per-`Entity` stat layer that every
-lookup in the game went through. The shop deliberately sells nothing that needs
-one.
+lookup in the game went through, and the shop deliberately sold nothing that
+needed one.
+
+**That layer now exists** (`game/attributes.py`, reached through `Entity.attrs`
+and `Entity.max_hp`), so the reason no longer holds and the shop's shape is a
+free choice rather than a forced one. It has not changed, and the argument for
+leaving it alone is a different and narrower one: the shop is priced against a
+measured income and nothing measures whether any of it is worth buying, so
+adding a fifth good that competes with levelling would be two unmeasured systems
+bidding for the same gold. If a stat upgrade is ever sold here, price it after
+the progression curve has been swept, not before.
 
 The fourth good does not appear until the second half of the campaign. A forty-
 stage run banks roughly three times what a twenty-stage run did, and against
@@ -75,9 +85,9 @@ class Good:
 #: greys the row out for the same reason.
 def _poultice(run, amount: int) -> bool:
     hero = run.world.hero
-    if hero is None or hero.hp >= hero.type.hp:
+    if hero is None or hero.hp >= hero.max_hp:
         return False
-    hero.hp = min(hero.type.hp, hero.hp + amount)
+    hero.hp = min(hero.max_hp, hero.hp + amount)
     return True
 
 
@@ -185,7 +195,7 @@ def can_buy(run, good: Good) -> bool:
     if good.id == "poultice":
         # The one good that can be useless rather than merely unaffordable.
         hero = run.world.hero
-        return hero is not None and hero.hp < hero.type.hp
+        return hero is not None and hero.hp < hero.max_hp
     return True
 
 

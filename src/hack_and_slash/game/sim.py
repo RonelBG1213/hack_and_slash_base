@@ -9,7 +9,9 @@ running at 240.
 The phase order below is not arbitrary. Each phase reads the results of the last
 one, and moving any of them changes the game:
 
-1. **timers** -- i-frames, cooldowns and stagger expire before anything consults them
+1. **timers** -- i-frames, cooldowns and stagger expire before anything consults
+   them, and health regeneration accrues. Still one phase and not two: both are
+   per-tick counters moving on before the tick reads any of them
 2. **decide** -- the hero's intent arrives from outside; enemies produce theirs
 3. **begin** -- new swings and dodges start, committing facing
 4. **move** -- walking, dashes and knockback, resolved against walls
@@ -28,7 +30,7 @@ from __future__ import annotations
 from .. import config
 from ..core.collision import circle_separation, move_and_collide, path_is_clear
 from ..core.vec2 import ZERO, Vec2, from_angle
-from . import actions, ai, combat, loot
+from . import actions, ai, attributes, combat, loot, progression
 from .entities import ActionState, Entity, Faction
 from .events import Event, EventKind
 from .intent import NOTHING, Intent
@@ -60,6 +62,7 @@ def step(world: World, hero_intent: Intent = NOTHING) -> None:
 
     for entity in world.entities:
         actions.tick_timers(entity)
+    _regen(world)
 
     intents = _gather_intents(world, hero_intent)
 
@@ -84,6 +87,45 @@ def step(world: World, hero_intent: Intent = NOTHING) -> None:
 
 
 # --- phases ------------------------------------------------------------------
+def _regen(world: World) -> None:
+    """Pay out health regeneration, in whole points, once per tick.
+
+    **Phase 1**, beside the timers, and that placement is a decision. Regen is
+    per-tick accrual, which is exactly what phase 1 is for -- and putting it
+    here means a hit and a regen arriving on the same tick have one readable
+    order (the point is banked, then the fight happens) instead of an order that
+    depends on which side of `strike` somebody dropped the call.
+
+    Banked in hundredths and paid in whole points, so nothing anywhere holds a
+    fractional hit point. A float bank would accumulate over the 240,000 ticks
+    of a run, and a seeded run has to replay exactly.
+
+    Two guards, and both are load-bearing rather than defensive:
+
+    * **The dead do not regenerate.** The phase-1 loop has no liveness filter,
+      and `_settle` culls a corpse one tick after it dies -- so without this a
+      body could tick back above zero in the window between the two and quietly
+      un-lose the run.
+    * **Nothing is banked at full health**, so a hero that spends a whole stage
+      untouched does not arrive at the next fight with a reservoir of instant
+      healing saved up.
+    """
+    for entity in world.entities:
+        rate = entity.attrs.regen
+        if rate <= 0 or not entity.is_alive:
+            continue
+
+        ceiling = entity.max_hp
+        if entity.hp >= ceiling:
+            entity.regen_bank = 0
+            continue
+
+        entity.regen_bank += rate
+        gained, entity.regen_bank = divmod(entity.regen_bank, attributes.REGEN_SCALE)
+        if gained:
+            entity.hp = min(ceiling, entity.hp + gained)
+
+
 def _gather_intents(world: World, hero_intent: Intent) -> dict[int, Intent]:
     """The hero's intent comes from outside; everything else thinks for itself.
 
@@ -251,6 +293,18 @@ def _loose_projectile(world: World, entity: Entity) -> None:
         # -0.5..+0.5 across the fan; a single shot lands exactly on the facing.
         offset = 0.0 if count == 1 else (index / (count - 1) - 0.5) * weapon.spread
         heading = from_angle(entity.facing + offset)
+
+        # The attacker's half of the attribute layer, applied here rather than
+        # at impact, because a shot carries an id and the owner may be dead and
+        # culled by the time it arrives. `NEUTRAL` for the defender: the target
+        # is not known yet, and its defense is taken in `resolve_projectile_hits`
+        # where it is. Per shot, like the damage roll and for the same reason.
+        damage, crit = combat.resolve_damage(
+            combat.roll_damage(weapon, world.rng),
+            entity.attrs,
+            attributes.NEUTRAL,
+            world.attr_rng,
+        )
         world.spawn_projectile(
             Projectile(
                 id=world.take_projectile_id(),
@@ -263,7 +317,8 @@ def _loose_projectile(world: World, entity: Entity) -> None:
                 radius=weapon.projectile_radius,
                 # Rolled per shot: a volley that lands three identical numbers
                 # reads as one hit rather than three.
-                damage=combat.roll_damage(weapon, world.rng),
+                damage=damage,
+                crit=crit,
                 knockback=weapon.knockback,
                 ticks_left=weapon.projectile_lifetime,
             )
@@ -286,6 +341,7 @@ def _settle(world: World) -> None:
             world.outcome = Outcome.WON
 
     _drop_loot(world)
+    _award_xp(world)
     world.entities = [entity for entity in world.entities if entity.is_alive]
     _collect_pickups(world, hero)
 
@@ -316,6 +372,29 @@ def _drop_loot(world: World) -> None:
                 world.purse.gold_find,
             )
         )
+
+
+def _award_xp(world: World) -> None:
+    """What the newly dead are worth in experience.
+
+    Beside `_drop_loot` and before the cull, which is what makes it safe for
+    exactly the reason the loot pass is safe: a body is dead and still in the
+    list for one settle, so every kill pays out once and no "have I counted
+    this" flag is needed.
+
+    Accumulated onto the world and banked by `Run._bank`, the same road gold
+    travels -- the sim never sees a `Run`.
+
+    Draws no dice. This is the one subsystem added to the game that needed no
+    RNG stream of its own, because there is nothing here to roll.
+    """
+    payout = progression.table()
+    if payout.is_off:
+        return
+    for entity in world.entities:
+        if entity.is_alive or entity.type.faction is not Faction.ENEMY:
+            continue
+        world.xp += payout.xp_for(entity.type.level)
 
 
 def _collect_pickups(world: World, hero: Entity | None) -> None:

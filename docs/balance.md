@@ -238,6 +238,28 @@ and exists to answer exactly that question.
 Both are the same trade, taken twice: the instrument stays fixed so the grid stays
 comparable, and the price is that new systems ship unmeasured and say so.
 
+**The attribute layer and levelling, taken a third time — and this one is
+different in a way that matters.** Seven attributes and a level-up system now
+exist ([Limits](limits.md#the-attribute-layer)), and they ship with `xp_base: 0`
+so that every number on this page still measures the game it measured. The
+structural proof is `test_neutral_attributes_reproduce_todays_arithmetic`, which
+settles in milliseconds what a sweep would take minutes to suggest.
+
+The difference from the shop is worth stating, because it changes what has to
+happen next rather than only what is unknown. Gold is optional — a player might
+genuinely not spend it, so a bot that never buys is *a* player, just a frugal
+one. **Points are not optional.** Nobody reaches a boss holding nine unspent
+levels. So the moment `xp_base` goes above zero, a sweep run by the current
+`autoplay` stops measuring an under-equipped hero and starts measuring a hero
+nobody would ever play, and it reports the gap in the same units as difficulty.
+
+That is precisely the [flanker demon](#findings) finding, arriving from the
+other direction: there, the instrument lacked a behaviour the *enemy* targeted;
+here it lacks a behaviour every *player* has. Same lesson, and the same order of
+operations — **teach `autoplay` to allocate first, re-baseline the grid second,
+tune the curve third.** Turning the dial up before that produces a wall of
+plausible-looking numbers that mean nothing.
+
 ## Known-bad cells are recorded, not deleted
 
 `UNTUNED_STAGES` and `UNTUNED_CAMPAIGNS` in `tests/test_playthrough.py` map a cell

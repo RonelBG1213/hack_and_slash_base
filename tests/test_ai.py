@@ -142,7 +142,7 @@ def test_sidestepping_a_charge_avoids_it() -> None:
     # Walk perpendicular to the charge for its entire duration.
     run(world, GORE.windup + GORE.active + 4, intents.walk(Vec2(0, -1)))
 
-    assert hero.hp == hero.type.hp, "could not get out of the way"
+    assert hero.hp == hero.max_hp, "could not get out of the way"
 
 
 # --- the archer --------------------------------------------------------------
@@ -162,9 +162,9 @@ def test_an_arrow_flies_toward_the_hero_and_deals_damage() -> None:
 
     for _ in range(400):
         step(world)
-        if hero.hp < hero.type.hp:
+        if hero.hp < hero.max_hp:
             break
-    assert hero.hp < hero.type.hp, "never landed a shot on a stationary target"
+    assert hero.hp < hero.max_hp, "never landed a shot on a stationary target"
 
 
 def test_an_arrow_stops_at_a_wall_instead_of_passing_through() -> None:

@@ -1,0 +1,106 @@
+{
+  "_comment": [
+    "Levelling: what a kill is worth in experience, what a level costs, and",
+    "what one point buys in each of the seven attributes. game/progression.py",
+    "holds the arithmetic and none of the values.",
+    "",
+    "*** THIS SYSTEM SHIPS SWITCHED OFF. xp_base IS ZERO. ***",
+    "",
+    "Nothing is earned, no level is ever reached, the panel never opens and",
+    "every attribute in the game resolves to neutral -- which is what makes the",
+    "recorded 280-cell class-by-stage grid provably unmoved by the whole",
+    "attribute layer, rather than unmoved as far as anybody has checked.",
+    "test_neutral_attributes_reproduce_todays_arithmetic settles that in",
+    "milliseconds; tools/balance.py would take minutes and prove less.",
+    "",
+    "Setting xp_base back to 0 is also the rollback, exactly as gold.base and",
+    "item_chance are for the loot layer. The code goes quiet without being",
+    "removed.",
+    "",
+    "BEFORE TURNING IT ON, read the note on `allocate` in game/autoplay.py.",
+    "The reference bot presses the light attack and spends nothing. A player",
+    "always spends levels -- unlike gold, there is no reason not to -- so a",
+    "sweep run against an unlevelled hero measures a game nobody plays and",
+    "reports it in the same units as difficulty. That is the flanker demon",
+    "again: an instrument without the behaviour cannot measure the feature.",
+    "Teach autoplay to allocate first, then re-baseline the grid, and treat",
+    "every number below as a guess until that has happened."
+  ],
+
+  "xp_base": 0,
+
+  "_xp_comment": [
+    "xp = xp_base * monster_level. The same shape as the gold formula and",
+    "deliberately reusing the same input: EntityType.level already means 'how",
+    "dangerous was that', it is already tuned, and inventing a second danger",
+    "scale beside it is two dials doing one job.",
+    "",
+    "No floor multiplier here, unlike gold. Depth already pays through the",
+    "roster -- act VIII fields level 9-12 creatures where act I fields level",
+    "1-2 -- so a second multiplier on top would compound into the hero",
+    "out-levelling the campaign somewhere around act VI.",
+    "",
+    "Draws no dice. A kill is worth exactly what the table says, so the",
+    "progression layer touches none of the three RNG streams and cannot",
+    "disturb a damage roll however it is tuned."
+  ],
+
+  "curve": {
+    "first": 60,
+    "step": 45,
+    "max_level": 20,
+    "points_per_level": 3,
+
+    "_comment": [
+      "Cost of the Nth level is first + step * (N - 1), so levels 2, 3 and 4",
+      "cost 60, 105 and 150. Linear rather than exponential: the campaign is",
+      "forty stages of roughly rising value, and a curve that bends the other",
+      "way would put every level in the first act or every level in the last.",
+      "",
+      "max_level caps the total spend at 19 levels x 3 points = 57 points.",
+      "That number is the whole budget the attribute values below are drafted",
+      "against, and it is a guess until a sweep says otherwise."
+    ]
+  },
+
+  "points": {
+    "max_hp": 4,
+    "damage": 1,
+    "defense": 1,
+    "crit_chance": 15,
+    "crit_damage": 25,
+    "evasion": 8,
+    "regen": 5,
+
+    "_comment": [
+      "What one point buys, in each attribute's own units -- flat for the",
+      "first three, per-mille for crit and evasion, hundredths of a hit point",
+      "per tick for regen.",
+      "",
+      "ALL SEVEN ARE UNMEASURED FIRST-PASS GUESSES. They are drafted against",
+      "the recorded shape of the game rather than against a sweep:",
+      "",
+      "  max_hp 4   -- 57 points is +228, near double a Knight's 130. The cap",
+      "                is doing the work here, not this number.",
+      "  damage 1   -- flat, because the classes are an order of magnitude",
+      "                apart per swing (rogue dagger 5, magician bolt 15) and a",
+      "                percentage would pay the magician three times over.",
+      "  defense 1  -- the most dangerous dial in the file. A rogue's 5-damage",
+      "                dagger against 4 defense is a 60% cut, and MIN_DAMAGE",
+      "                then floors every hit at 1, which is how a stage runs to",
+      "                the tick limit and reports as a balance failure. Enemy",
+      "                defense is 0 everywhere on purpose; see entities.json.",
+      "  crit 15/25 -- 20 points is a 30% rate; 20 more is +50% damage on it.",
+      "  evasion 8  -- deliberately the meanest of the seven. See below.",
+      "  regen 5    -- 10 points is one hit point every two seconds, which is",
+      "                about a third of a Knight's between-stage heal over a",
+      "                median stage.",
+      "",
+      "On evasion specifically: docs/design.md opens by saying that taking a",
+      "hit is a decision you made rather than something the arena did to you.",
+      "A random miss is precisely the arena doing something to you, in both",
+      "directions, so it is priced to be a garnish rather than a build. It is",
+      "the attribute most likely to be cut outright once somebody plays it."
+    ]
+  }
+}

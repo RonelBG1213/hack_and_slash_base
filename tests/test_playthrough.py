@@ -182,7 +182,10 @@ def why_not(index: int, hero: str, seeds=SEEDS) -> str:
         if world.outcome is Outcome.WON:
             continue
         alive = [e for e in world.enemies() if e.is_alive]
-        untouched = [e for e in alive if e.hp == e.type.hp]
+        # `max_hp`, not `type.hp`. This comparison is the whole diagnostic: if
+        # it stops matching a body that has never been hit, the message goes on
+        # printing and quietly reports every stalled stage as a fair fight.
+        untouched = [e for e in alive if e.hp == e.max_hp]
         hero_hp = world.hero.hp if world.hero else 0
         if world.hero is None or hero_hp <= 0:
             lines.append(f"seed {seed}: died on tick {ticks}, {len(alive)} still up")
@@ -605,7 +608,7 @@ def test_a_run_carries_damage_forward() -> None:
     assert run.outcome is RunOutcome.WON
     # Finishing a forty-stage run on full health would mean nothing ever stuck.
     # Measured against the promoted maximum, which is the hero that finishes.
-    assert run.world.hero.hp < run.hero_type.hp
+    assert run.world.hero.hp < run.max_hp
 
 
 def test_the_heal_between_stages_is_the_class_s_own() -> None:
@@ -779,7 +782,7 @@ def test_the_hero_can_break_away_from_a_chase_in_open_ground() -> None:
     assert hero.pos.distance_to(chaser.pos) > opening_gap * 2, (
         "a chaser kept pace with the hero across open floor"
     )
-    assert hero.hp == hero.type.hp, "was caught while running in a straight line"
+    assert hero.hp == hero.max_hp, "was caught while running in a straight line"
 
 
 # --- the run is reproducible -------------------------------------------------
@@ -841,4 +844,4 @@ def test_health_never_goes_negative_or_above_full() -> None:
             break
         step(world, autoplay(world))
         for entity in world.entities:
-            assert 0 <= entity.hp <= entity.type.hp, entity.type.id
+            assert 0 <= entity.hp <= entity.max_hp, entity.type.id

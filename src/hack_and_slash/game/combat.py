@@ -19,6 +19,7 @@ from __future__ import annotations
 from ..core.collision import circles_overlap, cone_hits
 from ..core.vec2 import from_angle
 from . import actions
+from .attributes import PER_MILLE, Attributes
 from .entities import ActionState, Entity, Weapon
 from .events import Event, EventKind
 
@@ -27,10 +28,66 @@ MIN_DAMAGE = 1
 
 
 def roll_damage(weapon: Weapon, rng) -> int:
+    """The weapon's own number, rolled. **Draws from `world.rng` and nothing
+    else in the game does.**
+
+    Signature and draw count are both load-bearing and are deliberately
+    untouched by the attribute layer: `tests/test_combat.py` reconstructs the
+    first hit of a seeded run by calling this with a bare `random.Random(seed)`,
+    and every recorded balance number was measured against exactly this
+    sequence of draws. `resolve_damage` below *wraps* this rather than
+    absorbing it, so that stays true.
+    """
     if weapon.variance <= 0:
         return max(MIN_DAMAGE, weapon.damage)
     swing = rng.randint(-weapon.variance, weapon.variance)
     return max(MIN_DAMAGE, weapon.damage + swing)
+
+
+def resolve_damage(
+    base: int, attacker: Attributes, defender: Attributes, rng
+) -> tuple[int, bool]:
+    """Turn a rolled weapon number into what the target actually loses.
+
+    Returns `(damage, was_crit)`. `rng` is **`world.attr_rng`**, never
+    `world.rng` -- see the note on `ATTR_STREAM` in `world.py`.
+
+    The order is fixed and changing it changes the game:
+
+        base  ->  + attacker.damage  ->  x crit  ->  - defender.defense  ->  floor
+
+    Flat damage before the crit, so a point of damage is worth more to a class
+    that crits often -- which is the only thing making the two attributes
+    interesting side by side. Defense after the crit, so armour is worth least
+    against the biggest hit, which is what makes a crit read as one.
+
+    `MIN_DAMAGE` still applies underneath everything, so no amount of defense
+    makes a body immune. That floor is not politeness: a fight where nothing can
+    hurt anything runs to the tick limit and reports as a balance failure in
+    every instrument this project has.
+
+    Zero crit chance takes an early return and draws no die at all, mirroring
+    `roll_damage` at zero variance. That is what keeps a neutral fight drawing
+    exactly the dice a pre-attribute fight drew.
+    """
+    damage = base + attacker.damage
+
+    crit = attacker.crit_chance > 0 and rng.randrange(PER_MILLE) < attacker.crit_chance
+    if crit:
+        damage = (damage * (PER_MILLE + attacker.crit_damage)) // PER_MILLE
+
+    return max(MIN_DAMAGE, damage - defender.defense), crit
+
+
+def evades(defender: Attributes, rng) -> bool:
+    """Whether this hit is avoided outright.
+
+    Checked beside the i-frame gate rather than inside `resolve_damage`, because
+    an evaded hit is not a hit for nothing -- it lands no knockback, no stagger
+    and no hitstop, exactly as invulnerability does. Zero takes an early return
+    and draws nothing, for the same reason crit does.
+    """
+    return defender.evasion > 0 and rng.randrange(PER_MILLE) < defender.evasion
 
 
 def are_hostile(a: Entity, b: Entity) -> bool:
@@ -44,13 +101,19 @@ def apply_hit(world, attacker: Entity, target: Entity, weapon: Weapon, rng) -> b
     over the next few ticks -- so a hit shoves a body rather than teleporting it,
     and a shove can push something into a wall or out of its own swing.
     """
-    if target.is_invulnerable:
+    if target.is_invulnerable or evades(target.attrs, world.attr_rng):
+        # Evasion reuses BLOCKED on purpose: to a player the two are the same
+        # event -- an attack that arrived and did nothing -- and `effects.py`
+        # already draws it. A second event kind would be a second thing to draw
+        # that means the same thing.
         world.emit(
             Event(EventKind.BLOCKED, target.pos, target.id, is_hero=target.is_hero)
         )
         return False
 
-    damage = roll_damage(weapon, rng)
+    damage, crit = resolve_damage(
+        roll_damage(weapon, rng), attacker.attrs, target.attrs, world.attr_rng
+    )
     target.hp = max(0, target.hp - damage)
     target.last_hit_by = attacker.id
     target.flash = actions.FLASH_TICKS
@@ -78,6 +141,9 @@ def apply_hit(world, attacker: Entity, target: Entity, weapon: Weapon, rng) -> b
             is_hero=target.is_hero,
         )
     )
+    if crit:
+        world.emit(Event(EventKind.CRIT, target.pos, target.id, amount=damage,
+                         is_hero=target.is_hero))
     if not target.is_alive:
         world.emit(Event(EventKind.DEATH, target.pos, target.id, is_hero=target.is_hero))
     return True
@@ -113,7 +179,21 @@ def resolve_swings(world) -> None:
 
 
 def resolve_projectile_hits(world) -> None:
-    """Arrows against bodies. Spent on the first thing they hit."""
+    """Arrows against bodies. Spent on the first thing they hit.
+
+    **The attacker's half of the attribute layer was already applied at
+    launch**, in `sim._loose_projectile`, and that split is forced rather than
+    chosen: a shot carries `owner_id`, not a body, and by the time it lands the
+    owner may be dead and culled out of `world.entities`. So the attacker's
+    damage bonus and its crit are folded into `shot.damage` when the arrow is
+    loosed, and only the *target's* half -- evasion and defense -- is resolved
+    here, where the target is in scope.
+
+    The visible consequence is that an arrow's crit is decided when it is fired
+    rather than when it arrives. Nothing can observe the difference: the roll is
+    from `attr_rng` either way and the arrow's damage is already fixed at launch
+    for the same reason.
+    """
     survivors = []
     for shot in world.projectiles:
         struck = False
@@ -124,13 +204,16 @@ def resolve_projectile_hits(world) -> None:
                 continue
 
             struck = True
-            if target.is_invulnerable:
+            if target.is_invulnerable or evades(target.attrs, world.attr_rng):
                 world.emit(
                     Event(EventKind.BLOCKED, target.pos, target.id, is_hero=target.is_hero)
                 )
                 break
 
-            target.hp = max(0, target.hp - shot.damage)
+            # Attacker's side already in `shot.damage`; only the target's
+            # defense is left to apply, and the floor still holds under it.
+            damage = max(MIN_DAMAGE, shot.damage - target.attrs.defense)
+            target.hp = max(0, target.hp - damage)
             target.last_hit_by = shot.owner_id
             target.flash = actions.FLASH_TICKS
             target.velocity = target.velocity + shot.velocity.normalized() * shot.knockback
@@ -141,10 +224,13 @@ def resolve_projectile_hits(world) -> None:
                     EventKind.HIT,
                     target.pos,
                     target.id,
-                    amount=shot.damage,
+                    amount=damage,
                     is_hero=target.is_hero,
                 )
             )
+            if shot.crit:
+                world.emit(Event(EventKind.CRIT, target.pos, target.id,
+                                 amount=damage, is_hero=target.is_hero))
             if not target.is_alive:
                 world.emit(
                     Event(EventKind.DEATH, target.pos, target.id, is_hero=target.is_hero)

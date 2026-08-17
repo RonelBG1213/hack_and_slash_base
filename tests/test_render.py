@@ -716,3 +716,51 @@ def test_the_stage_banner_never_draws_over_a_panel(atlas, monkeypatch) -> None:
     scene.shopping = False
     scene.draw(surface)
     assert drawn == ["banner"], "the banner lost its remaining frames to the panel"
+
+
+# --- the level panel ---------------------------------------------------------
+def test_the_level_panel_draws_every_attribute(atlas) -> None:
+    from hack_and_slash.game import progression
+    from hack_and_slash.render.level_panel import LevelPanel
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.run.hero_level = 4
+    scene.run.unspent_points = 9
+
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    LevelPanel().draw(surface, scene.run)
+    assert not is_blank(surface)
+
+    # Seven rows on seven keys, and the panel and the scene must agree about
+    # which digit is which -- a mismatch spends a point on the wrong attribute
+    # and nothing anywhere would report it.
+    from hack_and_slash.render.level_panel import LABELS, ROW_KEYS
+
+    assert len(ROW_KEYS) == len(progression.SPENDABLE)
+    assert set(LABELS) == set(progression.SPENDABLE)
+
+
+def test_the_level_panel_fits_above_the_hud() -> None:
+    """Seven rows is two more than any other panel in the game has, on a
+    viewport 188px tall. Drafted at ROW_H 22 and the last row sat under the
+    health bar."""
+    from hack_and_slash.render import level_panel as panel
+
+    last_row = panel.ROW_Y + (len(panel.ROW_KEYS) - 1) * panel.ROW_H
+    assert last_row < panel.HINT_Y
+    assert panel.HINT_Y + 11 <= config.VIEWPORT_H
+
+
+def test_the_hud_says_nothing_about_levels_until_there_is_one(atlas) -> None:
+    """While progression ships off the hero is level 1 for the whole game, so
+    this strip has to stay exactly the one that was there before attributes
+    existed -- the pixel counterpart of the arithmetic claim."""
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    quiet = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    scene.hud.draw(quiet, scene.world, scene.run, 0)
+
+    scene.run.hero_level = 7
+    loud = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    scene.hud.draw(loud, scene.world, scene.run, 0)
+
+    assert pygame.image.tobytes(quiet, "RGB") != pygame.image.tobytes(loud, "RGB")

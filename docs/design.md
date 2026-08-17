@@ -170,6 +170,36 @@ attempt at the run, and the fork is part of the run.
 Gold carries too, and between stages there is a shop — see [Loot and
 gold](loot.md).
 
+### Attributes and levels
+
+> [!NOTE]
+> **Built, and switched off.** Seven attributes — crit rate, crit damage,
+> health, damage, defense, dodge and health regen — and a level-up system that
+> feeds them: kills pay experience, levels pay points, a panel between stages
+> spends them. None of it is reachable in the game as it ships, because
+> `data/progression.json` sets `xp_base: 0` and so nothing is ever earned.
+>
+> That is deliberate and it is the only way this could land on a tuned game.
+> Every attribute defaults to the identity of its own operation, so the
+> arithmetic is provably the arithmetic all forty stages were measured against
+> — see [Limits](limits.md#the-attribute-layer) for how, and
+> [Balance](balance.md#what-is-not-measured) for what has to happen before the
+> dial goes up.
+
+Two of the seven sit awkwardly against the rest of this document, and it is
+better to say so here than to discover it in play.
+
+**Dodge is a die the game rolls for you**, and the opening line of this document
+says a hit is a decision you made rather than something the arena did to you. It
+is priced as a garnish for that reason, it is zero on every enemy, and it is the
+attribute most likely to be cut once somebody plays it.
+
+**Defense compresses the classes.** A Rogue swings for 5 and a Magician for 15,
+so a flat point off every hit is worth three times as much against the Rogue —
+and `MIN_DAMAGE` floors every hit at 1 underneath, which turns enough of it into
+a stage that cannot end rather than a fight that is hard. It is zero on every
+enemy, and the enemy side of it is the piece least likely to survive tuning.
+
 ---
 
 ## Promotion

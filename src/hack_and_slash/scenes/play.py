@@ -25,7 +25,7 @@ import pygame
 from .. import config
 from ..core.campaign import Campaign
 from ..core.vec2 import ZERO, Vec2
-from ..game import jobs, shop, skills
+from ..game import jobs, progression, shop, skills
 from ..game.entities import DEFAULT_HERO, Bestiary
 from ..game.intent import Intent
 from ..game.run import Run, RunOutcome
@@ -35,6 +35,8 @@ from ..render.camera import Camera
 from ..render.effects import Effects
 from ..render.hud import Hud
 from ..render.job_panel import CHOICE_KEYS, JobPanel
+from ..render.level_panel import ROW_KEYS as LEVEL_ROW_KEYS
+from ..render.level_panel import LevelPanel
 from ..render.renderer import Renderer
 from ..render.shop_panel import ROW_KEYS, ShopPanel
 from .base import Scene
@@ -93,6 +95,15 @@ SHOP_EXIT_KEYS = (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE, pygame.K_E
 #: So the arena stays paused until 1 or 2. Esc still leaves to the menu nowhere
 #: here, exactly as it does behind the shop.
 
+#: The level panel closes on the shop's keys, and *does* have an exit -- which
+#: is the one way it differs from the promotion panel above.
+#:
+#: The difference is recoverability. `Run.unspent_points` carries between
+#: stages, so declining here banks the points for a boss rather than throwing
+#: them away; a fork declined is half a campaign played with the wrong kit. A
+#: panel should only be inescapable when leaving it is unrecoverable.
+LEVEL_EXIT_KEYS = SHOP_EXIT_KEYS
+
 
 class PlayScene(Scene):
     def __init__(
@@ -117,6 +128,7 @@ class PlayScene(Scene):
         self.hud = Hud()
         self.shop_panel = ShopPanel()
         self.job_panel = JobPanel()
+        self.level_panel = LevelPanel()
         self.accumulator = Accumulator()
         self.effects = Effects()
 
@@ -148,6 +160,17 @@ class PlayScene(Scene):
         #: having it clipped away by a class change a moment later is the only
         #: ordering that would surprise anybody.
         self.promoting = False
+
+        #: Open on any transition that arrives with points to spend, between
+        #: the promotion and the shop. That ordering is the same argument the
+        #: promotion/shop ordering makes, one step further along: a point put
+        #: into health raises the maximum a Poultice fills to, so spending has
+        #: to resolve before buying or the shop clamps against a ceiling that is
+        #: about to move.
+        #:
+        #: Never opens at all while `data/progression.json` ships `xp_base: 0`,
+        #: because no point is ever earned.
+        self.levelling = False
         self._enter_stage()
 
         #: Dodge is edge-triggered. Held as a flag rather than read from the key
@@ -185,6 +208,12 @@ class PlayScene(Scene):
             # Checked before the shop because it is drawn on top of it. Both are
             # open on this one transition and only the front one takes keys.
             return self._handle_job_event(event)
+
+        if self.levelling:
+            # Between the two, and for the same reason it is drawn between them:
+            # the class is settled before the points are spent, and the points
+            # are spent before the gold is.
+            return self._handle_level_event(event)
 
         if self.shopping:
             # The shop swallows everything. Aiming, swinging and rolling are all
@@ -252,6 +281,27 @@ class PlayScene(Scene):
             index = ROW_KEYS.index(event.key)
             if index < len(goods):
                 shop.buy(self.run, goods[index])
+        return None
+
+    def _handle_level_event(self, event: pygame.event.Event) -> Optional[Scene]:
+        """Spend a point, or keep them. Nothing else happens while this is up.
+
+        The panel closes on its own once the last point is gone, so a player who
+        means to spend everything never has to dismiss it -- and one who means
+        to bank a level for the boss presses Enter and keeps them.
+        """
+        if event.type != pygame.KEYDOWN:
+            return None
+
+        if event.key in LEVEL_EXIT_KEYS:
+            self.levelling = False
+            return None
+
+        if event.key in LEVEL_ROW_KEYS:
+            index = LEVEL_ROW_KEYS.index(event.key)
+            if index < len(progression.SPENDABLE):
+                progression.spend(self.run, progression.SPENDABLE[index])
+                self.levelling = self.run.unspent_points > 0
         return None
 
     def restarted(self) -> "PlayScene":
@@ -326,7 +376,7 @@ class PlayScene(Scene):
 
     # --- update --------------------------------------------------------------
     def update(self, elapsed_seconds: float) -> Optional[Scene]:
-        if self.promoting or self.shopping:
+        if self.promoting or self.levelling or self.shopping:
             # Not stepped, and the accumulator is not fed either -- banking real
             # seconds while a panel is open would fast-forward the first moments
             # of the next stage the instant it closed.
@@ -367,6 +417,13 @@ class PlayScene(Scene):
                 # advanced classes from the JSON turn the whole feature off.
                 if self.run.at_promotion_point and jobs.can_promote(self.run):
                     self.promoting = True
+
+                # And whenever the stage just cleared paid for a level. Checked
+                # after the promotion so the two open in the order they are
+                # resolved in, and gated on the count rather than on "did we
+                # level this stage" so points banked on an earlier transition
+                # are offered again rather than stranded.
+                self.levelling = self.run.unspent_points > 0
                 break
 
         self.effects.tick()
@@ -387,7 +444,7 @@ class PlayScene(Scene):
         self.renderer.draw(viewport, self.world, self.camera, self.effects)
         self.hud.draw(surface, self.world, self.run, self.world.tick)
 
-        if self.shopping or self.promoting:
+        if self.shopping or self.promoting or self.levelling:
             # A panel, or the banner -- never both. Both at once puts the stage
             # name through the panel's title, and the banner is still counting
             # down underneath, so it gets its remaining frames once the panel is
@@ -399,6 +456,10 @@ class PlayScene(Scene):
             # the promotion panel was added between them.
             if self.shopping:
                 self.shop_panel.draw(surface, self.run)
+            if self.levelling:
+                # Over the shop and under the promotion, matching the order the
+                # three are resolved in and the order they take keys in.
+                self.level_panel.draw(surface, self.run)
             if self.promoting:
                 # Over the shop, not instead of it. Both are open on the final
                 # transition, and the class is the choice being asked for.

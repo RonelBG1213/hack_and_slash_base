@@ -20,6 +20,7 @@ from enum import Enum
 from pathlib import Path
 
 from ..core.vec2 import ZERO, Vec2
+from .attributes import NEUTRAL, Attributes
 
 #: The class played when nobody has chosen one -- tests, tools, and every
 #: `World` or `Run` built without naming a class. The Knight rather than an
@@ -212,6 +213,29 @@ class EntityType:
     #: expressed -- as data, the way `dodge_ticks` says enemies cannot roll.
     flank_degrees: float = 0.0
 
+    #: The content half of the attribute layer -- crit, defense, evasion, regen
+    #: and the flat bonuses. See `attributes.py`; every field defaults to the
+    #: identity of its own operation, so a type that declares nothing fights
+    #: exactly the way it did before the layer existed.
+    #:
+    #: **One field rather than seven, and that is the point.**
+    #: `test_a_variant_is_stat_identical_to_what_it_varies` iterates
+    #: `dataclasses.fields`, so a variant is held to the whole block by the
+    #: test that already exists, and an eighth attribute is covered the day it
+    #: is added rather than the day somebody remembers to widen a list.
+    attributes: Attributes = NEUTRAL
+
+    @property
+    def full_hp(self) -> int:
+        """What a fresh body of this type has, attribute block included.
+
+        The content-level counterpart to `Entity.max_hp`, for the screens that
+        describe a class before there is a body to ask -- the character select
+        and the promotion panel. A live body always knows better, because it may
+        have earned some.
+        """
+        return self.hp + self.attributes.max_hp
+
     @property
     def can_dodge(self) -> bool:
         return self.dodge_ticks > 0
@@ -261,6 +285,7 @@ class EntityType:
             preferred_range=float(payload.get("preferred_range", 0.0)),
             retreat_range=float(payload.get("retreat_range", 0.0)),
             flank_degrees=float(payload.get("flank_degrees", 0.0)),
+            attributes=Attributes.from_dict(payload.get("attributes")),
         )
 
 
@@ -416,6 +441,21 @@ class Entity:
     stagger: int = 0  # ticks unable to act, from being hit
     attack_cooldown: int = 0  # AI pacing between swings
 
+    #: What this body earned during this run, on top of what its type ships
+    #: with. Written by the progression layer and by nothing else; neutral on
+    #: every enemy in the game and on a hero that has not levelled.
+    #:
+    #: Lives on the `Entity` rather than on the `EntityType` because the type is
+    #: frozen content shared by every run of that class -- and it survives
+    #: `jobs.promote`, which swaps `type` on a live body and would otherwise
+    #: throw away everything the run had earned at the exact midpoint of it.
+    bonus: Attributes = NEUTRAL
+
+    #: Hundredths of a hit point of regeneration banked but not yet paid out.
+    #: Integer, so a long run cannot accumulate rounding drift and stop
+    #: replaying from its seed. See `sim._regen`.
+    regen_bank: int = 0
+
     # Cosmetic only. The renderer reads these; the sim never branches on them,
     # which is what lets the feel pass be turned off without changing a fight.
     flash: int = 0
@@ -462,9 +502,44 @@ class Entity:
         return self.iframes > 0
 
     @property
+    def attrs(self) -> Attributes:
+        """Content plus earned. The only attribute value the sim ever reads.
+
+        Summed on every access rather than cached: the earned half changes when
+        a level is spent and the content half changes when `jobs.promote` swaps
+        the type, and a cache invalidated in two places is a cache that will be
+        wrong in a third.
+        """
+        return self.type.attributes + self.bonus
+
+    @property
+    def max_hp(self) -> int:
+        """This body's full health, attributes included.
+
+        **Read this, never `entity.type.hp`.** The type's number is the content
+        baseline and stopped being the whole answer when the attribute layer
+        landed; a caller that reaches past this sees a maximum that a levelled
+        hero has already exceeded. The two that matter most are
+        `health_fraction` below -- which the reference bot's disengage rule keys
+        off -- and `jobs.promote`, which carries health across the fork as a
+        fraction and would turn a wrong ceiling into a silent heal or wound.
+        """
+        return self.type.hp + self.attrs.max_hp
+
+    @property
     def health_fraction(self) -> float:
-        return max(0.0, min(1.0, self.hp / self.type.hp))
+        return max(0.0, min(1.0, self.hp / self.max_hp))
 
 
 def spawn(next_id: int, entity_type: EntityType, pos: Vec2) -> Entity:
-    return Entity(id=next_id, type=entity_type, pos=pos, hp=entity_type.hp)
+    """A body at full health, its type's attribute block included.
+
+    `bonus` is neutral here by construction -- nothing has been earned yet --
+    so the type's own `max_hp` is the whole of the difference from `type.hp`.
+    """
+    return Entity(
+        id=next_id,
+        type=entity_type,
+        pos=pos,
+        hp=entity_type.hp + entity_type.attributes.max_hp,
+    )

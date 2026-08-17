@@ -133,13 +133,16 @@ class JobPanel:
         one it replaced, and it is coloured -- there is no branch here that is
         strictly better, so a player has to see which way each one traded.
         """
-        delta = advanced.hp - base.hp
+        # `full_hp`, not `hp`: what the player is choosing between is the health
+        # each branch actually fights with, attribute block included.
+        after = advanced.full_hp
+        delta = after - base.full_hp
         if delta > 0:
-            health = (f"hp {advanced.hp}  +{delta}", config.GOOD)
+            health = (f"hp {after}  +{delta}", config.GOOD)
         elif delta < 0:
-            health = (f"hp {advanced.hp}  {delta}", config.BAD)
+            health = (f"hp {after}  {delta}", config.BAD)
         else:
-            health = (f"hp {advanced.hp}", config.GREY)
+            health = (f"hp {after}", config.GREY)
 
         heavy = advanced.weapons[skills.HEAVY]
         ultimate = advanced.weapons[skills.ULTIMATE]

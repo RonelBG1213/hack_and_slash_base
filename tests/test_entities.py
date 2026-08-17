@@ -568,6 +568,13 @@ def test_the_fork_is_not_a_decision_about_healing() -> None:
 
     A tier may heal more than the tier below it. A branch may not heal more than
     its twin.
+
+    **Regen is the second heal channel, and it is checked here for the reason
+    the rule exists rather than as an afterthought.** `heal_between_stages` was
+    the only way to recover health when this test was written. An attribute
+    block that gave the Holy branch more regen than its twin would make the fork
+    a decision about healing through a door this test was not watching, and the
+    number would not appear anywhere near the one it was competing with.
     """
     for cls in ADVANCED:
         twin = next(
@@ -582,4 +589,10 @@ def test_the_fork_is_not_a_decision_about_healing() -> None:
         assert cls.heal_between_stages >= BESTIARY[cls.promotes_from].heal_between_stages, (
             f"{cls.id} recovers less between stages than the {cls.promotes_from} "
             "it was promoted from, which is a stealth nerf for taking the fork"
+        )
+        assert cls.attributes.regen == twin.attributes.regen, (
+            f"{cls.id} regenerates {cls.attributes.regen} where {twin.id} "
+            f"regenerates {twin.attributes.regen}. Same rule as the line above "
+            "and the same reason -- regen is healing, so a branch that has more "
+            "of it is 'the healing one' however the number is spelled"
         )
