@@ -1,7 +1,7 @@
 {
   "_comment": [
     "Levelling: what a kill is worth in experience, what a level costs, and",
-    "what one point buys in each of the seven attributes. game/progression.py",
+    "what one point buys in each attribute. game/progression.py",
     "holds the arithmetic and none of the values.",
     "",
     "*** THIS SYSTEM SHIPS SWITCHED OFF. xp_base IS ZERO. ***",
@@ -71,6 +71,7 @@
     "crit_damage": 25,
     "evasion": 8,
     "regen": 5,
+    "move_speed": 5,
 
     "_comment": [
       "What one point buys, in each attribute's own units -- flat for the",
@@ -91,10 +92,17 @@
       "                the tick limit and reports as a balance failure. Enemy",
       "                defense is 0 everywhere on purpose; see entities.json.",
       "  crit 15/25 -- 20 points is a 30% rate; 20 more is +50% damage on it.",
-      "  evasion 8  -- deliberately the meanest of the seven. See below.",
+      "  evasion 8  -- deliberately the meanest of them all. See below.",
       "  regen 5    -- 10 points is one hit point every two seconds, which is",
       "                about a third of a Knight's between-stage heal over a",
       "                median stage.",
+      "  move_speed 5 -- per-mille, so a point is +0.5% and the 57-point budget",
+      "                is +28.5%. Priced under the Boots in the shop (+5% a",
+      "                pair, four pairs) on purpose: the shop good is the one a",
+      "                player reaches for, and two systems selling the same",
+      "                stat should not both be the cheap way to buy it.",
+      "                Walking only -- the dodge roll's distance is fixed. See",
+      "                sim._walk_speed.",
       "",
       "On evasion specifically: docs/design.md opens by saying that taking a",
       "hit is a decision you made rather than something the arena did to you.",

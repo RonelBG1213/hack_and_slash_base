@@ -69,6 +69,7 @@ way an enemy expresses that it cannot dodge by having no `dodge_ticks`.
 | `crit_damage` | per-mille **bonus**, so 500 is ×1.5 | 0 |
 | `evasion` | per-mille chance to avoid entirely | 0 |
 | `regen` | hundredths of a hit point per tick | 0 |
+| `move_speed` | per-mille **bonus** on walking speed, so 100 is +10% | 0 |
 
 Integers throughout, and per-mille rather than per-cent, for the reason every
 duration here is ticks: a run is 240,000 ticks and regen accrues on all of them,
@@ -92,6 +93,40 @@ Four things to know before setting one:
 - **A variant may not have its own.** `attributes` is one field on `EntityType`,
   so `test_a_variant_is_stat_identical_to_what_it_varies` covers the whole block
   — which is the point of it being one field.
+- **`move_speed` is walking only.** It does not scale the dodge roll, which
+  reads `type.dodge_speed` directly. How far a roll travels is how much ground
+  one invulnerable window covers, so scaling it would be handing out
+  invulnerability rather than mobility.
+
+### Adding a new attribute
+
+Rarer than adding a creature and worth writing down, because the field is
+declared in one place and **four others are wired to that declaration** — three
+of which fail loudly and one of which does not.
+
+1. **Append it to `Attributes`** in `game/attributes.py`. *Append*, never
+   insert: the field order is `progression.SPENDABLE` order, which is the order
+   the level panel draws its rows, so an insert silently changes which digit
+   spends what and nothing reports it.
+2. **Price it in `data/progression.json`.** Not optional — `Table.load` checks
+   both directions and **raises at startup** if an attribute has no price or a
+   price has no attribute. This is the loudest of the four and it is deliberate.
+3. **Give the level panel a row.** `ROW_KEYS` needs another digit and `LABELS`
+   another entry, or `test_the_level_panel_draws_every_attribute` fails. Check
+   `ROW_H` against `HINT_Y` while you are there: the fit test measures
+   `len(ROW_KEYS) - 1`, so it passes while the last row draws through the hint.
+   Eight rows needed `ROW_H` 18 → 16.
+4. **Teach `LevelPanel._format` its units**, if it is not a flat number. Per-mille
+   and hundredths-per-tick are internal; a player reads percentages.
+5. **Make it do something.** A field nothing reads is inert — which is a fine
+   intermediate state, and is what every attribute is until the sim consults it.
+
+The claim you have to be able to make afterwards is that the recorded grid did
+not move. Take the early return: `sim._walk_speed` returns `type.speed`
+*itself* at zero rather than multiplying by 1.0, so a body that declares nothing
+is bit-identical rather than approximately identical. `combat.evades` and the
+crit roll do the same, and it is what lets the claim be arithmetic instead of a
+sweep.
 
 ## Adding a brain
 
@@ -183,6 +218,46 @@ The same move with `"faction": "hero"`, `"brain": "player"`, dodge fields and a
 There is no second place to register it — the character select reads
 `bestiary.hero_classes`, which is whatever the faction says, in file order.
 
+### The four dodge fields
+
+```json
+"dodge_speed": 3.6, "dodge_ticks": 12, "iframe_ticks": 8, "dodge_cooldown": 38
+```
+
+| Field | Means |
+| --- | --- |
+| `dodge_speed` | pixels per tick while rolling — with `dodge_ticks`, the distance |
+| `dodge_ticks` | how long the roll lasts, and the whole of "can this thing roll" |
+| `iframe_ticks` | how much of that is invulnerable, counted from the **first** tick |
+| `dodge_cooldown` | ticks before the next roll, counted from this one **ending** |
+
+`dodge_ticks: 0` is how "cannot dodge" is expressed — as data, not as a branch in
+the sim. Every enemy in the game leaves all four off, and
+`test_only_the_classes_can_dodge` holds that from both ends.
+
+Three relationships matter more than any of the four numbers, and two of them are
+tested:
+
+- **`iframe_ticks < dodge_ticks`**, always. Invulnerability starts on the first
+  tick and must end before the roll does, or the last frames of every dodge are
+  free and the correct way to play is to roll constantly.
+  `test_no_class_s_iframes_outlast_its_roll` refuses it. A draft of the Shadow
+  Rogue was caught by exactly that, at 11 iframes on a 10-tick roll.
+- **`dodge_ticks + dodge_cooldown > DODGE_BUFFER_TICKS`** (6, in
+  `scenes/play.py`). A dodge press stays live for a few ticks so that one made a
+  moment early still lands — see
+  [Architecture](architecture.md#the-simulation-runs-on-a-fixed-timestep-never-on-frame-time).
+  A class whose roll and cooldown together finish inside that window would take
+  one press and roll twice.
+  `test_the_dodge_buffer_is_shorter_than_every_roll_in_the_game` refuses it. The
+  shortest in the shipped roster is the Shadow Rogue at 11 + 18, so there is a
+  lot of room — but both halves are balance numbers that get tuned, and this is
+  the test that notices.
+- **The roll's distance is the class's alone.** Nothing scales it: not the
+  Boots, not `move_speed`, not anything a run can buy. `sim._self_propulsion`
+  reads `type.dodge_speed` directly on the dodging branch, because how far a
+  roll travels is how much ground one invulnerable window covers.
+
 A class declares four attacks. **The order is a contract**: light, neutral, heavy,
 ultimate, ascending in commitment and cooldown. `game/skills.py` names the
 indices, and a test fails if a class lists them in another order — otherwise it
@@ -246,6 +321,60 @@ it by damage rather than health. The escort rule is now a test —
 `test_no_boss_stage_is_escorted_by_anything_ranged` — rather than only advice.
 
 ---
+
+## Adding a shop good
+
+Two edits, and the pair is checked against itself at load so neither half can
+exist alone.
+
+**The numbers** go in the `shop` block of `data/loot.json`. Order is content —
+it is the order the panel draws and therefore which digit buys what — so place
+the entry where you want the row, not at the end by habit.
+
+```json
+"boots": { "name": "Boots", "price": 520, "amount": 5, "limit": 4 }
+```
+
+| Key | Means |
+| --- | --- |
+| `price` | gold |
+| `amount` | whatever the effect does with it — health, heal-per-stage, percentage points |
+| `limit` | 0 is uncapped, which is only right for a consumable |
+| `unlocks_at` | first stage it is stocked, 1-based; absent means always |
+
+**What it does** goes in `EFFECTS` in `game/shop.py`: a function taking
+`(run, amount)` and returning whether anything happened, plus the blurb
+template. Returning `False` is how "you are already at full health" is said —
+the purchase is refused rather than taking the gold for nothing, and `can_buy`
+greys the row out for the same reason.
+
+`stock()` raises both ways: a good in the JSON with no effect, and an effect
+with no good. There is no silent half.
+
+Four things that will bite:
+
+- **Cap anything permanent.** They compound. Uncapped, the correct play is to
+  buy nothing but the best one early and the shop stops being a decision.
+- **Give the panel a key and check the height.** `ROW_KEYS` in
+  `render/shop_panel.py` needs a digit per row, and
+  `test_the_shop_rows_and_hint_fit_above_the_hud` measures the *tallest the
+  panel ever gets* — `stock()`, not `available(run)` — so a late shelf overflows
+  the HUD on a run nobody has played yet. A fifth row needed `ROW_Y` 62 → 56 and
+  `ROW_H` 24 → 20.
+- **Keep the blurb short.** `test_no_shop_row_overflows_the_panel` measures it
+  with the panel's real font against the sold-out tally.
+- **A good that writes an attribute writes two things.** `run.earned` is what
+  `Run._advance` hands the next stage's `World`; `hero.bonus` is what the sim
+  reads in the stage being played. Write only the first and the purchase does
+  nothing until the next transition; only the second and it is lost at that
+  transition. `progression.spend` is the pattern — copy it.
+
+> [!IMPORTANT]
+> **Price it against income; know that the amount is a guess.** A run banks
+> ~24,500 gold and the shelves absorb ~14,340 of it, so what a thing *costs* can
+> be set against a real measurement. What it is *worth* cannot: `autoplay` never
+> spends, so nothing in the suite has an opinion on whether the thing is worth
+> buying. Say which of the two a number is, in the file, next to the number.
 
 ## Adding a stage
 

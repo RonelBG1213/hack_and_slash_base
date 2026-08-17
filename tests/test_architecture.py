@@ -20,9 +20,20 @@ import pytest
 SRC = Path(__file__).resolve().parents[1] / "src"
 PURE_PACKAGES = ("core", "game")
 
+#: Pure modules that sit at the top of the package rather than inside one of the
+#: pure packages, so the glob below cannot find them. Named one by one and
+#: deliberately short: a module belongs here only if it must be readable with no
+#: display in existence.
+#:
+#: `config` is the constants everything reads. `settings` is the player's
+#: preferences, and it is on this list because the window size is read from it
+#: *before* there is a window to ask -- the moment it imports pygame, `main.py`
+#: can no longer decide how big to open the display.
+PURE_MODULES = ("config", "settings")
+
 
 def _pure_modules() -> list[str]:
-    names = []
+    names = [f"hack_and_slash.{stem}" for stem in PURE_MODULES]
     for package in PURE_PACKAGES:
         for path in sorted((SRC / "hack_and_slash" / package).glob("*.py")):
             if path.stem == "__init__":

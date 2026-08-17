@@ -8,7 +8,7 @@ Reads a `Run` and never writes to one. Spending is `progression.spend`, called
 by the scene when a key arrives, so the panel cannot get out of step with what a
 keypress actually does -- it does none of it.
 
-Seven rows on keys 1-7, and unlike the shop this panel can be opened repeatedly
+Eight rows on keys 1-8, and unlike the shop this panel can be opened repeatedly
 until the points run out. It closes on Enter with points still unspent, which is
 deliberate: banking them for a boss is a decision worth being able to make, and
 `Run.unspent_points` carries between stages so nothing is lost by declining.
@@ -26,9 +26,11 @@ from .. import config
 from ..game import progression
 from ..game.attributes import PER_MILLE, REGEN_SCALE
 
-#: Keys 1..7, in `progression.SPENDABLE` order -- which is the order the fields
+#: Keys 1..8, in `progression.SPENDABLE` order -- which is the order the fields
 #: are declared on `Attributes`. The row a player reads and the key they press
-#: are the same digit.
+#: are the same digit, which is why a new attribute is *appended* to that
+#: dataclass and never inserted: an insert silently moves what every digit here
+#: spends, and nothing would report it.
 ROW_KEYS = (
     pygame.K_1,
     pygame.K_2,
@@ -37,6 +39,7 @@ ROW_KEYS = (
     pygame.K_5,
     pygame.K_6,
     pygame.K_7,
+    pygame.K_8,
 )
 
 #: What each attribute is called on screen. `evasion` is shown as "Dodge"
@@ -51,16 +54,21 @@ LABELS = {
     "crit_damage": "Crit damage",
     "evasion": "Dodge",
     "regen": "Health regen",
+    "move_speed": "Move speed",
 }
 
 TITLE_Y = 10
 SUBTITLE_Y = 28
 
-#: Seven rows at 18px from y=46 ends at 172, and the viewport is 188 tall -- so
-#: the hint below clears the HUD. Drafted at ROW_H 22 and the last row sat under
-#: the health bar.
+#: Eight rows at 16px from y=46 puts the last one at 158, clear of the hint at
+#: 174 and of the 188-tall viewport below it. Drafted at ROW_H 22 for seven rows
+#: and the last row sat under the health bar; at 18 an eighth row starts two
+#: pixels above the hint and draws straight through it.
+#:
+#: Note the fit test measures `len(ROW_KEYS) - 1`, so it would have passed at 18
+#: while the pixels overlapped -- the arithmetic below is the real constraint.
 ROW_Y = 46
-ROW_H = 18
+ROW_H = 16
 HINT_Y = 174
 
 LEFT = 40
@@ -90,8 +98,12 @@ class LevelPanel:
         for index, name in enumerate(progression.SPENDABLE):
             self._row(surface, run, table, index, name, affordable=points > 0)
 
+        # Counted from the rows rather than written out, so the hint cannot go
+        # on saying 1-7 the day an attribute is added.
         hint = self.small.render(
-            "1-7 to spend    Enter to keep the rest", False, config.GREY
+            f"1-{len(progression.SPENDABLE)} to spend    Enter to keep the rest",
+            False,
+            config.GREY,
         )
         surface.blit(hint, ((config.INTERNAL_W - hint.get_width()) // 2, HINT_Y))
 
@@ -131,7 +143,7 @@ class LevelPanel:
         as fifteen percent, so the conversion happens here, at the edge, and
         nowhere in the arithmetic.
         """
-        if name in ("crit_chance", "evasion"):
+        if name in ("crit_chance", "evasion", "move_speed"):
             return f"{value * 100 / PER_MILLE:g}%"
         if name == "crit_damage":
             return f"{value * 100 / PER_MILLE:g}%"

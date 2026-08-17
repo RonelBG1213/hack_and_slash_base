@@ -15,6 +15,7 @@ from hack_and_slash import config
 from hack_and_slash.core import campaign_io
 from hack_and_slash.core.vec2 import Vec2
 from hack_and_slash.game import skills
+from hack_and_slash.game.entities import ActionState
 from hack_and_slash.game.intent import Intent
 from hack_and_slash.game.sim import step
 from hack_and_slash.render.atlas import load as load_atlas
@@ -254,16 +255,23 @@ def test_the_hud_draws_for_a_body_with_no_skills(atlas) -> None:
 # --- input -------------------------------------------------------------------
 def test_a_skill_key_selects_its_slot_and_fires_once(atlas) -> None:
     """The input path, which nothing covered before: a keypress becomes an
-    `Intent` naming a slot, and the flag is cleared so it does not fire again on
-    the next frame. Held-to-repeat is right for the light attack and wrong for a
+    `Intent` naming a slot, and the flag is spent so it does not fire again on
+    the next tick. Held-to-repeat is right for the light attack and wrong for a
     skill -- a leant-on key would spend every cooldown the instant it expired,
-    forever, which is the opposite of a decision."""
+    forever, which is the opposite of a decision.
+
+    Spent by `_consume_edges` rather than by the read, which is the only part of
+    this that changed: a press now waits for a tick that can take it instead of
+    being discarded by the next frame. What it must not do is fire twice, and
+    that is still what this asserts.
+    """
     scene = PlayScene(campaign(), BESTIARY, atlas)
 
     scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_e))
     intent = scene._read_intent()
     assert intent.attack and intent.weapon == skills.HEAVY
 
+    scene._consume_edges()
     assert scene._read_intent().weapon == skills.LIGHT, "the press fired twice"
 
 
@@ -274,6 +282,189 @@ def test_the_highest_slot_wins_when_two_keys_land_in_one_frame(atlas) -> None:
     for key in (pygame.K_f, pygame.K_q):
         scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=key))
     assert scene._read_intent().weapon == skills.ULTIMATE
+
+
+def test_reading_an_intent_does_not_spend_the_press(atlas) -> None:
+    """A rendered frame and a simulation tick are not the same thing.
+
+    `_read_intent` is a pure read; `_consume_edges` is what ages the press, and
+    it runs only where a `step` does. Collapsing the two is what threw a dodge
+    away on every frame the accumulator paid out nothing, and this is the
+    smallest statement of that.
+    """
+    from hack_and_slash.scenes.play import DODGE_BUFFER_TICKS
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
+
+    for _ in range(5):
+        assert scene._read_intent().dodge, "the press was spent by being looked at"
+
+    # It survives exactly as many ticks as it says it does, and no more -- an
+    # unbounded buffer is a roll the player stopped wanting.
+    for _ in range(DODGE_BUFFER_TICKS):
+        assert scene._read_intent().dodge
+        scene._consume_edges()
+
+    assert not scene._read_intent().dodge, "the buffer outlived its own limit"
+
+
+def test_a_dodge_survives_a_frame_that_produced_no_tick(atlas) -> None:
+    """`FPS` and `TICKS_PER_SEC` are both 60 and `clock.tick` deals in whole
+    milliseconds, so the accumulator regularly banks a frame without paying out
+    a tick. Measured: 2% of frames on a clean 16/17 alternation, 4-5% with
+    ordinary jitter, 9% with a vsync hiccup -- and every one of them used to
+    swallow whatever had just been pressed."""
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    before = scene.world.tick
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
+    scene.update(config.DT * 0.4)
+
+    assert scene.world.tick == before, "the frame was meant to be too short to tick"
+    assert scene._dodge_buffer, "a dodge was thrown away by a frame that did not tick"
+
+    scene.update(config.DT * 2)
+    assert scene.world.hero.state is ActionState.DODGING
+
+
+def test_a_dodge_survives_hitstop(atlas) -> None:
+    """The bigger of the two windows, and the one a player feels.
+
+    `freeze` is set on every landed hit -- the hero's own and the ones it takes
+    -- for up to eleven ticks. Those ticks are consumed without stepping, so
+    clearing the flag once a frame meant a fifth of a second of dead dodge
+    immediately after every connect, which is exactly when the roll is reached
+    for.
+    """
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.freeze = 6
+    before = scene.world.tick
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
+    scene.update(config.DT * 4)
+
+    assert scene.world.tick == before, "the world advanced during hitstop"
+    assert scene._dodge_buffer, "a dodge pressed during hitstop was swallowed"
+
+    scene.update(config.DT * 4)
+    assert scene.world.hero.state is ActionState.DODGING, "the roll never came out"
+
+
+def test_a_dodge_pressed_while_staggered_inside_hitstop_still_comes_out(atlas) -> None:
+    """The case the buffer exists for, and the one that made a one-tick
+    delivery worthless.
+
+    Getting hit sets both `freeze` and `stagger`. `freeze` drains *without
+    stepping*, so the stagger has not counted down at all by the time stepping
+    resumes -- a press delivered on the first stepped tick is delivered into an
+    `actions.can_dodge` that refuses it, and the player sees exactly what they
+    saw when the press was being dropped outright.
+
+    The buffer is one tick longer than the stagger, so the press is still live
+    on the tick the hero becomes free.
+    """
+    from hack_and_slash.game import actions
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    hero = scene.world.hero
+    hero.stagger = actions.STAGGER_TICKS
+    scene.freeze = 8
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
+
+    # Long enough to drain the freeze and then the stagger underneath it.
+    for _ in range(20):
+        scene.update(config.DT)
+        if scene.world.hero.state is ActionState.DODGING:
+            break
+
+    assert scene.world.hero.state is ActionState.DODGING, (
+        "the press was delivered while the hero was staggered and refused"
+    )
+
+
+def test_one_press_is_one_roll(atlas) -> None:
+    """The buffer's other half. It re-asks the sim for a few ticks, which is
+    only safe if a press that is *accepted* cannot be accepted twice.
+
+    It cannot, and the reason is arithmetic rather than a guard: the buffer is
+    six ticks, the shortest roll in the game is ten, and `dodge_cooldown` adds
+    eighteen more behind it -- so the buffer is long spent before the hero could
+    take a second. Pinned because both of those are balance numbers in a content
+    file, and the day one of them drops this is a free extra roll that nothing
+    else in the suite would report.
+    """
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
+
+    rolls, was = 0, None
+    for _ in range(120):
+        scene.update(config.DT)
+        now = scene.world.hero.state
+        if now is ActionState.DODGING and was is not ActionState.DODGING:
+            rolls += 1
+        was = now
+
+    assert rolls == 1, f"one press produced {rolls} rolls"
+
+
+def test_one_press_is_one_roll_even_when_a_frame_pays_out_many_ticks(atlas) -> None:
+    """The stall case. `MAX_FRAME_TIME` lets one frame pay out fifteen ticks
+    after a drag or a breakpoint, and the roll is ten to twelve -- so a frame
+    can begin and finish a dodge without the player seeing a frame of it.
+
+    Honest about what holds this up: the press surviving that frame is refused
+    by `dodge_cooldown` (18 ticks at the shortest) rather than by the buffer, so
+    this passes with the buffer read per tick *and* with it baked into the
+    intent. It is pinned because the cooldown is a balance number on a content
+    file -- the day a class ships a short enough one, this is the test that
+    says so instead of a player finding a free second roll.
+    """
+    from hack_and_slash.game.events import EventKind
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
+
+    # Counted off the sim's own event rather than by sampling the hero between
+    # frames: a fifteen-tick frame can begin *and finish* a ten-tick roll
+    # inside one `update`, so a sampler sees IDLE either side and reports
+    # nothing at all. `feed` is the one place every tick's events pass through.
+    rolls = 0
+    feed = scene.effects.feed
+
+    def spy(events, hitstop):
+        nonlocal rolls
+        events = list(events)
+        rolls += sum(
+            1 for e in events if e.kind is EventKind.DODGE and e.is_hero
+        )
+        feed(events, hitstop)
+
+    scene.effects.feed = spy
+
+    # One frame long enough to be clamped, then ordinary frames to carry the
+    # hero out the far side of the roll.
+    scene.update(config.MAX_FRAME_TIME)
+    for _ in range(120):
+        scene.update(config.DT)
+
+    assert rolls == 1, f"a stalled frame turned one press into {rolls} rolls"
+
+
+def test_the_dodge_buffer_is_shorter_than_every_roll_in_the_game() -> None:
+    """What the test above depends on, stated where it can be checked against
+    the content files rather than against one class."""
+    from hack_and_slash.scenes.play import DODGE_BUFFER_TICKS
+
+    rollers = [t for t in BESTIARY.types.values() if t.can_dodge]
+    assert rollers, "no class can dodge, so this guarantees nothing"
+    for hero_type in rollers:
+        assert hero_type.dodge_ticks + hero_type.dodge_cooldown > DODGE_BUFFER_TICKS, (
+            f"{hero_type.id} rolls for {hero_type.dodge_ticks} ticks and waits "
+            f"{hero_type.dodge_cooldown}, against a {DODGE_BUFFER_TICKS}-tick "
+            f"input buffer -- one press could roll twice"
+        )
 
 
 # --- loot on the floor -------------------------------------------------------
@@ -360,6 +551,12 @@ def test_the_shop_pauses_the_world_and_swallows_the_controls(atlas) -> None:
 
     A skill pressed here would otherwise come out on the first tick of the next
     stage, which is a swing the player did not aim.
+
+    The dodge half of this matters more than it used to. `_consume_edges` is now
+    what clears the flags, and the shop is the one place a press is dropped
+    without a tick having taken it -- otherwise a dodge pressed on the frame the
+    stage was cleared would survive the whole visit and roll the hero into a
+    room they have not seen.
     """
     scene = PlayScene(campaign(), BESTIARY, atlas)
     scene.shopping = True
@@ -370,6 +567,11 @@ def test_the_shop_pauses_the_world_and_swallows_the_controls(atlas) -> None:
 
     assert scene.world.tick == before, "the world advanced while the shop was open"
     assert scene._skill_pressed is None, "a skill press leaked past the shop"
+
+    # And a dodge banked on the frame the stage ended, before the panel opened.
+    scene._dodge_buffer = 3
+    scene.update(1.0)
+    assert not scene._dodge_buffer, "a dodge press leaked past the shop"
 
 
 def test_a_number_key_buys_the_good_on_that_row(atlas) -> None:

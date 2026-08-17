@@ -217,7 +217,7 @@ In order:
 
 ## What is not measured
 
-Two holes, both deliberate and both stated where somebody will trip over them.
+Three holes, all deliberate and all stated where somebody will trip over them.
 
 **The thirty-five attacks.** The reference bot plays light-only, which is what
 keeps every recorded number meaning what it meant when it was recorded. It cannot
@@ -235,11 +235,22 @@ and exists to answer exactly that question.
 
 **The shop.** `autoplay` never buys. See [Loot](loot.md#what-is-measured-and-what-is-not).
 
+That hole got one shelf deeper with the **Boots**, and the depth is worth being
+precise about, because the Boots are the first good that touches what a class
+*is* rather than a `Run` integer. The grid is still provably unmoved — the bot
+buys nothing, so `move_speed` is zero on every body in every sweep, and
+`sim._walk_speed` returns the type's own number at zero rather than multiplying
+it by one. What is unmeasured is not whether the Boots moved the recorded
+numbers (they cannot) but **whether +20% walking speed is a sensible thing to be
+able to buy**, in a game with no enemy pathing where outrunning a crowd is the
+hero's main answer to one. The cap is set on that reasoning rather than on a
+sweep.
+
 Both are the same trade, taken twice: the instrument stays fixed so the grid stays
 comparable, and the price is that new systems ship unmeasured and say so.
 
 **The attribute layer and levelling, taken a third time — and this one is
-different in a way that matters.** Seven attributes and a level-up system now
+different in a way that matters.** Eight attributes and a level-up system now
 exist ([Limits](limits.md#the-attribute-layer)), and they ship with `xp_base: 0`
 so that every number on this page still measures the game it measured. The
 structural proof is `test_neutral_attributes_reproduce_todays_arithmetic`, which

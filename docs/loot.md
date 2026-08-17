@@ -70,6 +70,7 @@ decision taken while a grunt walks up behind you is a decision taken badly.
 | Poultice | 90g | +30 health now, clamped to your maximum | — | stage 1 |
 | Tonic | 260g | +6 health back after every stage, permanently | 5 | stage 1 |
 | Charm | 340g | +25% gold find, permanently | 4 | stage 1 |
+| Boots | 520g | +5% walking speed, permanently | 4 | stage 1 |
 | Elixir | 2,400g | +10 health back after every stage, permanently | 4 | **stage 21** |
 
 The permanent goods are capped because they compound. Maxed, that is +70 health
@@ -92,16 +93,34 @@ arriving twenty-five stages later.
 4,700 gold and they still face 4,700 gold — the first half's economy did not
 change. Tripling the Tonic to soak up the new income would have priced the first
 one out of act I, which fixes a late-game problem by breaking an early-game one.
-So the whole sink is in the late shelf: 12,260 to max everything, about half a
-run, which is the same fraction 2,060 was of the run it was priced against.
+So the whole sink is in the late shelf: 14,340 to max everything, a little over
+half a run, which is about the fraction 2,060 was of the run it was priced
+against.
 
-**None of the four touches what a class is** — no damage, no speed, no maximum
-health. That is load-bearing rather than squeamish; see
-[Limits](limits.md#almost-no-progression-that-makes-you-hit-harder) for why —
-and for the single exception, which is [promotion](design.md#promotion).
+**The Boots are the one good that touches what a class is.** The other four are
+integers on the `Run`; the Boots write `move_speed` into the attribute block
+that `Entity.attrs` sums, which is the same road levelling travels. That used to
+be structurally impossible — `EntityType` is frozen content shared by every run
+of a class, so a stat upgrade needed a per-entity layer that did not exist. It
+does now, and this is the first thing in the shop to use it. See
+[Limits](limits.md#almost-no-progression-that-makes-you-hit-harder) for what is
+still deliberately not sold, and [promotion](design.md#promotion) for the other
+exception.
 
-Keys `1`–`4` buy; Enter, Space or Esc leaves. The shop draws three rows for the
-first twenty stages and four after, and the row a player reads is always the key
+Two things about it are decisions rather than details. **It is walking speed
+only** — the dodge roll's distance is untouched, because how far a roll travels
+is how much ground one i-frame window covers, so scaling it would sell
+invulnerability rather than mobility. And **it is capped at four**, harder than
+it looks: this game has no enemy pathing, so outrunning a crowd is the hero's
+main answer to one. Uncapped speed does not make the shop a worse decision, it
+makes the arena a solved one.
+
+Its **price** is set against income like every other shelf. Its **amount is a
+guess** — the only shelf here of which that is true, and it is flagged in
+`data/loot.json` beside the drop rates for the same reason.
+
+Keys `1`–`5` buy; Enter, Space or Esc leaves. The shop draws four rows for the
+first twenty stages and five after, and the row a player reads is always the key
 they press — `shop.available()` is what both the panel and the key handler use. The shop swallows every other
 control while it is open, including Esc, which is "back to the menu" everywhere
 else — dropping somebody out of a forty-stage run because they reached for
@@ -129,8 +148,9 @@ the ones recorded against the twenty-stage campaign, to the gold — the same
 seeds paying out the same amounts through the same twenty stages. It is the
 economy's half of the proof that acts I–IV were not touched.
 
-The prices are set against the full figure: 12,260 to max everything, about half
-a run, with all of the increase in a shelf that does not appear until stage 21.
+The prices are set against the full figure: 14,340 to max everything, a little
+over half a run, with most of the increase in a shelf that does not appear until
+stage 21.
 
 > [!WARNING]
 > **Nothing measures whether any of it is worth buying.** `autoplay` never spends
@@ -138,9 +158,14 @@ a run, with all of the increase in a shelf that does not appear until stage 21.
 > provably unmoved by the loot layer — and exactly why nobody knows whether four
 > Tonics trivialise act two.
 >
-> So the drop rates, the rarity worths and the four effects remain a first pass.
+> So the drop rates, the rarity worths and the five effects remain a first pass.
 > The suite pins only the relationships — rarer is worth more and drops less, a
 > deeper floor pays more, a bigger monster pays more — never the values.
+>
+> The Boots join that list rather than lengthening it. The bot buys nothing, so
+> `move_speed` is zero on every body in every sweep — and `sim._walk_speed`
+> returns the type's own number at zero rather than multiplying it by one, so
+> the grid is untouched as arithmetic rather than as a rounding argument.
 
 ### What the ceiling *is* measured on, as of the forty-stage pass
 
@@ -175,7 +200,7 @@ Two implementation facts worth knowing before changing anything here.
 
 **Loot never draws from `world.rng`.** It has its own seeded generator. This is
 the guarantee that adding loot to a tuned game moved nothing — see
-[Architecture](architecture.md#two-random-streams-not-one).
+[Architecture](architecture.md#three-random-streams-not-one).
 
 **Drops are swept up the moment a stage is won, and that is not a convenience.**
 A stage is won on the tick its last enemy dies, and the run layer builds the next

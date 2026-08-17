@@ -23,6 +23,7 @@ from .. import config
 from ..core.campaign import Campaign
 from ..game.entities import Bestiary, EntityType
 from ..render.atlas import Atlas
+from ..settings import Settings
 from .base import Scene
 from .play import PlayScene
 
@@ -54,6 +55,7 @@ class CharacterSelectScene(Scene):
         on_exit=None,
         start_stage: int = 0,
         index: int = 0,
+        settings: Optional[Settings] = None,
     ) -> None:
         self.campaign = campaign
         self.bestiary = bestiary
@@ -61,6 +63,12 @@ class CharacterSelectScene(Scene):
         self.seed = seed
         self.on_exit = on_exit
         self.start_stage = start_stage
+
+        #: Carried through rather than used here -- this screen has no opinion
+        #: about screenshake. It is on the road between the menu that owns the
+        #: settings and the run that reads them, and dropping them here would
+        #: mean a player's toggles applied to a loaded run and not to a new one.
+        self.settings = settings or Settings()
 
         self.classes: tuple[EntityType, ...] = bestiary.hero_classes
         self.index = max(0, min(index, len(self.classes) - 1))
@@ -131,6 +139,7 @@ class CharacterSelectScene(Scene):
             seed=self.seed,
             start_stage=self.start_stage,
             hero_type_id=self.chosen.id,
+            settings=self.settings,
             on_exit=self.on_exit,
         )
 

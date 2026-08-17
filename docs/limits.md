@@ -12,18 +12,20 @@ with the same information.
 
 > [!NOTE]
 > **This section was written when it was true of the whole game, and it is now
-> true only of the shipped configuration.** A seven-attribute layer and a
-> level-up system landed underneath it — crit rate, crit damage, health,
-> damage, defense, dodge and health regen — and they ship **switched off**
+> true only in the narrow sense below.** An eight-attribute layer and a level-up
+> system landed underneath it — crit rate, crit damage, health, damage, defense,
+> dodge, health regen and move speed — and they ship **switched off**
 > (`xp_base: 0` in [`data/progression.json`](../data/progression.json)).
 >
-> Nothing below has changed as a *fact about what you can play today*. What
-> changed is that it is now a dial rather than an absence, and the paragraph
-> further down claiming equipment "has no answer" has been overtaken. See
+> **One of the eight is now on sale.** The Boots write `move_speed`, so the shop
+> does touch what a class is, and the sentence below survives only because
+> movement is not output: speed changes how a fight is fought and not how hard
+> the hero hits, which is what the rest of this section actually rests on. See
 > [The attribute layer](#the-attribute-layer) at the end of this section.
 
-The shop sells health now, health per stage, and gold find; nothing it stocks
-touches damage, speed or maximum health, on any of the forty stages.
+The shop sells health now, health per stage, gold find and walking speed;
+nothing it stocks touches **damage or maximum health**, on any of the forty
+stages.
 
 That is load-bearing rather than squeamish. Because the hero's **output** does not
 grow across a run, health on a later boss buys fight *length* and nothing else —
@@ -57,14 +59,25 @@ invalidate the whole recorded balance grid on the day it shipped. Promotion sits
 in `EntityType`, which is frozen content — it swaps which type a body points at
 rather than adding a layer under it.
 
+**The layer arrived, and the Boots are the first thing sold through it.** What
+that changed is smaller than it sounds, and the reason is the same one that made
+the layer affordable in the first place: the reference bot never spends, so
+`move_speed` is zero in every sweep, and `sim._walk_speed` returns the type's
+own number at zero rather than multiplying it by one. The grid is untouched as
+arithmetic, not as an argument.
+
+What remains refused is **damage and maximum health in the shop**, and the
+reason is now a design one rather than a structural one — see
+[Nothing measures the shop](#nothing-measures-the-shop).
+
 ### The attribute layer
 
 The refusal above was correct about the cost and wrong about the conclusion, and
 the half that survives is worth keeping: **the layer is what invalidates the
 grid, so the layer had to be able to prove it hadn't.**
 
-Seven attributes — crit rate, crit damage, health, damage, defense, dodge and
-health regen — in two halves. `EntityType.attributes` is content, frozen and
+Eight attributes — crit rate, crit damage, health, damage, defense, dodge,
+health regen and move speed — in two halves. `EntityType.attributes` is content, frozen and
 shared, and is where an enemy's armour would live. `Entity.bonus` is what one
 run earned, and it dies with the run. `Entity.attrs` is the sum and the only
 thing the sim reads. Every field defaults to the identity of its own operation,
@@ -79,9 +92,12 @@ patterns pointed at a new problem:
   silently. `world.attr_rng` is seeded `seed ^ ATTR_STREAM`, and
   `test_attribute_rolls_do_not_disturb_the_damage_stream` was written before the
   code it guards, exactly as the loot one was.
-- **One field on `EntityType`, not seven.** `test_a_variant_is_stat_identical_to_what_it_varies`
+- **One field on `EntityType`, not one per attribute.** `test_a_variant_is_stat_identical_to_what_it_varies`
   iterates `dataclasses.fields`, so all nine variants were held to the whole
   block with no test edit — and an eighth attribute is covered the day it lands.
+  It has since landed (`move_speed`) and that is exactly what happened: no test
+  edit, and `progression.Table.load` refused to start until the new attribute
+  had a price, which is the same trick working from the other end.
 - **The claim is settled structurally, not by a sweep.**
   `test_neutral_attributes_reproduce_todays_arithmetic` checks every weapon in
   the content files in milliseconds. `tools/balance.py` takes minutes and proves
@@ -136,6 +152,16 @@ why the balance grid is provably unmoved by the loot layer — and exactly why
 nobody knows whether four Tonics trivialise act two. The loot numbers are a first
 pass and [`data/loot.json`](../data/loot.json) says so at the top.
 
+**This is now the reason damage and maximum health are not on the shelves, and
+it is a weaker reason than the one it replaced.** It used to be structural: the
+shop could not sell a stat because there was nowhere to put one. The attribute
+layer removed that, and the Boots demonstrate it. What is left is a judgement —
+that a good competing with levelling for the same gold is two unmeasured systems
+bidding against each other, and that speed is the safest of the eight to try
+first because it changes how a fight is fought rather than how hard the hero
+hits. Teaching the bot to spend is what would turn any of this into a
+measurement, and it stops the grid being a fixed reference on the same day.
+
 ### The fifteen attacks
 
 The reference bot plays light-only by design, so it cannot see the neutral, heavy
@@ -173,6 +199,27 @@ The reference bots gain little from it, and the twitchiest one is actively
 crippled by it. They have perfect information and only the crudest sense of
 pillars, so that says more about them than about the roll — but it is the claim in
 this documentation most likely to be overturned by hands on a keyboard.
+
+> [!NOTE]
+> **Until recently a human could not have overturned it, because the roll was
+> not reliably coming out.** `PlayScene` cleared its edge-triggered inputs once
+> per rendered frame rather than once per simulation tick, so a dodge was
+> discarded on any frame that paid out no tick — and, far more often, on every
+> frame swallowed by hitstop, which is up to eleven ticks after each landed hit.
+> The press was being lost precisely in the moment the roll is reached for.
+>
+> Worse, and this is the part worth carrying: **fixing the loss changed
+> nothing.** A press made during hitstop still landed 0 times out of 16, because
+> `freeze` drains without stepping and the `stagger` underneath it therefore
+> has not started counting down — the press arrived on time and was refused. It
+> took a bounded input buffer, one tick longer than the stagger, to take that
+> to 15 out of 15.
+>
+> None of the measurement above is affected: the bots go through `sim.step`
+> directly and never touched the scene. But every impression anyone formed
+> playing this by hand was formed against an input path that dropped presses,
+> and this section is where that matters. **The dodge has never actually been
+> judged by a human on a working control.**
 
 ### Five classes, one campaign
 

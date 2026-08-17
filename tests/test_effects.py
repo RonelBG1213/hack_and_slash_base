@@ -49,6 +49,56 @@ def test_a_fight_resolves_identically_with_effects_running() -> None:
     assert plain == decorated
 
 
+def test_a_fight_resolves_identically_whichever_way_the_toggles_are_set() -> None:
+    """The same guarantee, extended to the two rows the options screen exposes.
+
+    Putting a switch on the feel pass is only safe because of the test above --
+    but "only the presentation layer changed" is exactly what somebody would say
+    while adding a toggle that skipped a `drain_events` and left a tick's events
+    queued into the next one. All four combinations, against the undecorated
+    fight, so a toggle cannot be the thing that makes the difference.
+    """
+    plain = fight(seed=31337, effects=None)
+
+    for screenshake in (True, False):
+        for numbers in (True, False):
+            decorated = fight(
+                seed=31337,
+                effects=Effects(screenshake=screenshake, damage_numbers=numbers),
+            )
+            assert plain == decorated, (
+                f"screenshake={screenshake}, damage_numbers={numbers} changed the fight"
+            )
+
+
+def test_the_toggles_actually_turn_the_thing_off() -> None:
+    """The other half: a switch that changes nothing at all would pass every
+    test above and be a lie on the screen."""
+    quiet = Effects(screenshake=False, damage_numbers=False)
+    quiet.feed([Event(EventKind.HIT, Vec2(0, 0), 1, amount=9, is_hero=True)])
+
+    assert quiet.numbers == [], "a damage number was drawn with numbers switched off"
+    assert quiet.shake_offset().is_zero(), "the viewport moved with shake switched off"
+
+    # And the magnitude is still recorded, so the two halves of the class do not
+    # disagree about what happened -- see the note on `shake_offset`.
+    assert quiet.shake > 0.0
+
+
+def test_switching_damage_numbers_off_keeps_the_ones_that_answer_a_question() -> None:
+    """A coin picked up and a hit rolled out of are outcomes with no other tell
+    in the game. The row says "damage numbers" and it means them."""
+    quiet = Effects(damage_numbers=False)
+    quiet.feed(
+        [
+            Event(EventKind.HIT, Vec2(0, 0), 1, amount=9),
+            Event(EventKind.PICKUP, Vec2(0, 0), 1, amount=12, rarity="rare"),
+            Event(EventKind.BLOCKED, Vec2(0, 0), 1, is_hero=True),
+        ]
+    )
+    assert [n.text for n in quiet.numbers] == ["+12", "dodge"]
+
+
 def test_effects_draw_from_their_own_random_not_the_world_s() -> None:
     """The specific way the test above would break.
 

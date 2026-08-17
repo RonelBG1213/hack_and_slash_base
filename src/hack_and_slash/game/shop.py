@@ -1,23 +1,29 @@
 """What gold buys, between one stage and the next.
 
-Four goods, and every one of them is an integer on the `Run`.
+Five goods. Four are integers on the `Run`; the fifth writes an attribute.
 
-That used to be the whole design, on the argument that `EntityType` is frozen
-content shared by every run of that class -- so anything touching a hero's
-damage, speed or maximum health would need a per-`Entity` stat layer that every
-lookup in the game went through, and the shop deliberately sold nothing that
-needed one.
+That used to be the whole design -- every good a `Run` integer -- on the
+argument that `EntityType` is frozen content shared by every run of that class,
+so anything touching a hero's damage, speed or maximum health would need a
+per-`Entity` stat layer that every lookup in the game went through, and the shop
+deliberately sold nothing that needed one.
 
 **That layer now exists** (`game/attributes.py`, reached through `Entity.attrs`
-and `Entity.max_hp`), so the reason no longer holds and the shop's shape is a
-free choice rather than a forced one. It has not changed, and the argument for
-leaving it alone is a different and narrower one: the shop is priced against a
-measured income and nothing measures whether any of it is worth buying, so
-adding a fifth good that competes with levelling would be two unmeasured systems
-bidding for the same gold. If a stat upgrade is ever sold here, price it after
-the progression curve has been swept, not before.
+and `Entity.max_hp`), and the Boots are the first good to use it. The narrower
+caution that replaced the structural one still stands and is worth restating,
+because it is now a thing being done rather than a thing being avoided: the shop
+is priced against a measured income, and *nothing measures whether any of it is
+worth buying* -- `autoplay` never spends. So the Boots' price is set against
+income like the rest, and its **amount is a guess**, in the same sense every
+drop rate in `data/loot.json` is a guess.
 
-The fourth good does not appear until the second half of the campaign. A forty-
+What that buys in exchange is that the claim "the recorded grid is unmoved"
+survives it unchanged, for the reason it survived the whole loot layer: the
+reference bot buys nothing, so `move_speed` is zero in every sweep, and
+`sim._walk_speed` returns the type's own number untouched at zero rather than
+multiplying it by one.
+
+The Elixir does not appear until the second half of the campaign. A forty-
 stage run banks roughly three times what a twenty-stage run did, and against
 three capped goods that meant every permanent bought out around the halfway
 mark with twenty stages left to spend nothing on. A late shelf is the cheapest
@@ -39,6 +45,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import loot
+from .attributes import Attributes
 
 
 @dataclass(frozen=True)
@@ -103,6 +110,27 @@ def _charm(run, amount: int) -> bool:
     return True
 
 
+def _boots(run, amount: int) -> bool:
+    """The one good that writes an attribute rather than a `Run` integer.
+
+    Both halves, exactly as `progression.spend` writes them and for the same
+    reason: `run.earned` is what `Run._advance` hands the next stage's `World`
+    as `hero_bonus`, and `hero.bonus` is what the sim reads on the body standing
+    in this one. Writing only the first leaves the purchase inert until the next
+    stage boundary; writing only the second loses it at that boundary.
+
+    `amount` is percentage points, because that is what the panel shows. The
+    attribute is per-mille, so it is scaled here -- the same shape as `_charm`
+    turning 25 into 0.25.
+    """
+    run.earned = run.earned + Attributes(move_speed=amount * 10)
+
+    hero = run.world.hero
+    if hero is not None:
+        hero.bonus = run.earned
+    return True
+
+
 def _elixir(run, amount: int) -> bool:
     # The same dial the Tonic writes, deliberately. A second effect that did
     # something new would need somewhere new to live; what the late run is short
@@ -115,6 +143,7 @@ EFFECTS = {
     "poultice": (_poultice, "+{amount} health, now"),
     "tonic": (_tonic, "+{amount} health back per stage"),
     "charm": (_charm, "+{amount}% gold from every drop"),
+    "boots": (_boots, "+{amount}% move speed"),
     "elixir": (_elixir, "+{amount} health back per stage"),
 }
 

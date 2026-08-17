@@ -1,4 +1,4 @@
-"""The seven attributes, and the guarantee that adding them moved nothing.
+"""The attribute block, and the guarantee that adding it moved nothing.
 
 Two of the tests here are load-bearing in the same way
 `test_loot_rolls_do_not_disturb_the_damage_stream` is, and for the same reason:
@@ -174,3 +174,54 @@ def _rng_state_after_a_fight(attributes: Attributes):
     for _ in range(600):
         step(world, NOTHING)
     return world.rng.getstate()
+
+
+# --- move_speed, the one attribute that is not damage arithmetic -------------
+def test_walking_speed_is_the_type_s_own_number_at_zero() -> None:
+    """The claim the recorded grid rests on, stated as arithmetic.
+
+    `sim._walk_speed` returns `type.speed` itself at zero rather than
+    multiplying it by 1.0, so an enemy -- and a hero that has bought nothing --
+    walks the exact float it walked before this attribute existed. Identity, not
+    approximate identity: `1.45 * 1.0` happens to be 1.45, and a test that
+    relied on that would be relying on the wrong thing.
+    """
+    from hack_and_slash.game.sim import _walk_speed
+
+    world = World(level_with((4, 10), [("grunt", (12, 10))]), BESTIARY, seed=SEED)
+    for entity in world.entities:
+        assert entity.attrs.move_speed == 0
+        assert _walk_speed(entity) is entity.type.speed
+
+
+def test_move_speed_scales_walking_and_not_the_roll() -> None:
+    """The dodge dash is deliberately left alone. How far a roll travels is how
+    much ground one i-frame window covers, so a speed stat that stretched it
+    would be buying invulnerability rather than mobility."""
+    from hack_and_slash.game.sim import _walk_speed
+
+    world = World(level_with((4, 10), [("grunt", (12, 10))]), BESTIARY, seed=SEED)
+    hero = world.hero
+    base = hero.type.speed
+
+    hero.bonus = Attributes(move_speed=200)
+    assert _walk_speed(hero) == base * 1.2
+    assert hero.type.dodge_speed == BESTIARY[hero.type.id].dodge_speed
+
+
+def test_move_speed_moves_the_hero_further_in_the_same_ticks() -> None:
+    """End to end through `sim.step`, because `_walk_speed` having the right
+    number and the hero actually covering the ground are two claims."""
+    from hack_and_slash.core.vec2 import Vec2
+    from hack_and_slash.game.intent import walk
+
+    def distance(bonus: Attributes) -> float:
+        world = World(level_with((4, 10), [("grunt", (12, 10))]), BESTIARY, seed=SEED)
+        hero = world.hero
+        hero.bonus = bonus
+        start = hero.pos
+        for _ in range(10):
+            step(world, walk(Vec2(0, -1)))
+        return start.distance_to(hero.pos)
+
+    assert distance(Attributes(move_speed=500)) > distance(NEUTRAL) * 1.4

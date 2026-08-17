@@ -29,8 +29,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--seed",
         type=int,
-        default=0,
-        help="seed for the run; the same seed replays the same fight",
+        default=None,
+        help="seed for the run; the same seed replays the same fight. Overrides "
+        "the seed set in the options screen, and defaults to it when absent",
     )
     parser.add_argument(
         "--stage",
@@ -60,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
 
     import pygame
 
-    from hack_and_slash import config
+    from hack_and_slash import config, settings as settings_module
     from hack_and_slash.core import campaign_io
     from hack_and_slash.core.campaign_io import CampaignFormatError
     from hack_and_slash.game.entities import load_bestiary
@@ -106,10 +107,24 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
+    # Read before the window is opened, because it is what decides how big the
+    # window is. Never fails: a settings file that cannot be read comes back as
+    # the defaults rather than as an exception -- see `settings.load`.
+    settings = settings_module.load()
+
+    # `--seed` beats the stored one, and the flag defaults to None rather than
+    # to 0 so that "not passed" and "passed --seed 0" are different things.
+    # Zero is a real seed and the one the game shipped defaulting to, so a flag
+    # defaulting to 0 would silently overrule a seed set on the options screen.
+    seed = args.seed if args.seed is not None else settings.seed
+
     # The display has to exist before the atlas, so surfaces can be converted to
     # the window's pixel format -- an unconverted blit costs more every frame.
     pygame.init()
-    pygame.display.set_mode((config.WINDOW_W, config.WINDOW_H), pygame.RESIZABLE)
+    if settings.fullscreen:
+        pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    else:
+        pygame.display.set_mode(settings.window_size, pygame.RESIZABLE)
 
     try:
         atlas = load_atlas()
@@ -118,7 +133,14 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    menu = MenuScene(campaign, bestiary, atlas, seed=args.seed)
+    def home() -> MenuScene:
+        """A fresh title screen. Every route back here goes through this.
+
+        Rebuilt rather than held, because the menu reads the save file when it
+        is constructed -- a `MenuScene` kept across a run that just ended would
+        go on offering a Load Game row for a run that has been deleted.
+        """
+        return MenuScene(campaign, bestiary, atlas, seed=seed, settings=settings)
 
     if args.hero is not None:
         # Naming a class means skipping the screen whose only job is to ask for
@@ -130,19 +152,21 @@ def main(argv: list[str] | None = None) -> int:
                 campaign,
                 bestiary,
                 atlas,
-                seed=args.seed,
+                seed=seed,
                 start_stage=args.stage - 1,
                 hero_type_id=args.hero,
-                on_exit=lambda: MenuScene(campaign, bestiary, atlas, seed=args.seed),
-            )
+                settings=settings,
+                on_exit=home,
+            ),
+            settings=settings,
         ).run()
     elif args.stage > 1:
         # Skip the title screen when jumping to a stage -- the only reason to
         # pass --stage is to look at that stage. The character select still
         # happens: the stage is chosen, the class is not.
-        App(menu._start_at(args.stage - 1)).run()
+        App(home()._start_at(args.stage - 1), settings=settings).run()
     else:
-        App(menu).run()
+        App(home(), settings=settings).run()
     return 0
 
 

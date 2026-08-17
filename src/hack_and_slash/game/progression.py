@@ -30,8 +30,9 @@ from pathlib import Path
 from .. import config
 from .attributes import Attributes
 
-#: The seven attribute names, derived rather than listed, so an eighth is
-#: spendable the day it is declared.
+#: Every attribute name, derived rather than listed, so a new one is spendable
+#: the day it is declared -- and, through the check in `Table.load`, refuses to
+#: start until `data/progression.json` says what a point in it buys.
 SPENDABLE: tuple[str, ...] = tuple(f.name for f in dataclasses.fields(Attributes))
 
 
@@ -91,7 +92,8 @@ class Table:
         """The attribute block `points` spent on one attribute buys."""
         if attribute not in self.points:
             raise KeyError(
-                f"'{attribute}' is not spendable; the seven are {sorted(self.points)}"
+                f"'{attribute}' is not spendable; the {len(self.points)} are "
+                f"{sorted(self.points)}"
             )
         return Attributes(**{attribute: self.points[attribute] * points})
 
@@ -107,15 +109,18 @@ class Table:
             if not name.startswith("_")
         }
         # Bidirectional, the way `shop.stock()` validates its goods: a table
-        # that prices six of the seven leaves one silently unspendable, and a
-        # table that prices something that is not an attribute is a typo that
-        # would otherwise sit there costing nothing.
+        # that prices all but one attribute leaves that one silently
+        # unspendable, and a table that prices something that is not an
+        # attribute is a typo that would otherwise sit there costing nothing.
+        # Both halves fire loudly at startup, which is how an attribute added to
+        # the dataclass without a price is caught on the day it is added.
         missing = sorted(set(SPENDABLE) - set(points))
         unknown = sorted(set(points) - set(SPENDABLE))
         if missing or unknown:
             raise KeyError(
                 f"{source}: points prices {unknown or 'nothing unknown'} and is "
-                f"missing {missing or 'nothing'}; the seven are {sorted(SPENDABLE)}"
+                f"missing {missing or 'nothing'}; the {len(SPENDABLE)} are "
+                f"{sorted(SPENDABLE)}"
             )
 
         return cls(

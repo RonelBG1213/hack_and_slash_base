@@ -8,3 +8,7 @@ assets/*.png
 
 # Headless screenshot output.
 *.out.png
+
+# The save file, the settings and the profile. Written while the game runs;
+# one player's progress is not a fact about the project.
+state/

@@ -12,6 +12,7 @@ from hack_and_slash.core.campaign import Campaign
 from hack_and_slash.core.level import EnemySpawn, Level
 from hack_and_slash.game import shop
 from hack_and_slash.game.run import Run
+from hack_and_slash.game.sim import step
 
 from .helpers import BESTIARY, HERO, open_room
 
@@ -48,7 +49,15 @@ def good(good_id: str) -> shop.Good:
 
 # --- the shelves -------------------------------------------------------------
 def test_the_shop_stocks_what_the_data_says() -> None:
-    assert [g.id for g in shop.stock()] == ["poultice", "tonic", "charm", "elixir"]
+    # Order is content, not a sort: it is the order the panel draws and
+    # therefore which good sits on which digit.
+    assert [g.id for g in shop.stock()] == [
+        "poultice",
+        "tonic",
+        "charm",
+        "boots",
+        "elixir",
+    ]
 
 
 def test_every_good_has_a_price_an_amount_and_something_to_say() -> None:
@@ -200,7 +209,7 @@ def run_on_stage(stage_number: int, gold: int = 100000) -> Run:
 
 def test_the_late_good_is_not_on_the_shelves_early() -> None:
     early = shop.available(run_on_stage(1))
-    assert [g.id for g in early] == ["poultice", "tonic", "charm"]
+    assert [g.id for g in early] == ["poultice", "tonic", "charm", "boots"]
 
 
 def test_the_late_good_appears_on_the_stage_its_data_names() -> None:
@@ -245,3 +254,64 @@ def test_available_is_stock_filtered_by_where_the_run_is() -> None:
     for stage_number in (1, good("elixir").unlocks_at, 40):
         rows = shop.available(run_on_stage(stage_number))
         assert rows == tuple(g for g in shop.stock() if g.unlocks_at <= stage_number)
+
+
+# --- the boots, and the one good that writes an attribute --------------------
+def test_the_boots_write_both_halves_of_the_stat_layer() -> None:
+    """`run.earned` is what survives a stage boundary; `hero.bonus` is what the
+    sim reads in the stage being played. Writing only one is a purchase that
+    either does nothing now or goes quiet at the next transition, and neither
+    failure says a word at the point of sale."""
+    run = rich_run()
+    boots = good("boots")
+
+    assert shop.buy(run, boots)
+    assert run.earned.move_speed == boots.amount * 10, "per-mille, not percent"
+    assert run.world.hero.attrs.move_speed == boots.amount * 10
+
+
+def test_the_boots_move_the_hero_and_leave_everything_else_alone() -> None:
+    """The point of the good, and the guarantee underneath it: one attribute
+    moves and the other seven do not."""
+    import dataclasses
+
+    run = rich_run()
+    shop.buy(run, good("boots"))
+
+    for field in dataclasses.fields(run.earned):
+        if field.name == "move_speed":
+            continue
+        assert getattr(run.earned, field.name) == 0, f"the boots moved {field.name}"
+
+
+def test_the_boots_survive_the_stage_boundary() -> None:
+    """The half a one-sided implementation loses. `Run._advance` hands the next
+    `World` the earned block, so speed bought in act I is still there in act II
+    -- the same road `progression.spend` travels and for the same reason."""
+    run = rich_run()
+    shop.buy(run, good("boots"))
+    bought = run.earned.move_speed
+
+    for enemy in run.world.enemies():
+        enemy.hp = 0
+    # A tick, because `sim._settle` is what judges the stage -- killing the
+    # roster is not the same as the world having noticed.
+    step(run.world)
+    run.settle()
+
+    assert run.just_advanced, "the stage did not turn over"
+    assert run.world.hero.attrs.move_speed == bought
+
+
+def test_the_boots_are_capped() -> None:
+    """Speed compounds against a game with no pathing, where outrunning a crowd
+    is the hero's main tool -- so it is capped for the reason the Charm is."""
+    run = rich_run(gold=1000000)
+    boots = good("boots")
+    assert boots.limit > 0, "an uncapped speed good is the only thing worth buying"
+
+    for _ in range(boots.limit):
+        assert shop.buy(run, boots)
+
+    assert not shop.buy(run, boots), "the cap did not hold"
+    assert run.earned.move_speed == boots.amount * 10 * boots.limit

@@ -78,6 +78,19 @@ class Effects:
     shake: float = 0.0
     hitstop: int = 0
 
+    #: The two the options screen exposes. Both default to True, so an `Effects`
+    #: built without an opinion -- every test and tool that predates the screen
+    #: -- is the one that was always here.
+    #:
+    #: Safe to expose *because* of the guarantee at the top of this file rather
+    #: than in spite of it: this module is fed events the sim emits and never
+    #: reads back, so there is no path by which either flag could reach a fight.
+    #: `test_effects.py` runs the same seeded fight with them both ways and
+    #: demands identical output, which is what turns that from an argument into
+    #: a fact.
+    screenshake: bool = True
+    damage_numbers: bool = True
+
     def feed(self, events: list[Event], hitstop: int = 0) -> None:
         """Take one tick's events. Called every frame, before drawing."""
         self.hitstop = hitstop
@@ -121,6 +134,14 @@ class Effects:
                     )
 
     def _add_number(self, event: Event) -> None:
+        # The toggle covers *damage* numbers and nothing else, which is what the
+        # row it sits behind says. The pickup and dodge numbers stay: a coin the
+        # player walked over and a hit they rolled out of are both outcomes with
+        # no other tell in the game, and switching those off would not be a
+        # quieter screen so much as a game that stopped answering questions.
+        if not self.damage_numbers:
+            return
+
         self.numbers.append(
             FloatingNumber(
                 text=str(event.amount),
@@ -145,7 +166,11 @@ class Effects:
 
     def shake_offset(self) -> Vec2:
         """Where to nudge the whole viewport this frame."""
-        if self.shake <= 0.0:
+        # Gated here rather than at `feed`, so `shake` goes on meaning "how hard
+        # was that" whichever way the toggle is set. Suppressing the offset is
+        # the whole of "off"; suppressing the magnitude as well would leave the
+        # two halves of this class disagreeing about what happened.
+        if not self.screenshake or self.shake <= 0.0:
             return ZERO
         angle = self.rng.uniform(0.0, math.tau)
         return Vec2(math.cos(angle) * self.shake, math.sin(angle) * self.shake)

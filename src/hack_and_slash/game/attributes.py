@@ -1,4 +1,4 @@
-"""The seven numbers a body fights with, over and above its content stats.
+"""The eight numbers a body fights with, over and above its content stats.
 
 Two layers, and they are separate because they have different lifetimes.
 `EntityType.attributes` is content -- frozen, shared by every run of that class,
@@ -88,6 +88,20 @@ class Attributes:
     #: paid out whole. See `sim._regen`.
     regen: int = 0
 
+    #: Per-mille *bonus* on the class's own walking speed, so 100 is +10% and
+    #: zero is a body that walks exactly as its type says. A bonus rather than a
+    #: multiplier, so the neutral value is zero like everything else here.
+    #:
+    #: Walking only. `sim._self_propulsion` reads it on the walking branch and
+    #: deliberately not on the dodge dash: the roll is a fixed-distance
+    #: defensive tool, and stretching it changes how much ground one i-frame
+    #: window covers, which is a balance surface rather than a speed stat.
+    #:
+    #: Appended last on purpose. The field order *is* `progression.SPENDABLE`
+    #: order, which is the order the level panel draws its rows -- so inserting
+    #: one in the middle silently moves which digit spends what.
+    move_speed: int = 0
+
     def __add__(self, other: "Attributes") -> "Attributes":
         """Fieldwise, and derived rather than listed.
 
@@ -124,7 +138,7 @@ class Attributes:
         unknown = sorted(set(payload) - known)
         if unknown:
             raise KeyError(
-                f"unknown attribute(s) {unknown}; the seven are {sorted(known)}"
+                f"unknown attribute(s) {unknown}; the {len(known)} are {sorted(known)}"
             )
         return cls(**{name: int(value) for name, value in payload.items()})
 

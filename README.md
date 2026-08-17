@@ -48,11 +48,37 @@ Then:
 | Command | What it does |
 | --- | --- |
 | `python main.py` | Play |
-| `python main.py --seed 7` | Play a specific run — the same seed replays the same run |
+| `python main.py --seed 7` | Play a specific run — the same seed replays the same run. Overrides the seed set on the Settings screen |
 | `python main.py --stage 10` | Jump straight to a stage. For tuning: you arrive at full health, so it is not the fight a run gives you |
 | `python main.py --class rogue` | Skip the character select and play a class straight away. Advanced classes are named here too, which is the only way to reach one without playing twenty stages to it |
 | `python main.py --smoke` | Pixel-fidelity check: every sprite must upscale with hard edges |
 | `python -m pytest` | Full suite, headless, no window |
+
+## The main menu
+
+Six rows: New Game, Load Game, Settings, Achievements, Unlockables, Quit Game.
+Up/down to choose, Enter to take one, Esc to quit.
+
+**Load Game** is a single autosave slot, written on the tick a stage begins and
+deleted when the run ends. A save records the campaign index, the seed, the
+class, the health carried in and what the run has banked; the arena itself is
+*rebuilt* from those rather than stored, which is what makes a loaded stage the
+stage that was saved rather than one that resembles it. There is deliberately no
+mid-fight save — see `src/hack_and_slash/game/save.py` for why.
+
+**Settings** covers window scale and fullscreen, screenshake, damage numbers, the
+seed for the next run, and erasing the save and profile. Nothing on that screen
+can change how a fight resolves, which is the line it is drawn on: difficulty is
+a balance decision and balance decisions live in `data/` where they get swept.
+
+**Achievements** and **Unlockables** are stubs and say so. Achievements draws
+four lifetime counters from `state/profile.json`; nothing is defined. Unlockables
+is empty because unlocks were chosen to be gameplay-affecting, and the first one
+that ships moves the recorded class×stage grid — so it is a design decision to be
+taken deliberately rather than a screen to be filled in.
+
+`state/` holds the save, the settings and the profile. It is generated and
+gitignored, like `levels/` and `assets/`.
 
 ## Controls
 
@@ -67,7 +93,9 @@ Then:
 | Space / Shift / right click | Dodge roll |
 | `R` | Restart the run |
 | Esc | Back to the menu |
-| `1` `2` `3` | Buy, in the shop between stages |
+| Up / down, Enter | Choose, on the menu and the Settings screen |
+| Left / right | Change a value, on the Settings screen |
+| `1`–`5` | Buy, in the shop between stages |
 | `1` `2` | Choose a path, on the promotion screen after stage twenty |
 | Enter / Space / Esc | Dismiss the shop and start the stage |
 
@@ -79,6 +107,12 @@ that point, would otherwise throw the run away by habit.
 The light attack repeats while held. The three skills do not — each is one press,
 because deciding *when* to spend one is most of what makes it a skill, and a
 leant-on key would spend every cooldown the instant it expired.
+
+A dodge or a skill pressed between two simulation ticks waits for the next one
+rather than being dropped — including during the freeze after a hit lands, which
+is where most of them used to go. The dodge goes further and stays live for a
+few ticks, so a roll pressed a moment early still comes out when you are free to
+take it. It never grants a roll the game would otherwise refuse.
 
 ---
 

@@ -18,6 +18,7 @@ real pause in a run -- the between-stage banner deliberately is not one.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Optional
 
 import pygame
@@ -25,7 +26,7 @@ import pygame
 from .. import config
 from ..core.campaign import Campaign
 from ..core.vec2 import ZERO, Vec2
-from ..game import jobs, progression, shop, skills
+from ..game import actions, jobs, profile, progression, save, shop, skills
 from ..game.entities import DEFAULT_HERO, Bestiary
 from ..game.intent import Intent
 from ..game.run import Run, RunOutcome
@@ -39,6 +40,7 @@ from ..render.level_panel import ROW_KEYS as LEVEL_ROW_KEYS
 from ..render.level_panel import LevelPanel
 from ..render.renderer import Renderer
 from ..render.shop_panel import ROW_KEYS, ShopPanel
+from ..settings import Settings
 from .base import Scene
 
 MOVE_KEYS = {
@@ -53,6 +55,21 @@ MOVE_KEYS = {
 }
 
 DODGE_KEYS = (pygame.K_SPACE, pygame.K_LSHIFT, pygame.K_RSHIFT)
+
+#: How many simulation ticks a dodge press stays live, waiting for the sim to be
+#: willing to take it.
+#:
+#: One more than `actions.STAGGER_TICKS`, and that is the whole derivation. The
+#: press a player most wants honoured is the one made in the freeze after a hit
+#: lands on them -- and because `freeze` drains without stepping, the stagger has
+#: not started counting down when the freeze ends. A buffer shorter than the
+#: stagger is spent on ticks that were always going to refuse it.
+#:
+#: Deliberately short. Long enough that a press made a moment early still comes
+#: out; short enough that it is never a roll the player has stopped wanting. It
+#: grants nothing `can_dodge` would refuse -- the sim is asked afresh every tick
+#: and gets the last word.
+DODGE_BUFFER_TICKS = actions.STAGGER_TICKS + 1
 
 #: The three attacks that are not the light one, on the keys the left hand can
 #: reach without leaving WASD -- the right hand is on the mouse and aiming, so
@@ -115,14 +132,17 @@ class PlayScene(Scene):
         on_exit=None,
         start_stage: int = 0,
         hero_type_id: str = DEFAULT_HERO,
+        run: Optional[Run] = None,
+        settings: Optional[Settings] = None,
     ) -> None:
         self.campaign = campaign
         self.bestiary = bestiary
         self.atlas = atlas
-        self.seed = seed
         self.on_exit = on_exit
-        self.start_stage = start_stage
-        self.hero_type_id = hero_type_id
+
+        # Defaulted, so a scene built the way every test and tool builds one is
+        # the scene that was always here.
+        self.settings = settings or Settings()
 
         self.renderer = Renderer(atlas)
         self.hud = Hud()
@@ -130,15 +150,26 @@ class PlayScene(Scene):
         self.job_panel = JobPanel()
         self.level_panel = LevelPanel()
         self.accumulator = Accumulator()
-        self.effects = Effects()
+        self.effects = Effects(
+            screenshake=self.settings.screenshake,
+            damage_numbers=self.settings.damage_numbers,
+        )
 
-        self.run = Run.start(
+        # A run handed in is a run loaded off disk. The three parameters that
+        # describe how to *start* one are then read back off it rather than
+        # taken from the arguments, because `restarted()` uses them and R has to
+        # mean "this run again" for a loaded run exactly as it does for a fresh
+        # one -- the same seed, the same class, the same place it began.
+        self.run = run if run is not None else Run.start(
             campaign,
             bestiary,
             seed=seed,
             at_stage=start_stage,
             hero_type_id=hero_type_id,
         )
+        self.seed = self.run.seed
+        self.start_stage = self.run.start_index
+        self.hero_type_id = self.run.hero_type_id
 
         # Replaced immediately by _enter_stage, which needs the stage's real
         # size. A placeholder rather than an Optional so nothing downstream has
@@ -173,10 +204,52 @@ class PlayScene(Scene):
         self.levelling = False
         self._enter_stage()
 
-        #: Dodge is edge-triggered. Held as a flag rather than read from the key
-        #: state, so a tap between two frames is never swallowed -- at 60fps a
-        #: press and release can both land inside one frame.
-        self._dodge_pressed = False
+        #: Set whenever the run is standing at the start of a stage with nothing
+        #: yet done to it, and cleared by the write. It is a flag rather than a
+        #: call because the *moment* to save is not the moment the stage begins:
+        #: the promotion, level and shop panels all open on that tick and all
+        #: three change what the run is. Saving before they are answered would
+        #: record a run that had not promoted, or had not spent its gold, and
+        #: loading it would silently take the fork away -- on the one transition
+        #: in the game where the fork is offered exactly once.
+        #:
+        #: So the write happens on the first update with no panel up, which is
+        #: also the first update that would step the world. Nothing has moved by
+        #: then, which is the property `save.restore` depends on.
+        self._needs_save = True
+
+        #: A run ends once. Guards the delete and the profile write, both of
+        #: which sit in `update` and would otherwise fire on every frame of the
+        #: death screen.
+        self._ended = False
+
+        if run is None:
+            # Counted here rather than at the character select, so a run begun
+            # by any route -- the menu, `--class`, `restarted()` -- is counted
+            # exactly once and on the same line. A run handed in was counted
+            # when it was first begun and must not be counted again for being
+            # picked back up.
+            profile.record_start()
+
+        #: Ticks a dodge press stays live, counted down by `_consume_edges` and
+        #: by nothing else. Not a bool, and the difference is what makes the
+        #: fix worth having.
+        #:
+        #: A press has to survive two separate things to become a roll. It has
+        #: to reach a tick at all -- a frame can pay out none, and hitstop
+        #: consumes ticks without stepping -- and then the sim has to accept it,
+        #: which `actions.can_dodge` refuses while the hero is staggered. Those
+        #: two interact badly: `freeze` drains *without stepping*, so `stagger`
+        #: does not count down during it, and a press made while frozen arrives
+        #: on the first stepped tick with the full stagger still to run. A press
+        #: that survives one tick is a press refused.
+        #:
+        #: So it survives `DODGE_BUFFER_TICKS` of them. This is not a
+        #: dodge-cancel: it grants nothing `actions.can_dodge` would refuse, it
+        #: only stops a press being thrown away for arriving a few ticks early.
+        #: The scene still reasons about no combat rule -- it re-asks, and the
+        #: sim answers.
+        self._dodge_buffer = 0
 
         #: Which skill slot was pressed since the last tick, or None. Edge
         #: triggered for the same reason dodge is, and for one more: a held key
@@ -227,7 +300,7 @@ class PlayScene(Scene):
             if event.key == pygame.K_r:
                 return self.restarted()
             if event.key in DODGE_KEYS:
-                self._dodge_pressed = True
+                self._dodge_buffer = DODGE_BUFFER_TICKS
             if event.key in SKILL_KEYS:
                 # Highest slot wins when two arrive in one frame, and the slots
                 # ascend by commitment -- so mashing resolves toward the thing
@@ -236,7 +309,7 @@ class PlayScene(Scene):
                 if self._skill_pressed is None or slot > self._skill_pressed:
                     self._skill_pressed = slot
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
-            self._dodge_pressed = True
+            self._dodge_buffer = DODGE_BUFFER_TICKS
         return None
 
     def _handle_job_event(self, event: pygame.event.Event) -> Optional[Scene]:
@@ -323,6 +396,17 @@ class PlayScene(Scene):
         )
 
     def _read_intent(self) -> Intent:
+        """What the player is asking for, without spending any of it.
+
+        Deliberately a pure read. The one-shot inputs are aged by
+        `_consume_edges`, from inside the tick loop and only where a `step`
+        runs; spending them here instead is what silently ate a dodge on every
+        frame that paid out no tick and on every frame swallowed by hitstop.
+
+        Called once a frame, so `move` and `aim` are sampled once a frame. The
+        dodge read here is the frame's opening value -- `update` re-reads the
+        buffer per tick, for the reason given at that call site.
+        """
         keys = pygame.key.get_pressed()
 
         move = ZERO
@@ -338,16 +422,51 @@ class PlayScene(Scene):
         slot = self._skill_pressed
         attacking = slot is not None or pygame.mouse.get_pressed()[0] or keys[pygame.K_j]
 
-        intent = Intent(
+        return Intent(
             move=move.clamped(1.0),
             aim=aim,
             attack=attacking,
-            dodge=self._dodge_pressed,
+            dodge=self._dodge_buffer > 0,
             weapon=slot if slot is not None else skills.LIGHT,
         )
-        self._dodge_pressed = False
+
+    def _consume_edges(self) -> None:
+        """Age the one-shot inputs by one tick. Called only where a `step` runs.
+
+        A rendered frame and a simulation tick are not the same thing, and this
+        is the seam where forgetting that costs a keypress. `FPS` and
+        `TICKS_PER_SEC` are both 60 and `clock.tick` deals in whole
+        milliseconds, so the accumulator regularly banks a frame's worth of time
+        without paying out a tick; and a connect sets `freeze` for up to eleven
+        ticks, none of which step the world. Clearing on *read* threw the press
+        away in both windows.
+
+        The two are spent differently, and deliberately.
+
+        **A skill lasts one tick.** Which cooldown to spend and when is most of
+        what makes a skill a skill, so a press that arrives while the hero is
+        committed is a press that missed its moment.
+
+        **A dodge lasts `DODGE_BUFFER_TICKS`**, because the roll is the one
+        thing pressed *reactively* -- and the moment it is most pressed in is
+        the freeze after being hit, which is precisely when `can_dodge` refuses
+        for the stagger. Delivering it once, on the first stepped tick, is
+        delivering it into a refusal.
+        """
+        if self._dodge_buffer > 0:
+            self._dodge_buffer -= 1
         self._skill_pressed = None
-        return intent
+
+    def _drop_edges(self) -> None:
+        """Forget what was pressed, without any of it reaching a tick.
+
+        The counterpart to `_consume_edges` and used in exactly one place: a
+        panel taking the screen. Separate from it rather than a flag on it,
+        because "the tick took this" and "nobody will ever take this" are
+        different events that happen to clear the same fields today.
+        """
+        self._dodge_buffer = 0
+        self._skill_pressed = None
 
     def _aim_direction(self) -> Vec2:
         """From the hero toward the cursor, in world terms.
@@ -380,18 +499,52 @@ class PlayScene(Scene):
             # Not stepped, and the accumulator is not fed either -- banking real
             # seconds while a panel is open would fast-forward the first moments
             # of the next stage the instant it closed.
+            #
+            # Dropped rather than aged, and this is the one place a press is
+            # deliberately thrown away. A buffered dodge would otherwise sit
+            # through the whole shop visit and come out on the first tick of the
+            # next arena -- a roll nobody asked for, into a room the player has
+            # not seen yet.
+            self._drop_edges()
             return None
+
+        # Every panel is answered and the world has not been stepped since it
+        # was built -- the one moment a snapshot describes the run completely.
+        # See the note on `_needs_save`.
+        if self._needs_save and not self.run.is_over:
+            save.write(self.run)
+            profile.record_stage(self.run)
+            self._needs_save = False
 
         intent = self._read_intent()
 
         for _ in range(self.accumulator.ticks_for(elapsed_seconds)):
             if self.freeze > 0:
                 # Frozen on a connect. The renderer keeps drawing; the world
-                # simply does not advance.
+                # simply does not advance -- so the edge flags are left alone,
+                # and a dodge pressed during the freeze fires on the tick it
+                # drains rather than being swallowed by it.
                 self.freeze -= 1
                 continue
 
-            step(self.world, intent)
+            # Movement and aim are sampled once a frame, deliberately -- they
+            # are continuous, and re-reading the mouse mid-frame would give one
+            # frame several aims. The buffer is not continuous, so it is read
+            # here, per tick, and `DODGE_BUFFER_TICKS` therefore means what it
+            # says rather than "that, plus however many ticks this frame owed".
+            #
+            # An intent built once before the loop keeps `dodge=True` for every
+            # tick of the frame, and a stall pays out up to fifteen of them
+            # (`MAX_FRAME_TIME`). That does *not* roll twice today, and it is
+            # worth being precise about why: `dodge_cooldown` is 18 ticks on the
+            # shortest class in the game, so the second roll is refused by the
+            # cooldown rather than by anything here. Reading per tick means the
+            # buffer does not quietly depend on that being true.
+            step(self.world, replace(intent, dodge=self._dodge_buffer > 0))
+
+            # Aged after the tick that saw it, never before -- so the press is
+            # live for exactly `DODGE_BUFFER_TICKS` stepped ticks.
+            self._consume_edges()
             self.effects.feed(self.world.drain_events(), self.world.hitstop)
             if self.world.hitstop > 0:
                 self.freeze = self.world.hitstop
@@ -424,6 +577,20 @@ class PlayScene(Scene):
                 # level this stage" so points banked on an earlier transition
                 # are offered again rather than stranded.
                 self.levelling = self.run.unspent_points > 0
+
+                # Armed, not written. The three panels above are open on this
+                # tick and each of them can still change the run.
+                self._needs_save = True
+                break
+
+            if self.run.is_over and not self._ended:
+                # However it ended, it is not somewhere to come back to. Leaving
+                # the file behind would put a dead run on the menu's Load Game
+                # row and hand the player back the arena they just died in.
+                self._ended = True
+                self._needs_save = False
+                save.delete()
+                profile.record_end(self.run)
                 break
 
         self.effects.tick()

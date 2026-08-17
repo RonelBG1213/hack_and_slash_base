@@ -14,6 +14,7 @@ from typing import Optional
 import pygame
 
 from .. import config
+from ..settings import Settings
 
 
 class Scene:
@@ -35,12 +36,19 @@ class App:
     rather than a stretched picture.
     """
 
-    def __init__(self, scene: Scene, caption: str = config.CAPTION) -> None:
+    def __init__(
+        self,
+        scene: Scene,
+        caption: str = config.CAPTION,
+        settings: Optional[Settings] = None,
+    ) -> None:
         pygame.init()
         pygame.display.set_caption(caption)
-        self.window = pygame.display.set_mode(
-            (config.WINDOW_W, config.WINDOW_H), pygame.RESIZABLE
-        )
+
+        # Defaulted rather than required, so every existing caller -- the tools,
+        # the tests, `--stage` -- opens the window the size it always did.
+        self.settings = settings or Settings()
+        self.window = self._open_window()
         self.surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
         self.clock = pygame.time.Clock()
         self.scene = scene
@@ -70,7 +78,26 @@ class App:
 
         pygame.quit()
 
+    def _open_window(self) -> pygame.Surface:
+        """The window the settings ask for.
+
+        Fullscreen takes the desktop resolution -- `(0, 0)` -- rather than the
+        chosen scale, because the scale is a *window* size and a fullscreen
+        window is whatever the display is. `_present` needs no say in it either
+        way: `config.integer_scale` finds the largest whole factor that fits
+        whatever it is given and letterboxes the rest, which is exactly as true
+        of a 3840x2160 panel as of a 1152x648 window.
+        """
+        if self.settings.fullscreen:
+            return pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        return pygame.display.set_mode(self.settings.window_size, pygame.RESIZABLE)
+
     def _present(self) -> None:
+        # Asked for rather than cached. The options screen changes the display
+        # mode while the game is running, and the surface `set_mode` returned at
+        # startup is not the surface it returns afterwards -- blitting to the
+        # stale one draws to a window nobody is looking at.
+        self.window = pygame.display.get_surface() or self.window
         width, height = self.window.get_size()
         scale = config.integer_scale(width, height)
         scaled = pygame.transform.scale(

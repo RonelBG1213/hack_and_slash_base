@@ -17,25 +17,29 @@ import pygame
 from .. import config
 from ..game import shop
 
-#: Keys 1..4 in the order the shop stocks them. The row number a player reads
+#: Keys 1..5 in the order the shop stocks them. The row number a player reads
 #: and the key they press are the same digit, which is the whole reason the
 #: stock order is content rather than something sorted at load.
 #:
-#: Four keys for a shop that shows three rows for the first twenty stages. The
-#: fourth is a late shelf, and both the rows and the hint line are counted from
+#: Five keys for a shop that shows four rows for the first twenty stages. The
+#: fifth is a late shelf, and both the rows and the hint line are counted from
 #: `shop.available(run)` rather than assumed -- so the panel is right in both
 #: halves of the campaign without knowing which half it is in.
-ROW_KEYS = (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4)
+ROW_KEYS = (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5)
 
 TITLE_Y = 26
 
-#: Was 68, when the shop had three rows for the whole game. A fourth row put the
-#: hint line one pixel under the HUD -- `test_the_shop_rows_and_hint_fit_above_
-#: the_hud` measures the tallest the panel ever gets rather than the version
-#: that happens to be on screen, which is why that was a failing test and not a
-#: bug report from somebody playing act V.
-ROW_Y = 62
-ROW_H = 24
+#: Was 68/24, when the shop had three rows for the whole game, then 62/24 for
+#: four. A fifth row put the hint line nineteen pixels under the HUD, so the
+#: rows tightened rather than the panel starting higher -- the title has to keep
+#: its air or the whole thing reads as a list rather than a shop.
+#:
+#: `test_the_shop_rows_and_hint_fit_above_the_hud` measures the tallest the
+#: panel ever gets rather than the version that happens to be on screen, which
+#: is why this has twice been a failing test rather than a bug report from
+#: somebody playing act V.
+ROW_Y = 56
+ROW_H = 20
 LEFT = 40
 
 #: Columns, as offsets from `LEFT`. Fixed rather than measured from the widest

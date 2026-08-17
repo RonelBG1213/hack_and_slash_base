@@ -15,6 +15,16 @@ LOOT_DATA = DATA_DIR / "loot.json"
 PROGRESSION_DATA = DATA_DIR / "progression.json"
 SPRITE_ATLAS = ASSETS_DIR / "sprites.png"
 
+# Written while the game runs, never committed and never read by the logic
+# suite. Kept apart from `data/` on purpose: that directory is *content* -- it
+# is edited by hand, it is reviewed in a diff, and a tuning change to it is a
+# balance decision. Nothing under `state/` is any of those things, and a save
+# file sitting beside entities.json would blur a line the whole project rests on.
+STATE_DIR = ROOT / "state"
+SAVE_FILE = STATE_DIR / "save.json"
+SETTINGS_FILE = STATE_DIR / "settings.json"
+PROFILE_FILE = STATE_DIR / "profile.json"
+
 # --- simulation --------------------------------------------------------------
 # The sim advances in fixed ticks, never in real frame time. Everything that
 # affects the outcome of a fight -- speeds, swing timings, cooldowns -- is

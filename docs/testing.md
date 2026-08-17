@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-python -m pytest              # 678 tests, headless, no window
+python -m pytest              # 803 tests, headless, no window
 python -m pytest tests/test_loot.py
 python main.py --smoke        # pixel fidelity: every sprite upscales with hard edges
 ```
@@ -53,25 +53,28 @@ That only matters for the handful of render tests; everything under `core/` and
 | --- | --- | --- |
 | `test_playthrough.py` | 313 | the [balance brackets](balance.md) and both class×stage grids |
 | `test_run.py` | 34 | carry-over: health, gold, banking across stages, and that a promotion survives one |
-| `test_render.py` | 41 | drawing, the HUD, the shop and promotion panels — headless |
+| `test_render.py` | 50 | drawing, the HUD, the panels, and the input path — headless |
 | `test_loot.py` | 28 | the gold formula, rarity weights, the sweep, the RNG split |
 | `test_progression.py` | 14 | experience, the curve, spending, and **that the layer ships off** |
-| `test_attributes.py` | 9 | the seven attributes, and **that they moved nothing** |
+| `test_attributes.py` | 12 | the attribute block, and **that it moved nothing** |
 | `test_entities.py` | 27 | content validity: levels, boss weapon order, sprite scale |
 | `test_collision.py` | 20 | movement against walls, separation, swept paths |
 | `test_actions.py` | 19 | the WINDUP → ACTIVE → RECOVERY state machine |
 | `test_ai.py`, `test_boss.py`, `test_sim.py` | 17 each | brains, the boss positional brain, one tick |
 | `test_combat.py` | 16 | hit resolution and damage rolls |
 | `test_campaign.py` | 15 | act structure, stage ordering, playability |
-| `test_shop.py` | 19 | prices, caps, the late shelf, refusal when short |
+| `test_shop.py` | 23 | prices, caps, the late shelf, the Boots, refusal when short |
 | `test_level.py` | 13 | tiles, solidity, spawns |
-| `test_effects.py` | 11 | that the feel pass changes nothing |
+| `test_effects.py` | 14 | that the feel pass changes nothing, whichever way its toggles are set |
+| `test_menu.py` | 38 | the six menu rows, the autosave, the options screen, and both column layouts |
+| `test_save.py` | 16 | **that a loaded stage is the stage that was saved** |
+| `test_settings.py` | 13 | preferences and the profile, and that neither can stop the game starting |
 | `test_skills.py` | 11 | slot indices and the cooldown contract |
 | `test_atlas.py` | 9 | data and art agree about which sprites exist |
 | others | | vectors, camera, spatial hash, level IO |
 | `test_architecture.py` | 1 | **the rule the project rests on** |
 
-## The four tests that are load-bearing
+## The five tests that are load-bearing
 
 Each of these guards something that would otherwise fail **silently** — no
 assertion anywhere else would notice.
@@ -114,6 +117,24 @@ what makes "the attribute layer moved none of the 280 cells" a structural fact
 rather than the result of a sweep somebody remembered to run — and
 `test_progression.py::test_the_shipped_table_ships_switched_off` is what keeps
 it true.
+
+### `test_save.py::test_a_restored_stage_is_the_stage_that_was_saved`
+
+A save records a campaign index, a seed and a health; the arena is **rebuilt**
+from those rather than serialised. So the whole feature rests on the rebuild
+being identical, and if it is not, loading a run hands the player a different
+fight wearing the same stage number. There is no symptom: the room is simply not
+where they left it, and every number on the HUD is still plausible.
+
+Asserted twice over, because the two halves fail differently. The entity list
+catches a world built from the wrong level, seed or class. Its companion,
+`test_a_restored_run_draws_the_same_dice`, catches the half a body comparison
+cannot see — two worlds can hold identical entities and diverge from the first
+swing if their generators are not in the same place, and **all three streams**
+have to match or the split that protects the damage rolls is not being restored.
+
+The same shape as the two RNG tests above: run it twice and demand equality,
+rather than checking a handful of fields somebody thought of.
 
 ---
 

@@ -190,9 +190,29 @@ def _move(world: World, entity: Entity, intent: Intent) -> None:
     )
 
 
+def _walk_speed(entity: Entity) -> float:
+    """Walking speed in pixels per tick, attribute block included.
+
+    Zero takes the type's own number straight back rather than multiplying it by
+    1.0 -- the same early return `combat.evades` and the crit roll take, and for
+    the same reason. Every enemy in the game and every hero that has bought
+    nothing goes down that branch, so a fight with this dial untouched is
+    arithmetically the fight that was measured, bit for bit, rather than
+    approximately so.
+    """
+    bonus = entity.attrs.move_speed
+    if bonus == 0:
+        return entity.type.speed
+    return entity.type.speed * (1 + bonus / attributes.PER_MILLE)
+
+
 def _self_propulsion(entity: Entity, intent: Intent) -> Vec2:
     """How far a body moves under its own power this tick, knockback aside."""
     if entity.state is ActionState.DODGING:
+        # `type.dodge_speed`, and deliberately not scaled by `move_speed`. The
+        # roll is a fixed-distance defensive tool: how far it travels is how
+        # much ground one i-frame window covers, so a speed stat that stretched
+        # it would be buying invulnerability rather than mobility.
         return entity.dash_dir * entity.type.dodge_speed
 
     if entity.state is ActionState.ACTIVE and entity.weapon.is_charge:
@@ -205,7 +225,7 @@ def _self_propulsion(entity: Entity, intent: Intent) -> Vec2:
         return ZERO
     # Clamped, not normalised: a half-pushed stick should walk at half speed,
     # but two keys held at once must not add up to 1.41x.
-    return intent.move.clamped(1.0) * (entity.type.speed * scale)
+    return intent.move.clamped(1.0) * (_walk_speed(entity) * scale)
 
 
 def _separate(world: World) -> None:

@@ -19,12 +19,14 @@ src/hack_and_slash/
   core/     vectors, level, campaign, collision, spatial index   <- no pygame
   game/     entities, actions, combat, AI, run, the tick          <- no pygame
   render/   atlas, camera, renderer, HUD, effects, shop and job panels
-  scenes/   menu, select, play, smoke
+  scenes/   menu, select, play, options, achievements, unlockables, smoke
+  settings.py  the player's preferences                            <- no pygame
 data/       entities.json, weapons.json, loot.json   -- content, not code
 levels/     stage1..40.json, campaign.json           -- generated
 assets/     sprites.png                              -- generated
+state/      save.json, settings.json, profile.json   -- written while playing
 tools/      art generator, level builder, balance sweep, screenshots
-tests/      678 tests, all headless
+tests/      803 tests, all headless
 ```
 
 | Module | What it is |
@@ -35,6 +37,9 @@ tests/      678 tests, all headless
 | `game/run.py` | The layer above a stage: what carries between them |
 | `game/skills.py` | Names the four attack-slot indices, so they are not bare integers in three places |
 | `core/spatial.py` | Broadphase hash. `World` builds it with cell 48 — a little wider than the longest reach in the game, so a swing query sweeps four buckets at worst |
+| `game/save.py` | Snapshot and restore a `Run`. Pure functions over a `dict`; the disk is touched from `scenes/` only, so the balance sweep cannot grow a file dependency |
+| `game/profile.py` | Four lifetime counters, and the only thing in the project that outlives a run |
+| `settings.py` | Window, effect toggles, seed. Beside `config.py` rather than in `render/` because the window size is read *before* there is a display to ask |
 
 Both are **generated**, and they are treated differently on the way into git:
 `assets/*.png` is gitignored, `levels/*.json` is committed. A fresh clone must
@@ -49,6 +54,15 @@ be rerun after editing a stage. See [Content](content.md#tools).
 > played without running a tool and diffs show what a stage edit did to the
 > arena; ignoring them means one less generated artifact to keep in step. It has
 > not been settled.
+
+`state/` is the third generated directory and the only one written *while the
+game runs* — the save file, the settings and the profile. Gitignored, and not
+because it is awkward to track: one player's progress is not a fact about the
+project. Nothing under `core/` or `game/` reads it except through an explicit
+path argument, and **nothing that decides a fight reads it at all.** The save
+describes a run and the profile counts them; neither is an input to either. That
+is what keeps `tools/balance.py` and the class×stage grid free of any dependency
+on what happens to be on disk.
 
 ---
 
@@ -80,6 +94,41 @@ whole ticks.
 and hitstop live in `render/effects.py`, fed by events the sim emits and never
 reads back. `tests/test_effects.py` runs the same seeded fight with effects on and
 off and demands the two come out identical.
+
+**And a trap, which cost the dodge for a long time.** A rendered frame and a
+simulation tick are not the same thing, and a frame can produce zero ticks or —
+during hitstop — several that never step. Anything edge-triggered therefore has
+to be spent by the *tick that consumes it*, never by the frame that read it:
+`PlayScene` cleared its dodge and skill flags once per frame, so a press landing
+in either window was discarded before `sim.step` ever saw it. `_read_intent`
+reads, `_consume_edges` spends, and `_drop_edges` throws away — three different
+events that used to be one line.
+
+**That fix alone measured as worth nothing, which is the more interesting
+half.** Reaching the sim is not the same as being accepted. Being hit sets both
+`freeze` and `stagger`, and `freeze` drains *without stepping* — so the stagger
+has not counted down at all when stepping resumes, and a press delivered on the
+first stepped tick is delivered into an `actions.can_dodge` that refuses it. A
+press made during hitstop landed 0 out of 33 times before the fix and 0 out of
+16 after it. It needed to survive `DODGE_BUFFER_TICKS` — one more than the
+stagger — at which point it lands every time.
+
+The buffer grants nothing the sim would refuse; it re-asks, and the sim gets the
+last word. It is bounded for the same reason it exists: an unbounded one is a
+roll the player has stopped wanting. What stops one press becoming two rolls is
+`dodge_ticks + dodge_cooldown` — 28 ticks on the shortest class against a
+six-tick buffer — which is a **content** number rather than anything in the
+scene, so `test_one_press_is_one_roll` and
+`test_the_dodge_buffer_is_shorter_than_every_roll_in_the_game` pin it where it
+can actually drift.
+
+Two rules generalise past this codebase:
+
+1. **Wherever a fixed-timestep sim sits behind a variable-rate input loop,
+   one-shot inputs belong on the sim's clock.**
+2. **Delivering an input is not the same as it being accepted.** Measure the
+   thing the player sees, not the thing you fixed — the first patch here was
+   correct, complete against its own description, and moved nothing.
 
 ---
 

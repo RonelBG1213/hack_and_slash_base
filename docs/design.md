@@ -28,7 +28,10 @@ mistake, not a free action.
 
 Your dodge roll is invulnerable from its very first frame, and the
 invulnerability ends *before* the roll does — so rolling at the right moment
-works and rolling constantly does not.
+works and rolling constantly does not. Its distance is fixed by your class and
+nothing in the game raises it, the Boots included: how far a roll travels is how
+much ground one invulnerable window covers, so selling that would be selling
+invulnerability rather than mobility.
 
 You keep a fraction of your speed mid-swing, not none of it — committing to an
 attack should cost position, not responsiveness.
@@ -173,11 +176,16 @@ gold](loot.md).
 ### Attributes and levels
 
 > [!NOTE]
-> **Built, and switched off.** Seven attributes — crit rate, crit damage,
-> health, damage, defense, dodge and health regen — and a level-up system that
-> feeds them: kills pay experience, levels pay points, a panel between stages
-> spends them. None of it is reachable in the game as it ships, because
-> `data/progression.json` sets `xp_base: 0` and so nothing is ever earned.
+> **Built, and switched off — with one exception.** Eight attributes — crit
+> rate, crit damage, health, damage, defense, dodge, health regen and move speed
+> — and a level-up system that feeds them: kills pay experience, levels pay
+> points, a panel between stages spends them. None of *that* is reachable in the
+> game as it ships, because `data/progression.json` sets `xp_base: 0` and so
+> nothing is ever earned.
+>
+> The exception is **move speed**, which the shop sells as the Boots. It is the
+> one attribute reachable in a normal run, and it is reachable through gold
+> rather than through levels. See [Loot and gold](loot.md#the-shop).
 >
 > That is deliberate and it is the only way this could land on a tuned game.
 > Every attribute defaults to the identity of its own operation, so the
@@ -186,7 +194,7 @@ gold](loot.md).
 > [Balance](balance.md#what-is-not-measured) for what has to happen before the
 > dial goes up.
 
-Two of the seven sit awkwardly against the rest of this document, and it is
+Two of the eight sit awkwardly against the rest of this document, and it is
 better to say so here than to discover it in play.
 
 **Dodge is a die the game rolls for you**, and the opening line of this document
@@ -253,4 +261,4 @@ So what the grid checks is each branch's health and body against acts V–VIII,
 and the twenty heavies and ultimates remain a first pass. That is the same deal
 the original fifteen attacks have, and it means the new kit is upside rather
 than something a stage requires. See
-[Limits](limits.md#the-ten-advanced-classes-and-the-twenty-attacks-they-bring).
+[Limits](limits.md#the-twenty-attacks-the-advanced-classes-bring).
