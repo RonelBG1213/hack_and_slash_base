@@ -74,7 +74,7 @@ That only matters for the handful of render tests; everything under `core/` and
 | others | | vectors, camera, spatial hash, level IO |
 | `test_architecture.py` | 1 | **the rule the project rests on** |
 
-## The five tests that are load-bearing
+## The six tests that are load-bearing
 
 Each of these guards something that would otherwise fail **silently** — no
 assertion anywhere else would notice.
@@ -117,6 +117,23 @@ what makes "the attribute layer moved none of the 280 cells" a structural fact
 rather than the result of a sweep somebody remembered to run — and
 `test_progression.py::test_the_shipped_table_ships_switched_off` is what keeps
 it true.
+
+### `test_rooms.py::test_the_map_stream_does_not_disturb_the_damage_stream`
+
+The same test a third time, against the fourth stream. Runs one seeded fight with
+the room layer rolling continuously alongside it and one with it silent, and
+demands the damage lists come out identical.
+
+Worth having even though the map stream is a `Random` the fight never sees,
+because the failure it guards against is not "the wrong generator was passed in"
+— it is a `random.shuffle` or a `random.choice` reached for out of habit in
+`game/rooms.py`, which draws from the module-level generator and would shift
+nothing visible and everything measured.
+
+Its sibling `test_an_arena_carries_no_props_at_all` is the other half of the
+claim: `sim._touch_props` opens on `if not world.props: return`, so the phase is
+free on every tick the grid has ever measured — and that is only true while no
+stage file grows a prop, which is asserted rather than assumed.
 
 ### `test_save.py::test_a_restored_stage_is_the_stage_that_was_saved`
 

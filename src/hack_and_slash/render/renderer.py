@@ -17,6 +17,7 @@ import math
 import pygame
 
 from .. import config
+from ..core.level import REWARD_PROP
 from ..core.vec2 import Vec2, from_angle
 from ..game.entities import ActionState, Entity
 from ..game.world import World
@@ -56,6 +57,10 @@ class Renderer:
         view.x, view.y = camera.x + shake.x, camera.y + shake.y
 
         self._draw_tiles(surface, world, view)
+        # Above the floor and below everything else. A fixture is scenery until
+        # you are standing on it, and nothing in a reward room is going to walk
+        # in front of one -- there is nothing in a reward room.
+        self._draw_props(surface, world, view)
         self._draw_shadows(surface, world, view)
         # Under the bodies. A coin is never the thing you need to see, and one
         # drawn over a charger's telegraph is a coin that got somebody killed.
@@ -94,6 +99,53 @@ class Renderer:
             )
             sx, sy = camera.to_screen(entity.pos)
             surface.blit(shadow, (sx - shadow.get_width() // 2, sy - shadow.get_height() // 2))
+
+    # --- the rooms between ---------------------------------------------------
+    #: How far above a door its destination icon is drawn, in pixels. A whole
+    #: tile: the icon has to sit clear of the arch rather than inside it, since
+    #: a 16px sprite does not fit in an 8px opening and shrinking it would lose
+    #: the one detail that tells a chest from a fountain.
+    ICON_LIFT = 15
+
+    #: What a spent fixture is multiplied by. Dark enough to read as used at a
+    #: glance, light enough that it is still obviously the thing it was --
+    #: removing it outright would make a room look like it never had one.
+    SPENT = (90, 90, 100)
+
+    def _draw_props(self, surface: pygame.Surface, world: World, camera: Camera) -> None:
+        """Fountains, stalls, shrines, chests and doors. Nothing in an arena.
+
+        A door is drawn as an arch with the sprite of what lies beyond it
+        floating above -- which is the entire user interface of this feature.
+        There is no panel and no label: the choice is three pictures on a wall,
+        so the pictures have to be the ones the player will see again in the
+        room they lead to. That is why the icon is the destination's own prop
+        sprite rather than a symbol invented for the door.
+        """
+        for prop in world.props:
+            if not camera.is_on_screen(prop.pos):
+                continue
+
+            sprite = self.atlas[prop.kind.value]
+            if prop.taken:
+                sprite = self.atlas.shaded(prop.kind.value, self.SPENT)
+
+            sx, sy = camera.to_screen(prop.pos)
+            surface.blit(
+                sprite, (sx - sprite.get_width() // 2, sy - sprite.get_height() // 2)
+            )
+
+            if prop.leads_to is None:
+                continue
+
+            icon = self.atlas[REWARD_PROP[prop.leads_to].value]
+            surface.blit(
+                icon,
+                (
+                    sx - icon.get_width() // 2,
+                    sy - icon.get_height() // 2 - self.ICON_LIFT,
+                ),
+            )
 
     # --- loot ----------------------------------------------------------------
     def _draw_pickups(self, surface: pygame.Surface, world: World, camera: Camera) -> None:

@@ -22,9 +22,11 @@ import pytest
 
 from hack_and_slash import config
 from hack_and_slash.core import campaign_io
-from hack_and_slash.game import jobs, save
+from hack_and_slash.core.level import RoomKind
+from hack_and_slash.game import jobs, rooms, save
 from hack_and_slash.game.attributes import NEUTRAL, Attributes
 from hack_and_slash.game.run import Run
+from hack_and_slash.game.world import World
 
 from .helpers import BESTIARY
 
@@ -67,6 +69,62 @@ def test_a_restored_stage_is_the_stage_that_was_saved() -> None:
 
     assert bodies(restored) == bodies(run)
     assert restored.world.seed == run.world.seed
+
+
+def test_a_restored_reward_room_is_the_room_that_was_saved() -> None:
+    """The second boundary a save is taken on, and the one with no `Level` on disk.
+
+    An arena is restored by handing `campaign[index]` back. A reward room has no
+    file: it is stamped out of one template by `rooms.chamber`, from a kind and
+    three door destinations. So this is a rebuild in the fuller sense, and the
+    thing that makes it work is that **nothing about the doors is written down**
+    -- `rooms.offer` is a pure function of the seed and the index, so the loaded
+    room is offered the three it was offered before.
+
+    If that ever stops being true the symptom is quiet and specific: the player
+    is handed a different set of doors from the ones they were looking at when
+    they quit, and every one of them is plausible.
+    """
+    run = mid_run()
+    run.room = RoomKind.SHRINE
+    run.next_room = RoomKind.TREASURE
+    run.world = World(
+        rooms.chamber(run.room, rooms.offer(run.seed, run.index)),
+        BESTIARY,
+        seed=Run._room_seed(run.seed, run.index),
+        carry_hp=run.world.hero.hp,
+        hero_type_id=run.hero_type_id,
+    )
+
+    restored = save.restore(save.snapshot(run), campaign(), BESTIARY)
+
+    assert restored.room is run.room
+    assert restored.next_room is run.next_room
+    assert restored.world.level.kind is run.world.level.kind
+    assert bodies(restored) == bodies(run)
+    assert [
+        (p.kind, p.pos.x, p.pos.y, p.leads_to) for p in restored.world.props
+    ] == [(p.kind, p.pos.x, p.pos.y, p.leads_to) for p in run.world.props]
+
+
+def test_a_save_taken_in_an_arena_says_so() -> None:
+    """Empty and None are the same answer here, and it has to survive the trip.
+
+    A room that came back as an arena would drop the player into a stage they
+    have already fought; an arena that came back as a room would put them in a
+    fountain with the stage still ahead of them. Both are silent.
+    """
+    run = mid_run()
+    assert save.snapshot(run)["room"] == ""
+    assert save.restore(save.snapshot(run), campaign(), BESTIARY).room is None
+
+
+def test_a_save_naming_a_room_that_is_an_arena_is_refused() -> None:
+    payload = save.snapshot(mid_run())
+    payload["room"] = RoomKind.BOSS.value
+
+    with pytest.raises(save.SaveFormatError, match="standing in a boss"):
+        save.restore(payload, campaign(), BESTIARY)
 
 
 def test_a_restored_run_draws_the_same_dice() -> None:

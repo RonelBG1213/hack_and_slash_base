@@ -22,7 +22,8 @@ one, and moving any of them changes the game:
 8. **advance** -- state machines move on, opening hitboxes and loosing arrows for
    the tick to come
 9. **settle** -- the run is judged, the dead drop what they were carrying, and
-   then they are removed
+   then they are removed. A reward room's fixtures are read here too, last of
+   all, and the phase opens on an empty list in every one of the forty arenas
 """
 
 from __future__ import annotations
@@ -47,6 +48,13 @@ MOMENTUM_EPSILON = 0.05
 #: How hard overlapping bodies push apart, per tick. A full push looks springy;
 #: this settles a crowd over a few ticks instead.
 SEPARATION_STRENGTH = 0.5
+
+#: How close the hero has to be to use a fixture, on top of their own radius.
+#: The same shape and the same generosity as `loot.PICKUP_RADIUS`, and for the
+#: same reason -- a fountain you have to stand exactly on is a fountain you
+#: circle twice. A door is the one place it matters that this is not larger: two
+#: doors close enough to share a reach would take the choice away.
+TOUCH_RADIUS = 8.0
 
 
 def step(world: World, hero_intent: Intent = NOTHING) -> None:
@@ -357,12 +365,21 @@ def _settle(world: World) -> None:
     if world.outcome is Outcome.RUNNING:
         if hero is None or not hero.is_alive:
             world.outcome = Outcome.LOST
-        elif not world.enemies():
+        elif world.level.is_fight and not world.enemies():
+            # `is_fight` and not simply "no enemies left". A reward room has
+            # none from the tick it opens, so without this it would be cleared
+            # before the hero had taken a step -- and the two facts are the same
+            # today and different faults tomorrow.
             world.outcome = Outcome.WON
 
     _drop_loot(world)
     _award_xp(world)
     world.entities = [entity for entity in world.entities if entity.is_alive]
+
+    # Before the pickup sweep, so a room won by walking through a door still
+    # hoovers up whatever was on its floor -- `_collect_pickups` sweeps on WON
+    # and would have already run by the time this set it.
+    _touch_props(world, hero)
     _collect_pickups(world, hero)
 
 
@@ -415,6 +432,53 @@ def _award_xp(world: World) -> None:
         if entity.is_alive or entity.type.faction is not Faction.ENEMY:
             continue
         world.xp += payout.xp_for(entity.type.level)
+
+
+def _touch_props(world: World, hero: Entity | None) -> None:
+    """Use whatever the hero is standing on, in a room that has anything to use.
+
+    **This returns on the first line in every arena the balance grid has ever
+    measured.** `World.props` is built from `Level.props`, and all forty stage
+    files carry none -- so the cost of this phase on a measured tick is one
+    falsy test, and the claim that adding rooms did not move the grid is a fact
+    about the code rather than a hope. It is the same argument the loot layer
+    and the attribute layer each rest on.
+
+    What it does *not* do is decide what a fixture is worth. A fountain heals by
+    an amount that depends on the class, a chest pays by the floor, and a shrine
+    hands out a currency this module has never heard of -- all of which are
+    facts about a `Run`, and `sim` takes a `World` and an `Intent` and knows
+    nothing about one. So this records that a thing was used, exactly as
+    `_drop_loot` records gold onto the world, and the layer above collects.
+
+    A door is the exception that ends the room: it is the reward room's only
+    win condition, since there is nothing in one to kill.
+    """
+    if not world.props:
+        return
+    if hero is None or not hero.is_alive or world.outcome is not Outcome.RUNNING:
+        return
+
+    reach = hero.radius + TOUCH_RADIUS
+    for prop in world.props:
+        if prop.taken or prop.pos.distance_to(hero.pos) > reach:
+            continue
+
+        prop.taken = True
+        world.emit(Event(EventKind.PROP, prop.pos, hero.id, is_hero=True))
+
+        if prop.is_door:
+            world.exit_to = prop.leads_to
+            world.outcome = Outcome.WON
+            # Returned rather than broken out of, and the difference is real:
+            # two doors within one reach would otherwise both be marked taken
+            # and the second would overwrite where the hero was going.
+            return
+
+        # Doors deliberately absent from this list. The run asks `exit_to`
+        # where it went and `taken` what it picked up, and one door in both
+        # would make "did I use anything" a question with two answers.
+        world.taken.append(prop.kind)
 
 
 def _collect_pickups(world: World, hero: Entity | None) -> None:

@@ -179,15 +179,26 @@ stage would draw the same rolls in the same order, which is both duller and a
 worse test — a bug that only shows up on a particular sequence would never appear
 twice.
 
-### Three random streams, not one
+### Four random streams, not one
 
-`World` holds **three** seeded generators, all derived from the one seed:
+Three live on the `World` and are derived from its seed; the fourth belongs to
+the layer above and is derived from the run's.
 
 | Stream | Seeded | Draws for |
 | --- | --- | --- |
 | `world.rng` | `seed` | the fight — damage rolls, and nothing else |
 | `world.loot_rng` | `seed ^ 0x10071` | what a kill leaves behind |
 | `world.attr_rng` | `seed ^ 0x2A771` | crit and dodge |
+| the map stream | `(seed ^ 0x4D0075) + index * 7919` | which three doors a reward room offers |
+
+The map stream is the one that is **not held anywhere**. `rooms._stream` builds a
+`Random`, takes one sample from it and throws it away, so the offer is a pure
+function of the run's seed and which transition it is. Two reasons, and the
+second is the one that decided it: it cannot interleave with a fight because
+there is nothing to interleave *with*, and a generator that is not held has no
+internal state for `game/save.py` to fail to record. A loaded run is offered the
+same three doors it was offered before it was put down, and the save file says
+nothing about doors at all.
 
 > [!IMPORTANT]
 > This split is the load-bearing guarantee of the whole loot layer.

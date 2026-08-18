@@ -10,6 +10,14 @@ without a single rough stage quietly ending the run three stages before you find
 out. Gold is what you did about it -- the shop between stages turns a good stage
 into a better next one.
 
+**A run is no longer arenas alone.** Between two of them it passes through a
+reward room -- a small walkable box with a fountain, a stall, a shrine or a chest
+in it, and three doors naming what the room after the *next* arena will hold.
+`index` still counts arenas and nothing else, which is what keeps `stage_number`,
+`_stage_seed` and every recorded per-stage number meaning exactly what they meant;
+`room` says whether the world currently being fought in is one of the forty or one
+of the things between them. See `game/rooms.py`.
+
 There is still no inventory and nothing to equip. What the shop sells are the
 three integers below: health now, health per stage from now on, and a better
 share of what drops. All of them live on the run rather than on the hero,
@@ -31,7 +39,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from ..core.campaign import Campaign
-from . import jobs, progression
+from ..core.level import PropKind, RoomKind
+from . import jobs, progression, rooms
 from .attributes import NEUTRAL, Attributes
 from .entities import DEFAULT_HERO, Bestiary, EntityType
 from .world import Outcome, Purse, World
@@ -113,6 +122,28 @@ class Run:
     #: the *effects*, and reading a cap back out of an effect would break the
     #: moment anything else moved one of them.
     purchases: dict[str, int] = field(default_factory=dict)
+
+    #: The reward room the hero is standing in, or None in an arena.
+    #:
+    #: Deliberately *beside* `index` rather than folded into it. A run that
+    #: counted rooms as stages would put stage 8's arena at index 15, and every
+    #: recorded number in this project -- the 280-cell grid, the per-stage
+    #: seeds, the floor multiplier on every gold drop -- is indexed by the
+    #: arena. So `index` still means "which of the forty", and this says
+    #: whether we are between two of them.
+    room: RoomKind | None = None
+
+    #: What the next reward room will hold, chosen at the last door walked
+    #: through. Empty before the first choice has been made, which is why the
+    #: room after arena 1 is fixed -- see `rooms.first_room`.
+    next_room: RoomKind | None = None
+
+    #: Fixtures used during the tick just taken. Drained like `just_advanced`:
+    #: the run reads it once to pay out and never reads it back, and the scene
+    #: reads it to decide whether a panel should open. A stall is the reason it
+    #: exists -- there is nothing for this layer to *do* about one, and the
+    #: whole of what a stall means is "open the shop".
+    used: list[PropKind] = field(default_factory=list)
 
     #: The advanced class promoted into, or empty. Kept *beside* `hero_type_id`
     #: rather than overwriting it, and that separation does real work: both
@@ -248,16 +279,29 @@ class Run:
 
     # --- advancing -----------------------------------------------------------
     def settle(self) -> None:
-        """Act on a stage that finished during the tick just taken.
+        """Act on whatever the tick just taken finished, or paid out.
 
-        Called after every `sim.step`. Cheap and idempotent while a stage is
+        Called after every `sim.step`. Cheap and idempotent while a room is
         still running, which is what lets the play scene call it unconditionally.
+
+        There are three things that can have happened and they are checked in
+        the order they can rule each other out: the hero died, a *reward room*
+        was left through a door, or an *arena* was cleared. Only the last of
+        those advances `index`, which is why the run's shape can change without
+        a single per-stage number meaning something different.
         """
         self.just_advanced = False
         self.healed = 0
+        self.used = []
 
         if self.is_over:
             return
+
+        # Before the outcome is read, and every tick rather than only on a
+        # transition: a fountain is used mid-room and the healing has to be on
+        # the body while the player is still standing there, not applied
+        # retroactively on the way out of a door.
+        self._take_rewards()
 
         if self.world.outcome is Outcome.LOST:
             self.outcome = RunOutcome.LOST
@@ -267,12 +311,113 @@ class Run:
         if self.world.outcome is not Outcome.WON:
             return
 
+        if self.room is not None:
+            self._leave_room()
+            return
+
         if self.on_final_stage:
             self.outcome = RunOutcome.WON
             self._bank()
             return
 
+        if rooms.table().is_off:
+            # The rollback, and the reason it is a branch here rather than a
+            # deleted feature: off, a cleared arena leads straight to the next
+            # one and the campaign is arithmetically the one that was measured.
+            self._advance()
+            return
+
+        self._enter_room()
+
+    def _take_rewards(self) -> None:
+        """Pay out whatever the hero touched during the tick just taken.
+
+        The counterpart to `_bank`, and the same seam: `sim` records *that* a
+        fountain was used because it can see a body standing on one, and this
+        works out what a fountain is *worth* because that depends on the class,
+        the floor and a currency the sim has never heard of.
+
+        A stall is deliberately a no-op here. There is nothing for this layer to
+        do about one -- the whole of what a stall means is "open the shop", and
+        that is a decision about panels, which belongs to the scene. It still
+        lands in `used`, which is how the scene finds out.
+        """
+        if not self.world.taken:
+            return
+
+        table = rooms.table()
+        hero = self.world.hero
+
+        for kind in self.world.taken:
+            if kind is PropKind.FOUNTAIN and hero is not None:
+                healed = min(hero.max_hp - hero.hp, table.heal_for(hero.max_hp))
+                hero.hp += healed
+                self.healed += healed
+            elif kind is PropKind.CHEST:
+                # Straight into the run's purse rather than onto the floor as a
+                # `Pickup`. A chest is opened by standing on it, so a drop would
+                # be swept up on the same tick it appeared -- two steps and one
+                # more thing to go wrong, for an outcome identical to this.
+                self.gold += table.chest_worth(self.index + 1)
+            elif kind is PropKind.SHRINE:
+                # The only route to the attribute layer in the shipped game:
+                # `xp_base` is 0, so no kill ever pays a level and the panel
+                # would otherwise never open.
+                self.unspent_points += table.shrine_points
+
+        self.used = list(self.world.taken)
+        self.world.taken.clear()
+
+    # --- the rooms between ---------------------------------------------------
+    def _enter_room(self) -> None:
+        """Leave a cleared arena for the room that follows it.
+
+        `index` does not move. Everything indexed by it -- the per-stage seed,
+        the floor multiplier on a drop, the stage number a player reads -- goes
+        on meaning the arena that was just cleared, which is what makes a room
+        free of every recorded number in this project.
+        """
+        kind = self.next_room or rooms.table().first_room
+        doors = rooms.offer(self.seed, self.index)
+
+        hero = self.world.hero
+        carried = hero.hp if hero is not None else 1
+
+        # Before the world is replaced, or the arena's takings go with it.
+        self._bank()
+
+        self.room = kind
+        self.world = World(
+            rooms.chamber(kind, doors),
+            self.bestiary,
+            seed=self._room_seed(self.seed, self.index),
+            carry_hp=carried,
+            hero_type_id=self.hero_type.id,
+            purse=Purse(floor=self.index + 1, gold_find=self.gold_find),
+            hero_bonus=self.earned,
+        )
+        self.just_advanced = True
+
+    def _leave_room(self) -> None:
+        """Walk through a door, and start the next arena.
+
+        The door's destination is remembered rather than acted on: it names the
+        room *after* the arena about to begin, which is what makes the choice a
+        choice rather than a menu -- it is taken two rooms before it is paid.
+        """
+        self.next_room = self.world.exit_to or rooms.table().first_room
+        self.room = None
         self._advance()
+
+    @staticmethod
+    def _room_seed(seed: int, index: int) -> int:
+        """A room's own world seed.
+
+        Nothing in a reward room rolls a die -- no damage, no drops, no crits --
+        so this decides nothing today. It exists so that the day something in a
+        room does roll, it is not drawing the sequence the arena beside it draws.
+        """
+        return Run._stage_seed(seed, index) ^ rooms.MAP_STREAM
 
     def _bank(self) -> None:
         """Move the stage's takings into the run's purse.

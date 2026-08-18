@@ -30,6 +30,11 @@ class EventKind(str, Enum):
     SHOOT = "shoot"
     PROJECTILE_SPENT = "projectile_spent"
     PICKUP = "pickup"  # gold or a valuable was collected
+    #: A reward room's fixture was used, or one of its doors was walked
+    #: through. One kind for both, because the presentation layer wants the
+    #: same thing from each -- a flash where it happened -- and `amount` is
+    #: zero on a door, which is the only difference either of them draws.
+    PROP = "prop"
 
 
 @dataclass(frozen=True)

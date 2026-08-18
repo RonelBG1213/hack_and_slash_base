@@ -65,10 +65,24 @@ def campaign(count: int = 3) -> Campaign:
 
 
 def clear_current_stage(run: Run) -> None:
+    """Kill everything, then walk out of the reward room that follows.
+
+    Both halves, so this still means "the run is standing at the start of the
+    next arena" -- which is what every assertion below is about. Straight to a
+    door and not past the fixture in the middle: a fountain healing on the way
+    through would put a second source of health inside tests written to pin the
+    between-stage heal exactly.
+    """
     for enemy in run.world.enemies():
         enemy.hp = 0
     step(run.world)
     run.settle()
+
+    if run.room is not None:
+        door = [prop for prop in run.world.props if prop.is_door][0]
+        run.world.hero.pos = door.pos
+        step(run.world)
+        run.settle()
 
 
 # --- the switch --------------------------------------------------------------

@@ -170,22 +170,77 @@ full health is exactly the tension the carry-over exists to create. It restarts
 as the **base** class, whatever you promoted into — a restart is a second
 attempt at the run, and the fork is part of the run.
 
-Gold carries too, and between stages there is a shop — see [Loot and
-gold](loot.md).
+Gold carries too — see [Loot and gold](loot.md).
+
+### The rooms between
+
+Between two arenas is a **reward room**: a small walkable box with one fixture at
+its centre and three doors on the far wall. Four kinds, and they are the whole of
+what a run gives you that is not a fight.
+
+| Room | What is in it |
+| --- | --- |
+| **The Spring** | A fountain. Heals a percentage of your maximum, on top of what clearing the stage already gave you |
+| **The Stall** | The shop. **This is now the only way into it** |
+| **The Shrine** | A point to spend on an attribute — and the only way to reach that panel in the shipped game, since nothing earns experience |
+| **The Cache** | A chest, worth more the deeper you are |
+
+The doors name **the room after the *next* arena**, not the one you are about to
+walk into. That one-room delay is the whole of what makes it a choice rather than
+a menu: you are deciding what you will want on the far side of a fight you have
+not had yet, and the fixture in front of you was chosen two rooms ago by somebody
+who did not know how that fight would go. The room after stage one was never
+chosen at all, so it is fixed — a fountain, which is also where the mechanic
+explains itself.
+
+There are four kinds and three doors, so **exactly one kind is missing from every
+offer**. A room is not a menu of everything; it is a menu of everything but one.
+
+> [!IMPORTANT]
+> **The shop no longer opens on its own.** It used to open on every one of the
+> thirty-nine transitions, whether or not there was anything to decide, and the
+> pause was the same length whether you spent four hundred gold or nothing. What
+> changed is not the shop — the panel, the shelves and the keys are untouched —
+> but that reaching it is now something you gave up a fountain for.
+>
+> Gold that can never be spent is not a reward, so the offer carries one
+> guarantee: if no room in the last four transitions put a stall on its wall, the
+> next one does.
+
+None of the four fixtures is measured, and that is a decision rather than an
+oversight — the reference bot walks past all of them, which is what keeps every
+recorded number in the project meaning what it meant. See
+[Balance](balance.md#the-brackets) for what happened when it did not.
+
+A reward room is **not a fight, and the code knows the difference by being told**
+rather than by noticing there is nothing in it. `Level.kind` says what a room is
+for; a room outside `FIGHTING_KINDS` is never cleared by being empty, which is
+what stops a fountain being finished on the tick it opens. It is also why boss
+arenas carry a kind of their own — the eight act enders declare it in
+`tools/make_level.py`, so the campaign's shape is a claim the data can be checked
+against rather than an index computed twice.
 
 ### Attributes and levels
 
 > [!NOTE]
-> **Built, and switched off — with one exception.** Eight attributes — crit
-> rate, crit damage, health, damage, defense, dodge, health regen and move speed
-> — and a level-up system that feeds them: kills pay experience, levels pay
-> points, a panel between stages spends them. None of *that* is reachable in the
-> game as it ships, because `data/progression.json` sets `xp_base: 0` and so
-> nothing is ever earned.
+> **The levelling half is switched off; the attributes are reachable by two
+> other roads.** Eight attributes — crit rate, crit damage, health, damage,
+> defense, dodge, health regen and move speed — and a level-up system that feeds
+> them: kills pay experience, levels pay points, a panel spends them. The
+> *earning* is what ships off: `data/progression.json` sets `xp_base: 0`, so no
+> kill is ever worth anything and no level is ever reached.
 >
-> The exception is **move speed**, which the shop sells as the Boots. It is the
-> one attribute reachable in a normal run, and it is reachable through gold
-> rather than through levels. See [Loot and gold](loot.md#the-shop).
+> Two things reach the attributes anyway, and neither goes through experience.
+> **The Boots**, which the shop sells, buy move speed with gold. **The shrine**,
+> one of the four reward rooms, hands out a point directly — so the panel a
+> levelling system would have opened is opened by walking up to a standing stone
+> instead. See [the rooms between](#the-rooms-between) and
+> [Loot and gold](loot.md#the-shop).
+>
+> That split is the point rather than an accident. Turning experience on would
+> pay out on every kill on all forty stages and move the recorded grid on the day
+> it landed; a shrine pays out where the run is already stopped, on a room the
+> player chose, and the grid cannot see a room at all.
 >
 > That is deliberate and it is the only way this could land on a tuned game.
 > Every attribute defaults to the identity of its own operation, so the

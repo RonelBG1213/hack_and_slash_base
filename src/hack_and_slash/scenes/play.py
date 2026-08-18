@@ -10,10 +10,17 @@ Hitstop is run here rather than in the sim. On a solid connect the world simply
 stops being stepped for a few frames while the renderer keeps drawing, which is
 what gives a hit weight without changing a single number in the fight.
 
-The shop between stages uses the same trick at a different scale: while it is
-open the world is not stepped and the accumulator is not fed, so the arena
-behind the panel is genuinely stopped rather than merely hidden. That is the one
-real pause in a run -- the between-stage banner deliberately is not one.
+The panels use the same trick at a different scale: while one is open the world
+is not stepped and the accumulator is not fed, so the room behind it is
+genuinely stopped rather than merely hidden. Those are the only real pauses in a
+run -- the between-stage banner deliberately is not one.
+
+**The shop is no longer one of the things that happens between two stages.** It
+used to open on every transition, all thirty-nine of them. It is now a fixture
+standing in a reward room, and `_open_panels_for_props` is the only thing that
+opens it -- so a player who wants to spend has to have chosen the door with a
+stall over it, two rooms earlier. The panel, its keys and its exit keys are all
+unchanged; what went is the automatic trigger.
 """
 
 from __future__ import annotations
@@ -25,6 +32,7 @@ import pygame
 
 from .. import config
 from ..core.campaign import Campaign
+from ..core.level import PropKind
 from ..core.vec2 import ZERO, Vec2
 from ..game import actions, jobs, profile, progression, save, shop, skills
 from ..game.entities import DEFAULT_HERO, Bestiary
@@ -493,6 +501,40 @@ class PlayScene(Scene):
         # the old facing is better than snapping to an arbitrary one.
         return aim.normalized() if aim.length() > 2.0 else ZERO
 
+    def _open_panels_for_props(self) -> bool:
+        """Answer whatever the hero just walked onto in a reward room.
+
+        Returns whether a panel opened, and the caller breaks out of the tick
+        loop when it did. That is not tidiness: a frame pays out up to fifteen
+        ticks, so without the break the room would go on being stepped behind
+        the panel -- which is the one thing the whole panel mechanism exists to
+        prevent, and it is only invisible here because there is nothing in a
+        reward room to take advantage of it.
+
+        Two of the four fixtures need a panel and two do not. A fountain heals
+        and a chest pays, both of which `Run._take_rewards` has already done by
+        the time this runs -- there is nothing left to ask the player. A stall
+        and a shrine are decisions, and a decision needs the arena stopped.
+
+        This is the *only* thing that opens the shop now. It used to open on
+        every transition; it opens when you walk up to a stall.
+        """
+        if not self.run.used:
+            return False
+
+        if PropKind.STALL in self.run.used:
+            self.shopping = True
+
+        if PropKind.SHRINE in self.run.used and self.run.unspent_points > 0:
+            # Opened here as well as on the next transition, deliberately. The
+            # points carry either way, so nothing is lost by declining -- but a
+            # shrine that handed out a point and said nothing would look broken,
+            # and the panel is the only thing in the game that says what a point
+            # is worth.
+            self.levelling = True
+
+        return self.shopping or self.levelling
+
     # --- update --------------------------------------------------------------
     def update(self, elapsed_seconds: float) -> Optional[Scene]:
         if self.promoting or self.levelling or self.shopping:
@@ -550,19 +592,25 @@ class PlayScene(Scene):
                 self.freeze = self.world.hitstop
 
             self.run.settle()
+            if self._open_panels_for_props():
+                # Out of the loop, not merely flagged -- see the note there.
+                break
+
             if self.run.just_advanced:
                 # A new stage means a new arena and new bounds; the damage
                 # numbers from the last one would hang over empty floor.
                 self.effects.clear()
                 self._enter_stage()
                 self.banner = BANNER_FRAMES
-                # The stage's takings have been banked by now, so the purse the
-                # shop shows is the true one. Opened on every transition rather
-                # than at act ends: gold trickles in, and four visits in a
-                # twenty-stage run means three of them with nothing to decide.
-                self.shopping = True
 
-                # And once per run, on the way into the half of the campaign
+                # The shop used to open here, on all thirty-nine transitions,
+                # whether or not there was anything to decide. It is now a
+                # place: one of the four things a reward room can hold, reached
+                # by choosing the door with a stall over it two rooms earlier.
+                # `_open_panels_for_props` below is what opens it, and the only
+                # thing that does.
+
+                # Once per run, on the way into the half of the campaign
                 # that is fought as an advanced class. The stage it happens on
                 # is `jobs.PROMOTION_STAGE`, named there because the bot has to
                 # promote on the same transition or it is measuring a game
@@ -646,9 +694,15 @@ class PlayScene(Scene):
         font = pygame.font.Font(None, 26)
         small = pygame.font.Font(None, 15)
 
-        title = font.render(
-            f"STAGE {self.run.stage_number} OF {self.run.stage_count}", False, config.ACCENT
+        # A room is not stage anything. Numbering one would put two screens in
+        # a row claiming to be stage eight, and the second of them would be the
+        # one with no enemies in it.
+        heading = (
+            self.world.level.kind.value.upper()
+            if self.run.room is not None
+            else f"STAGE {self.run.stage_number} OF {self.run.stage_count}"
         )
+        title = font.render(heading, False, config.ACCENT)
         name = small.render(self.world.level.name, False, config.WHITE)
 
         top = 26

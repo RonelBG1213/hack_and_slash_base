@@ -1,7 +1,14 @@
 """Putting a run down and picking it up again.
 
-**A save is taken on the tick a stage begins, and at no other moment.** That is
+**A save is taken on the tick a room begins, and at no other moment.** That is
 the entire design, and everything else here follows from it.
+
+It used to say "a stage", and a reward room is the second thing that qualifies.
+Not a widening of the rule -- a room meets it for exactly the same reason an
+arena does: `Run._enter_room` builds one out of a level, a seed, the health
+carried in and the purse, and nothing has moved by the time the first tick is
+taken. Quitting inside a fountain and being handed back the arena before it
+would be a stage replayed for no reason.
 
 `Run._advance` builds the next stage's `World` out of four things: the level from
 the campaign, `_stage_seed(seed, index)`, the health carried in, and the purse.
@@ -34,6 +41,8 @@ from pathlib import Path
 
 from .. import config
 from ..core.campaign import Campaign
+from ..core.level import RoomKind
+from . import rooms
 from .attributes import NEUTRAL, Attributes
 from .entities import DEFAULT_HERO, Bestiary
 from .run import Run
@@ -42,7 +51,7 @@ from .world import Purse, World
 #: Bumped when the shape of a snapshot changes in a way an older reader would
 #: get wrong. A save from another version is refused rather than guessed at --
 #: see `restore`, and the note there about what this does and does not catch.
-SAVE_VERSION = 1
+SAVE_VERSION = 2
 
 
 class SaveFormatError(Exception):
@@ -81,6 +90,17 @@ def snapshot(run: Run) -> dict:
         "unspent_points": run.unspent_points,
         "purchases": dict(run.purchases),
         "earned": dataclasses.asdict(run.earned),
+        # Which reward room is being stood in, and which one the last door
+        # chose. Both plain strings, and both empty in an arena.
+        #
+        # The doors themselves are *not* written down: `rooms.offer` is a pure
+        # function of the seed and the index, so a loaded run is offered the
+        # same three it was offered before. That is the whole reason the map
+        # stream is stateless -- a held `Random` would have to be serialised
+        # here, and a save format welded to a generator's internals is the
+        # thing the module docstring above refuses.
+        "room": run.room.value if run.room else "",
+        "next_room": run.next_room.value if run.next_room else "",
     }
 
 
@@ -140,15 +160,19 @@ def restore(payload: dict, campaign: Campaign, bestiary: Bestiary) -> Run:
     earned = _attributes(payload.get("earned"))
     gold_find = float(payload.get("gold_find", 0.0))
 
+    room = _room(payload.get("room"))
+    level = rooms.chamber(room, rooms.offer(seed, index)) if room else campaign[index]
+
     world = World(
-        campaign[index],
+        level,
         bestiary,
-        # `Run._stage_seed`, private and reached for across a module boundary
-        # on purpose. The alternative is writing `seed + index * 1013` here,
-        # which is the same arithmetic in a second place -- and the day somebody
-        # changes the offset, a loaded stage would quietly become a different
-        # fight from the one that was saved, with every number still plausible.
-        seed=Run._stage_seed(seed, index),
+        # `Run._stage_seed` and `Run._room_seed`, private and reached for
+        # across a module boundary on purpose. The alternative is writing
+        # `seed + index * 1013` here, which is the same arithmetic in a second
+        # place -- and the day somebody changes the offset, a loaded stage would
+        # quietly become a different fight from the one that was saved, with
+        # every number still plausible.
+        seed=Run._room_seed(seed, index) if room else Run._stage_seed(seed, index),
         carry_hp=int(payload.get("hp", 1)),
         # `job_id or hero_type_id`, exactly as `Run.hero_type` reads it. Loading
         # a promoted run from `hero_type_id` alone would put the player back in
@@ -176,8 +200,29 @@ def restore(payload: dict, campaign: Campaign, bestiary: Bestiary) -> Run:
         hero_level=int(payload.get("hero_level", 1)),
         unspent_points=int(payload.get("unspent_points", 0)),
         purchases={str(k): int(v) for k, v in (payload.get("purchases") or {}).items()},
+        room=room,
+        next_room=_room(payload.get("next_room")),
         job_id=job_id,
     )
+
+
+def _room(raw) -> RoomKind | None:
+    """One of the reward kinds, or None for "standing in an arena".
+
+    A value that names nothing is refused rather than defaulted to None. The
+    difference matters: None means the run is in an arena, and quietly turning
+    a typo into that would drop the player into stage N having already fought
+    it, with nothing anywhere to say why.
+    """
+    if not raw:
+        return None
+    try:
+        kind = RoomKind(str(raw))
+    except ValueError:
+        raise SaveFormatError(f"the save names a room that does not exist: {raw!r}") from None
+    if kind not in rooms.REWARD_PROP:
+        raise SaveFormatError(f"the save says the hero is standing in a {kind.value}")
+    return kind
 
 
 def _attributes(raw) -> Attributes:

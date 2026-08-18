@@ -9,10 +9,16 @@ DATA_DIR = ROOT / "data"
 ASSETS_DIR = ROOT / "assets"
 LEVELS_DIR = ROOT / "levels"
 
+#: The reward rooms between the arenas. Committed like `levels/`, and generated
+#: like it -- `tools/make_rooms.py` writes the one template `game/rooms.py`
+#: stamps a kind onto.
+ROOMS_DIR = LEVELS_DIR / "rooms"
+
 ENTITIES_DATA = DATA_DIR / "entities.json"
 WEAPONS_DATA = DATA_DIR / "weapons.json"
 LOOT_DATA = DATA_DIR / "loot.json"
 PROGRESSION_DATA = DATA_DIR / "progression.json"
+ROOMS_DATA = DATA_DIR / "rooms.json"
 SPRITE_ATLAS = ASSETS_DIR / "sprites.png"
 
 # Written while the game runs, never committed and never read by the logic
@@ -170,6 +176,14 @@ SPRITE_ORDER = (
     "hellhound",
     # and the one thing here that is not a re-skin
     "demon",
+    # what stands in the rooms between the arenas. Not creatures either, and
+    # appended for the same reason everything above was: a cell is found by
+    # index, so filing the fountain beside the coin would renumber the demon.
+    "fountain",
+    "stall",
+    "shrine",
+    "chest",
+    "door",
 )
 ATLAS_COLUMNS = 8
 

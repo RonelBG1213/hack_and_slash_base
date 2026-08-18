@@ -61,9 +61,24 @@ depth term — not before.
 
 ## The shop
 
-Opens between every stage and pauses the game, which nothing else in a run does —
-the between-stage banner deliberately does not. Spending gold is a decision, and a
-decision taken while a grunt walks up behind you is a decision taken badly.
+**Reached by walking up to a stall in a shop room, and by nothing else.** It used
+to open on every one of the thirty-nine transitions; it is now one of the four
+things a reward room can hold, and getting to one means having chosen that door
+two rooms earlier. See [the rooms between](design.md#the-rooms-between).
+
+Opening it pauses the game, which nothing else in a run does — the between-stage
+banner deliberately does not. Spending gold is a decision, and a decision taken
+while a grunt walks up behind you is a decision taken badly.
+
+> [!NOTE]
+> **What that changes about the prices, which is nothing yet.** Every price here
+> was set against a measured income of ~24,500g over a full run, and the income
+> has gone *up* — chests pay, and `tools/balance.py` is the thing that measures
+> it. But the number of shop *visits* has gone down and is no longer fixed, so
+> "can this run afford four Tonics" now depends on how it spent its doors. None
+> of that has been re-measured, and the prices are unchanged on purpose: moving
+> them at the same time as the thing that reaches them would leave nothing to
+> compare against.
 
 | Good | Price | Effect | Cap | From |
 | --- | --- | --- | --- | --- |
@@ -191,6 +206,14 @@ that says the arena still applies cannot be bought off.
 Two edits in [`data/loot.json`](../data/loot.json): set `gold.base` to 0 and
 `item_chance` to 0. Nothing then drops, the shop can never be afforded, and the
 code goes quiet without being removed. That is also the rollback.
+
+The rooms have their own switch and it is separate: `"enabled": false` in
+[`data/rooms.json`](../data/rooms.json). No reward room is then built, a cleared
+arena leads straight to the next one, and the shop goes back to opening on every
+transition — which is the campaign exactly as it was measured. Kept apart from
+the loot switch deliberately: one turns off what drops, the other turns off where
+you spend it, and a single flag doing both would make either rollback cost the
+other.
 
 ---
 

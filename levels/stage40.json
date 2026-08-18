@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "name": "The Hollow Throne",
   "tile": 16,
   "rows": [
@@ -32,6 +32,7 @@
     "#........................................#",
     "##########################################"
   ],
+  "kind": "boss",
   "enemies": [
     {
       "type": "hollow_king",
@@ -53,5 +54,6 @@
       "x": 25,
       "y": 14
     }
-  ]
+  ],
+  "props": []
 }

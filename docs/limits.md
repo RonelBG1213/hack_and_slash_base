@@ -145,6 +145,28 @@ everything a sound cue needs.
 
 ## Unmeasured
 
+### Nothing measures which door is worth taking
+
+`autoplay` walks from a room's entrance to a door and **touches nothing on the
+way**. So no number in `data/rooms.json` is measured by anything: not whether a
+fountain should heal 15% or 40%, not whether a chest pays enough to be worth a
+door, not whether the shrine's point beats either.
+
+That is deliberate and it was arrived at the hard way. The first draft had the
+bot use the fixture. Three of the four rewards were inert to it regardless — it
+never buys at a stall, never spends a shrine's point, never spends a chest's gold
+— so only the fountain did anything, and over twelve seeds it flipped one run
+from won to lost. The trace settled what kind of failure that was: the losing run
+reached the stage it died on with **more** health than the surviving one. A
+deterministic fight amplifies a nudge over thirty-nine stages, and the grid
+reported the amplification in the same units it reports difficulty.
+
+So the bot walks past, and rooms cost the measurement nothing at all — the
+run-level figures are byte-identical to the ones recorded before rooms existed.
+The hole this leaves is the same one the shop has: an instrument that spends is
+an instrument that has stopped being a fixed reference, and this project has
+chosen the fixed reference every time it has been asked.
+
 ### Nothing measures the shop
 
 `autoplay` never buys anything and never detours for a pickup, which is exactly

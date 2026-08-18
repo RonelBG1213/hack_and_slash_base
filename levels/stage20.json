@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "name": "The Sovereign's Hall",
   "tile": 16,
   "rows": [
@@ -30,6 +30,7 @@
     "#......................................#",
     "########################################"
   ],
+  "kind": "boss",
   "enemies": [
     {
       "type": "sovereign",
@@ -46,5 +47,6 @@
       "x": 20,
       "y": 20
     }
-  ]
+  ],
+  "props": []
 }

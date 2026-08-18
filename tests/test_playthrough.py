@@ -17,6 +17,7 @@ import pytest
 
 from hack_and_slash import config
 from hack_and_slash.core import campaign_io
+from hack_and_slash.core.level import RoomKind
 from hack_and_slash.core.vec2 import Vec2
 from hack_and_slash.game import jobs
 from hack_and_slash.game.autoplay import (
@@ -626,10 +627,16 @@ def test_the_heal_between_stages_is_the_class_s_own() -> None:
         run = Run.start(campaign(), BESTIARY, seed=5, hero_type_id=hero)
         # Take the hero down so the heal has room to show, then clear the stage.
         run.world.hero.hp = 20
+        # Twice, because a reward room now sits between two arenas and
+        # `just_advanced` fires on arriving at each. The first is the room,
+        # which heals nothing -- the between-stage heal is paid by `_advance`,
+        # on the way out of the door and into the next arena. Reading the first
+        # one gives zero for every class, which is a true statement about rooms
+        # and no statement at all about the Priest.
         for _ in range(TICK_LIMIT):
             step(run.world, autoplay(run.world))
             run.settle()
-            if run.just_advanced:
+            if run.just_advanced and run.room is None:
                 break
         healed[hero] = run.healed
 
@@ -679,6 +686,29 @@ def test_every_act_ends_on_a_boss_and_nothing_else_does() -> None:
             assert has_boss, f"stage {index + 1} ({stage.name}) ends an act with no boss"
         else:
             assert not has_boss, f"stage {index + 1} ({stage.name}) has a boss mid-act"
+
+
+def test_the_stage_files_agree_with_the_arithmetic_about_which_are_boss_stages() -> None:
+    """Two independent statements of one fact, which is the entire point.
+
+    `BOSS_STAGES` works the eight indices out from `STAGES_PER_ACT`. The stage
+    files say so themselves -- the eight act enders carry `kind: "boss"`, written
+    by hand into `tools/make_level.py`. Two derivations from the *same* formula
+    agree even when the formula is wrong; a declaration and a derivation do not.
+
+    It also pins the other half: every other stage is a `combat` arena, so
+    nothing in the campaign is a reward room and `sim._touch_props` returns on a
+    falsy test for every tick the grid has ever measured.
+    """
+    declared = {
+        index for index, stage in enumerate(campaign().stages) if stage.kind is RoomKind.BOSS
+    }
+    assert declared == set(BOSS_STAGES), (
+        f"the files declare bosses at {sorted(i + 1 for i in declared)}, the "
+        f"arithmetic says {sorted(i + 1 for i in BOSS_STAGES)}"
+    )
+    for index, stage in enumerate(campaign().stages):
+        assert stage.is_fight, f"stage {index + 1} is a {stage.kind.value}, not an arena"
 
 
 def test_no_boss_is_used_twice() -> None:

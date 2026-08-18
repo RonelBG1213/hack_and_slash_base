@@ -33,6 +33,39 @@ run by a base class, and `tools/balance.py` will not measure one. Ask it for
 Only the floor and the game is unfair; only the ceiling and there is no game.
 `tests/test_playthrough.py` pins all three, plus **two** class×stage grids.
 
+> [!IMPORTANT]
+> **The three brackets are not equally exposed to the rooms between the stages,
+> and the difference is structural rather than lucky.**
+>
+> The class×stage grid **cannot see a room at all.** `_stage_world` builds a
+> `World` straight out of `campaign()[index]` at full health, and a reward room
+> is not in `campaign.stages` — so no cell of either grid can reach one, and the
+> two recorded xfails are per-stage cells and are untouched. That is a fact about
+> the code, not a result that was checked.
+>
+> The **run-level** bracket and the **face-tank ceiling** do not see one either,
+> and that took a second attempt to arrange. `autoplay` walks from a room's
+> entrance to a door and touches nothing on the way — so no number in
+> `data/rooms.json` reaches any bracket, and the run-level figures are
+> byte-identical to the ones recorded before rooms existed: 24900 / 24664 for the
+> Knight line, cell for cell.
+>
+> **The first draft had the bot use the fixture, and it cost a whole run.** Three
+> of the four rewards were inert to it anyway — it never buys, never allocates a
+> point, never spends gold — so the fountain was the only one that did anything.
+> Over twelve seeds it flipped one run from won to lost, and the trace is what
+> settled it: **the losing run arrived at the stage it died on with more health
+> than the surviving one** (108 against 99). Not a difficulty change. Extra
+> health put the hero somewhere slightly different on stage 15 and thirty-nine
+> stages of a deterministic fight amplified it.
+>
+> The general form, which is the third time this project has hit it: **a
+> measurement that perturbs the thing it measures reports its own perturbation in
+> the same units it reports difficulty.** The demon's flanker brain was the first
+> and `xp_base` is the second. The answer each time has been to make the
+> instrument not touch the feature, and to say plainly what that leaves
+> unmeasured — see [Limits](limits.md#nothing-measures-which-door-is-worth-taking).
+
 ### Two grids, because there are two heroes
 
 A stage is not hard in the abstract. It is hard *for the hero that fights it*,
@@ -234,6 +267,14 @@ nobody has measured how much easier. `autoplay.skilful` presses all four slots
 and exists to answer exactly that question.
 
 **The shop.** `autoplay` never buys. See [Loot](loot.md#what-is-measured-and-what-is-not).
+
+**Every number in `data/rooms.json`.** The bot walks past all four fixtures, so
+nothing measures whether a fountain is worth 15% or 40%, whether a chest pays
+enough to matter, or whether the shrine's point is the best thing on any wall.
+That is the price of the run-level bracket still being a fixed reference, and it
+is the same trade as the shop: an instrument that spends is an instrument that
+has stopped being one. See
+[Limits](limits.md#nothing-measures-which-door-is-worth-taking).
 
 That hole got one shelf deeper with the **Boots**, and the depth is worth being
 precise about, because the Boots are the first good that touches what a class

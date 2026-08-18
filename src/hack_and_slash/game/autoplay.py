@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 from ..core.collision import path_is_clear
-from ..core.vec2 import Vec2
+from ..core.vec2 import EPSILON, ZERO, Vec2
 from . import actions, jobs, skills
 from .entities import ActionState, Entity
 from .intent import NOTHING, Intent
@@ -81,6 +81,12 @@ class Autoplay:
         if hero is None or not hero.is_alive:
             return NOTHING
 
+        if world.props:
+            # A reward room. Checked before the enemy list rather than after,
+            # because a room has no enemies and the line below would read that
+            # as "nothing to do" and stand still until the run tick limit.
+            return self._in_a_room(world, hero)
+
         enemies = world.enemies()
         if not enemies:
             return NOTHING
@@ -112,6 +118,77 @@ class Autoplay:
             return Intent(aim=toward, attack=True)
 
         return Intent(move=self._approach(world, hero, target), aim=toward)
+
+    def _in_a_room(self, world, hero: Entity) -> Intent:
+        """Walk to the first door and out. **Touch nothing on the way.**
+
+        That is not laziness and it is not a bot that plays rooms badly -- it is
+        the thing that makes rooms free to measure, and it was arrived at from
+        the other end.
+
+        The first draft walked to the fixture and used it. Three of the four
+        rewards were inert anyway -- this bot never buys at a stall, never spends
+        a shrine's point and never spends a chest's gold -- so only the fountain
+        did anything. And a fountain does plenty: over twelve seeds it flipped
+        one whole run from won to lost, and the trace showed the run arriving at
+        the stage it died on with *more* health than the run that survived it.
+        Not a difficulty change. The extra health moved the hero somewhere
+        slightly different on stage 15, and forty stages of a deterministic fight
+        amplified it. The measurement was reporting its own perturbation.
+
+        Walking past everything makes the claim structural instead: a fountain
+        that heals zero is bit-identical to rooms switched off across twelve
+        seeds -- `test_the_reference_bot_walks_past_every_fixture` and the
+        `rooms.json` note both point at that -- so a bot that never uses one
+        measures the same campaign it has always measured.
+
+        The cost is stated in `docs/limits.md` and is real: **nothing measures
+        whether any room is worth walking into.** That is the same hole the shop
+        has had since the loot layer landed, and it is the same trade -- an
+        instrument that spends is an instrument that has stopped being a fixed
+        reference.
+
+        No dodging, no aiming, no attacking. There is nothing in here to hit.
+        """
+        doors = [prop for prop in world.props if prop.is_door]
+        if not doors:
+            # `Level.problems()` refuses a room like this, so reaching here means
+            # something built one by hand. Standing still fails the run tick
+            # limit, which is the right way to find out about it.
+            return NOTHING
+
+        # Door 0, and its position is load-bearing rather than arbitrary: the
+        # chamber puts the fixture on the middle row, so a hero walking to the
+        # *middle* door would pass straight over it and use it by accident. The
+        # top and bottom doors clear it by 32px against a 14.5px reach.
+        return Intent(move=self._toward(world, hero, doors[0].pos))
+
+    def _toward(self, world, hero: Entity, point: Vec2) -> Vec2:
+        """Straight at it, sliding along anything in the way.
+
+        The same shape as `_approach` and `_away_from`, and not pathfinding for
+        the same reason. It should never fire in a shipped room -- the chamber
+        is an open box and `Level.problems()` checks the straight line to every
+        prop -- but a room is the one place in the game where getting stuck is
+        unrecoverable rather than slow, so the fallback is here anyway.
+        """
+        delta = point - hero.pos
+        if delta.length() <= EPSILON:
+            return ZERO
+
+        toward = delta.normalized()
+        tile = world.level.tile
+        if path_is_clear(hero.pos, hero.pos + toward * tile * 1.5, world.is_solid, tile):
+            return toward
+
+        sideways = toward.perpendicular()
+        for side in (1.0, -1.0):
+            candidate = sideways * side
+            if path_is_clear(
+                hero.pos, hero.pos + candidate * tile * 1.5, world.is_solid, tile
+            ):
+                return candidate
+        return toward
 
     def _should_give_ground(self, hero: Entity, too_close: bool) -> bool:
         """Whether a hurt hero should be backing away instead of trading.

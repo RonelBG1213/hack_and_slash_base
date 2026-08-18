@@ -1,0 +1,115 @@
+{
+  "_comment": [
+    "The rooms between the arenas: what stands in one, and which three doors it",
+    "offers on the way out. game/rooms.py holds the arithmetic and none of the",
+    "values, the way game/loot.py and game/progression.py do.",
+    "",
+    "*** enabled: false IS THE ROLLBACK. ***",
+    "",
+    "Switched off, no reward room is ever built, a cleared arena leads straight",
+    "to the next one, and scenes/play.py puts the shop back on every transition",
+    "-- which is the game exactly as it was measured. The code goes quiet",
+    "without being removed, the same switch gold.base and xp_base already are.",
+    "",
+    "NOTHING BELOW IS MEASURED, AND THE REASON IS DELIBERATE. The reference bot",
+    "walks from a room's entrance to a door and touches nothing on the way. So",
+    "no fixture in this file moves any bracket, and the campaign the harness",
+    "measures is arithmetically the campaign it measured before rooms existed.",
+    "",
+    "That was not the first draft. The bot used to walk to the fixture and use",
+    "it, and three of the four rewards were inert to it anyway -- it never buys",
+    "at a stall, never spends a shrine's point, never spends a chest's gold. The",
+    "fountain was the exception, and over twelve seeds it flipped one entire run",
+    "from won to lost. The trace is the interesting part: the losing run arrived",
+    "at the stage it died on with MORE health than the surviving one. The heal",
+    "moved the hero a little further along on stage 15 and forty stages of a",
+    "deterministic fight amplified it. That is the measurement reporting its own",
+    "perturbation, in the same units it reports difficulty -- which is the exact",
+    "trap data/entities.json records against the flanker demon.",
+    "",
+    "So the numbers below are guesses in the strongest sense: not 'unverified',",
+    "but 'nothing in the suite can see them at all'. Treat every one as an",
+    "opening bid, and change them with hands on a keyboard rather than with",
+    "tools/balance.py, which is structurally incapable of having an opinion."
+  ],
+
+  "enabled": true,
+
+  "doors": 3,
+
+  "_doors_comment": [
+    "Three distinct kinds, never three of the same. Duplicates would be cheaper",
+    "to roll and would read as a bug at 16px -- two identical icons on one wall",
+    "look like the room forgot to decide rather than like a repeated option.",
+    "",
+    "There are four reward kinds and three doors, so exactly one kind is missing",
+    "from any offer. That is the tension: a room is not a menu of everything, it",
+    "is a menu of everything but one."
+  ],
+
+  "guarantee_shop_within": 4,
+
+  "_guarantee_comment": [
+    "Gold is worthless if the shop never comes up, and with three doors drawn",
+    "from four kinds a run of unlucky rolls can go a long way without one. If no",
+    "offer in the last N transitions held a shop, the next one does.",
+    "",
+    "Checked against the *raw* rolls of those transitions rather than against",
+    "what the player took, and rolled fresh each time from (seed, index) rather",
+    "than counted -- so the guarantee holds identically in a loaded run, which",
+    "has no memory of what it was offered before it was put down.",
+    "",
+    "The forced shop goes on the LAST door, never the first. See the note in",
+    "game/rooms.offer: door 0 is the one anything mechanical reaches for."
+  ],
+
+  "first_room": "fountain",
+
+  "_first_comment": [
+    "The room after arena 1 was never chosen -- there was no door before it --",
+    "so it is fixed. A fountain, because it is the gentlest of the four and",
+    "because the one room every player is guaranteed to see is the right place",
+    "for the mechanic to explain itself."
+  ],
+
+  "fountain": {
+    "heal_percent": 15
+  },
+
+  "shrine": {
+    "points": 1
+  },
+
+  "treasure": {
+    "gold": 40,
+    "floor_step": 0.15
+  },
+
+  "_reward_comment": [
+    "Four first-pass guesses, drafted against the recorded shape of the game.",
+    "",
+    "  fountain.heal_percent 15 -- percent of MAXIMUM health, not of missing.",
+    "      Percent rather than flat so it means the same thing to a 130-hp",
+    "      Knight and a 70-hp Rogue. Of maximum rather than of missing because a",
+    "      fraction-of-missing heal pays the nearly-dead most, and free healing",
+    "      for a hero who refuses to disengage is precisely what the face-tank",
+    "      ceiling exists to refuse.",
+    "      For scale: heal_between_stages is already 56 of a Knight's 130 (43%)",
+    "      on every transition, so this is about a third again on the",
+    "      transitions it lands, not a new source of healing on its own.",
+    "",
+    "  shrine.points 1 -- one point, the same unit progression.json pays per",
+    "      level. It is the ONLY route to the attribute layer in the shipped",
+    "      game: xp_base is 0, so no kill ever pays a level and the panel would",
+    "      otherwise never open. Note what that buys -- the attributes become",
+    "      reachable without experience being turned on, and turning experience",
+    "      on is the half that would move the recorded grid.",
+    "",
+    "  treasure.gold 40 with floor_step 0.15 -- the same depth curve the kill",
+    "      payout uses (loot.json), for the same reason: a chest on floor 40",
+    "      should be worth what floor 40 is worth. 40 is a little over a stage",
+    "      of ordinary early income and a fraction of a late one, so a chest is",
+    "      a nudge early and a rounding error late. That asymmetry is probably",
+    "      wrong and is the first thing to look at once anyone has played it."
+  ]
+}

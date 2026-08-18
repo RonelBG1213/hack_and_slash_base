@@ -419,11 +419,66 @@ The one that is not tested, and the one that will cost you an afternoon:
 
 ---
 
+## Adding a room kind
+
+A **reward room** is what sits between two arenas: one fixture at the centre,
+three doors on the far wall. Four kinds ship, and a fifth is four edits.
+
+1. **`RoomKind` and `PropKind`** in `core/level.py`. A room kind is what a run is
+   standing in; a prop kind is the thing in the middle of it, and they have
+   separate names on purpose — a shop room holds a *stall*, and naming the sprite
+   after the building is how you end up with two words for one idea.
+2. **`REWARD_PROP`** in the same file, mapping the one to the other. One
+   direction only: the room is the authority, the prop is derived, and the two
+   cannot be edited into disagreeing.
+3. **`rooms.NAMES`**, for the banner.
+4. **The effect**, in `Run._take_rewards`. What a fixture is *worth* lives there
+   rather than in the sim, because it depends on the class, the floor and a
+   currency `sim` has never heard of — the sim records that a thing was touched,
+   exactly as it records gold onto a world, and the run collects.
+
+Then a sprite: append to `SPRITE_ORDER`, paint it in `tools/gen_art.py`.
+
+```sh
+python tools/gen_art.py
+python -m pytest tests/test_rooms.py tests/test_atlas.py -q
+```
+
+`test_every_reward_kind_can_be_built_and_has_somewhere_to_stand` is the
+bidirectional check — a kind with no prop builds an empty room, a prop no kind
+names is a sprite nothing can reach, and both fail there rather than in the
+middle of somebody's run.
+
+> [!WARNING]
+> **Three doors are drawn from the reward kinds without replacement.** Adding a
+> fifth kind does not just add a fifth thing — it changes the odds of every
+> existing one and widens the gap a shop can be away for. `data/rooms.json`
+> carries `guarantee_shop_within` for exactly that reason, and the test that
+> pins it sweeps twelve seeds over all thirty-nine transitions.
+
+> [!WARNING]
+> **A reward room has nothing in it to kill, so the only way out is a door — and
+> nothing in this game paths around a wall.** In an arena a blocked lane costs a
+> slow fight and the player walks over to fetch the stranded grunt. Here it is a
+> run that cannot continue at all. `tools/make_rooms.py` draws an open box with
+> no pillars for that reason, and `Level.problems()` re-checks the straight line
+> from the entrance to every prop rather than trusting it — so a bad room refuses
+> to start a run instead of ending one.
+
+Everything a room does is switched off by `"enabled": false` in
+[`data/rooms.json`](../data/rooms.json): no room is built, a cleared arena leads
+straight to the next one, and the shop goes back to opening on every transition.
+That is the rollback, and `test_switching_rooms_off_puts_the_campaign_back_in_a_straight_line`
+exercises it rather than describing it.
+
+---
+
 ## Tools
 
 ```sh
 python tools/gen_art.py                          # rebuild assets/sprites.png
 python tools/make_level.py                       # rebuild the forty stages
+python tools/make_rooms.py                       # rebuild the reward-room template
 python tools/balance.py                          # where the fight sits, reference class
 python tools/balance.py --class all --seeds 8    # ...every starting class
 python tools/balance.py --class advanced         # ...every class they promote into

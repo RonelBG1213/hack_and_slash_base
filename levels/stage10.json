@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "name": "The Pit",
   "tile": 16,
   "rows": [
@@ -26,6 +26,7 @@
     "#................................#",
     "##################################"
   ],
+  "kind": "boss",
   "enemies": [
     {
       "type": "houndmaster",
@@ -47,5 +48,6 @@
       "x": 29,
       "y": 8
     }
-  ]
+  ],
+  "props": []
 }

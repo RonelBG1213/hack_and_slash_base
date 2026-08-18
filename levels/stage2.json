@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "name": "The Pillars",
   "tile": 16,
   "rows": [
@@ -24,6 +24,7 @@
     "#................................#",
     "##################################"
   ],
+  "kind": "combat",
   "enemies": [
     {
       "type": "goblin",
@@ -55,5 +56,6 @@
       "x": 30,
       "y": 15
     }
-  ]
+  ],
+  "props": []
 }

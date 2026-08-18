@@ -34,12 +34,37 @@ def campaign(count: int = 3) -> Campaign:
     )
 
 
+def leave_room(run: Run, door: int = 0) -> None:
+    """Walk out of a reward room through one of its doors.
+
+    Straight onto the door, deliberately *not* past the fixture in the middle.
+    Every assertion in this file is about what the run layer does between two
+    arenas, and a fountain healing on the way through would put a second source
+    of health inside tests written to pin the first one exactly.
+
+    `tests/test_rooms.py` is where the fixtures are exercised.
+    """
+    prop = [p for p in run.world.props if p.is_door][door]
+    run.world.hero.pos = prop.pos
+    step(run.world)
+    run.settle()
+
+
 def clear_current_stage(run: Run) -> None:
-    """Kill everything on the stage the way the sim would, then settle."""
+    """Kill everything on the stage the way the sim would, then settle.
+
+    Then walk out of the reward room that follows, so this still means what it
+    has always meant: the run is standing at the start of the next arena. A run
+    now passes through a room between two of them, and a helper that stopped
+    halfway would quietly turn every test below into a test about rooms.
+    """
     for enemy in run.world.enemies():
         enemy.hp = 0
     step(run.world)
     run.settle()
+
+    if run.room is not None:
+        leave_room(run)
 
 
 # --- carry-over in World -----------------------------------------------------

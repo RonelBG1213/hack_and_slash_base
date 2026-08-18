@@ -51,6 +51,29 @@ def campaign():
     return campaign_io.load(config.LEVELS_DIR / "campaign.json")
 
 
+def at_a_stall(scene):
+    """Walk the hero onto a shop stall in the reward room it is standing in.
+
+    The fixture is swapped rather than the room being rolled for, because which
+    kind a room holds is the offer's business and this is a test about panels.
+    `tests/test_rooms.py` is where the offer itself is pinned.
+    """
+    from hack_and_slash.core.level import PropKind
+
+    scene.world.props[0].kind = PropKind.STALL
+    scene.world.hero.pos = scene.world.props[0].pos
+    scene.update(1.0)
+    return scene
+
+
+def out_through_a_door(scene, door: int = 0):
+    """Leave the reward room, which is what starts the next arena."""
+    doors = [prop for prop in scene.world.props if prop.is_door]
+    scene.world.hero.pos = doors[door].pos
+    scene.update(1.0)
+    return scene
+
+
 def is_blank(surface: pygame.Surface) -> bool:
     width, height = surface.get_size()
     first = surface.get_at((0, 0))
@@ -615,17 +638,34 @@ def test_escape_shuts_the_shop_rather_than_leaving_the_run(atlas) -> None:
     assert not exited
 
 
-def test_clearing_a_stage_opens_the_shop_with_the_takings_already_banked(atlas) -> None:
-    """The order matters: `Run._advance` banks before it replaces the world, so
-    the purse the panel shows is the real one rather than a stage behind."""
+def test_clearing_a_stage_no_longer_opens_the_shop(atlas) -> None:
+    """The headline of the rooms change, pinned from the side that was removed.
+
+    This used to be the opposite assertion. The shop opened on all thirty-nine
+    transitions whether or not there was anything to decide; it is now a fixture
+    you have to have chosen a door towards, two rooms earlier.
+    """
     scene = PlayScene(campaign(), BESTIARY, atlas)
 
     for enemy in scene.world.enemies():
         enemy.hp = 0
     scene.update(1.0)
 
-    assert scene.shopping, "clearing a stage did not open the shop"
-    assert scene.run.stage_number == 2
+    assert not scene.shopping, "clearing a stage still opens the shop by itself"
+    assert scene.run.room is not None, "and it did not lead into a reward room either"
+
+
+def test_walking_up_to_a_stall_opens_the_shop_with_the_takings_banked(atlas) -> None:
+    """The order matters: `Run._enter_room` banks before it replaces the world,
+    so the purse the panel shows is the real one rather than a stage behind."""
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    at_a_stall(scene)
+
+    assert scene.shopping, "walking onto a stall did not open the shop"
     assert scene.run.gold > 0, "the shop opened on an empty purse after a full stage"
     assert scene.world.gold == 0
 
@@ -826,14 +866,21 @@ def test_the_choice_is_offered_on_one_transition_and_no_other(atlas) -> None:
     from hack_and_slash.game import jobs
 
     def cleared(start: int) -> PlayScene:
+        """Clear the arena, then walk out of the room that follows it.
+
+        Both halves, because the promotion fires on arriving at the *next
+        arena* and a reward room now sits between the two. Stopping at the room
+        would be testing that the fork is not offered inside a fountain, which
+        is true and is not what this is about.
+        """
         scene = PlayScene(campaign(), BESTIARY, atlas, start_stage=start)
         for enemy in scene.world.enemies():
             enemy.hp = 0
         scene.update(1.0)
-        return scene
+        return out_through_a_door(scene)
 
     early = cleared(0)
-    assert early.shopping
+    assert early.run.stage_number == 2
     assert not early.promoting, "promotion was offered on the way into stage two"
 
     fork = cleared(jobs.PROMOTION_STAGE - 2)
@@ -900,6 +947,10 @@ def test_the_stage_banner_never_draws_over_a_panel(atlas, monkeypatch) -> None:
     for enemy in scene.world.enemies():
         enemy.hp = 0
     scene.update(1.0)
+
+    # Both live at once is now a stall reached while the room's own banner is
+    # still counting down -- the same collision, one room later.
+    at_a_stall(scene)
     assert scene.shopping and scene.banner > 0, "the trap needs both live at once"
 
     drawn = []

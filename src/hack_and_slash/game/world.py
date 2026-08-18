@@ -29,7 +29,7 @@ import random
 from dataclasses import dataclass
 from enum import Enum
 
-from ..core.level import Level
+from ..core.level import Level, PropKind, RoomKind
 from ..core.spatial import SpatialHash
 from ..core.vec2 import Vec2
 from .attributes import NEUTRAL, Attributes
@@ -71,6 +71,30 @@ class Outcome(str, Enum):
     RUNNING = "running"
     WON = "won"
     LOST = "lost"
+
+
+@dataclass
+class RoomProp:
+    """A fixture standing in a reward room: where it is, and whether it is spent.
+
+    Built from `Level.props` the way entities are built from `EnemySpawn`, and
+    kept out of `entities` for the reason `pickups` is: a fountain has no
+    health, no faction and no brain, and putting one in that list would hand it
+    to the broadphase, the separation pass and every AI brain in the game.
+
+    `taken` is on the live prop rather than on a set of indices somewhere else,
+    so the thing that knows it has been used is the thing itself -- and the
+    renderer can draw a spent fountain differently without asking anybody.
+    """
+
+    kind: PropKind
+    pos: Vec2
+    leads_to: RoomKind | None = None
+    taken: bool = False
+
+    @property
+    def is_door(self) -> bool:
+        return self.kind is PropKind.DOOR
 
 
 @dataclass
@@ -159,6 +183,28 @@ class World:
         #: the separation pass and every AI brain in the game.
         self.pickups: list[Pickup] = []
         self.gold = 0
+
+        #: The fixtures of a reward room, and empty in all forty arenas. That
+        #: emptiness is the whole argument that the interaction phase is free:
+        #: on every tick the balance grid has ever measured, `_touch_props`
+        #: returns on a falsy test before it reads anything.
+        self.props: list[RoomProp] = [
+            RoomProp(prop.kind, level.tile_center(*prop.tile), prop.leads_to)
+            for prop in level.props
+        ]
+
+        #: What the hero has used in this room, in the order it was used.
+        #: Drained by `Run` exactly as `gold` and `xp` are, and for the same
+        #: reason: `sim` takes a `World` and an `Intent` and knows nothing about
+        #: a run, so it can report that a fountain was touched but not what a
+        #: fountain is worth.
+        self.taken: list[PropKind] = []
+
+        #: The kind of room the door the hero walked out through leads to, set
+        #: on the tick a reward room is won. None in an arena, which is what
+        #: makes "an arena was cleared" and "a door was taken" two answers the
+        #: run layer can tell apart.
+        self.exit_to: RoomKind | None = None
 
         #: Experience this stage's kills have paid out, banked by `Run._bank`
         #: on the way out. On the world rather than on the run for the same

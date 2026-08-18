@@ -646,6 +646,77 @@ def paint_relic(surface: pygame.Surface) -> None:
     pygame.draw.rect(surface, (255, 255, 255), (mid - 2, mid - 2, 2, 2))
 
 
+# --- what stands in a reward room --------------------------------------------
+# Five fixtures, and they are drawn under a different rule from every body in
+# this file. A creature has to be told apart from other creatures at 1x in a
+# crowd; a fixture is alone in an empty room and has to be told apart from the
+# *floor* -- so these are taller, more saturated, and each one is built around a
+# single silhouette a player can name from across the room: a basin, an awning,
+# an obelisk, a lid, an arch.
+#
+# All five fill more of the cell than a body does. Nothing walks in front of
+# them, so there is no reason to keep them small.
+def paint_fountain(surface: pygame.Surface) -> None:
+    # A basin with water in it. The water is the only large area of blue-green
+    # in the game, which is most of why this reads as healing without a label.
+    mid = CELL // 2
+    pygame.draw.rect(surface, (86, 92, 112), (mid - 6, mid - 4, 12, 9))
+    pygame.draw.rect(surface, (58, 62, 78), (mid - 6, mid + 3, 12, 2))
+    pygame.draw.rect(surface, (72, 178, 168), (mid - 5, mid - 3, 10, 5))
+    pygame.draw.rect(surface, (160, 232, 224), (mid - 4, mid - 3, 4, 2))
+    # A spout above the rim, so the shape is not a plain rectangle at a glance.
+    pygame.draw.rect(surface, (110, 116, 138), (mid - 1, mid - 7, 2, 4))
+
+
+def paint_stall(surface: pygame.Surface) -> None:
+    # A striped awning over a counter. The stripes are the whole idea: nothing
+    # else in the game has a repeating pattern on it, so a stall is identifiable
+    # at a glance even when the colours are wrong on somebody's monitor.
+    mid = CELL // 2
+    pygame.draw.rect(surface, (96, 74, 52), (mid - 6, mid - 1, 12, 6))
+    pygame.draw.rect(surface, (128, 100, 70), (mid - 6, mid - 1, 12, 2))
+    for i in range(6):
+        colour = config.ACCENT if i % 2 == 0 else (196, 92, 84)
+        pygame.draw.rect(surface, colour, (mid - 6 + i * 2, mid - 6, 2, 5))
+    pygame.draw.rect(surface, (40, 42, 54), (mid - 6, mid - 7, 12, 1))
+
+
+def paint_shrine(surface: pygame.Surface) -> None:
+    # A standing stone with a lit rune. Tall and narrow -- the only fixture with
+    # that silhouette, so it is told apart from the fountain and the chest by
+    # shape before colour has said anything.
+    mid = CELL // 2
+    pygame.draw.rect(surface, (58, 60, 78), (mid - 3, mid - 7, 6, 12))
+    pygame.draw.rect(surface, (84, 88, 112), (mid - 3, mid - 7, 6, 2))
+    pygame.draw.rect(surface, (168, 122, 214), (mid - 1, mid - 4, 2, 5))
+    pygame.draw.rect(surface, (232, 208, 255), (mid - 1, mid - 4, 2, 2))
+    pygame.draw.rect(surface, (40, 42, 54), (mid - 4, mid + 4, 8, 2))
+
+
+def paint_chest(surface: pygame.Surface) -> None:
+    # Wider than it is tall, with a banded lid. Deliberately the same gold the
+    # coin uses on its clasp: a chest and the money it holds should look like
+    # they belong to each other.
+    mid = CELL // 2
+    pygame.draw.rect(surface, (70, 48, 32), (mid - 6, mid - 4, 12, 9))
+    pygame.draw.rect(surface, (108, 76, 48), (mid - 6, mid - 4, 12, 4))
+    pygame.draw.rect(surface, (52, 36, 24), (mid - 6, mid, 12, 1))
+    pygame.draw.rect(surface, config.GOLD, (mid - 1, mid - 2, 2, 5))
+    pygame.draw.rect(surface, (250, 232, 168), (mid - 1, mid - 2, 2, 2))
+
+
+def paint_door(surface: pygame.Surface) -> None:
+    # An arch, drawn as a frame rather than a slab: what matters about a door
+    # here is that it is a way *through*, and the renderer draws the icon of
+    # what lies beyond it in the opening. So the middle is left dark and empty
+    # on purpose -- it is a socket for that icon, not a missing detail.
+    mid = CELL // 2
+    pygame.draw.rect(surface, (128, 116, 92), (mid - 6, mid - 7, 12, 14))
+    pygame.draw.rect(surface, (12, 12, 18), (mid - 4, mid - 5, 8, 12))
+    pygame.draw.rect(surface, (168, 152, 116), (mid - 6, mid - 7, 12, 2))
+    pygame.draw.rect(surface, (78, 70, 56), (mid - 6, mid + 5, 12, 2))
+
+
 PAINTERS = {
     "floor": paint_floor,
     "wall": paint_wall,
@@ -694,6 +765,11 @@ PAINTERS = {
     "shadow": paint_shadow,
     "coin": paint_coin,
     "relic": paint_relic,
+    "fountain": paint_fountain,
+    "stall": paint_stall,
+    "shrine": paint_shrine,
+    "chest": paint_chest,
+    "door": paint_door,
 }
 
 

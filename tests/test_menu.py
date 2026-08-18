@@ -386,12 +386,30 @@ def test_the_stub_screens_draw_on_a_machine_that_has_never_played(atlas) -> None
 
 # --- the autosave ------------------------------------------------------------
 def cleared(atlas, start: int = 0, hero: str = "knight") -> PlayScene:
-    """A scene that has just cleared a stage, with the panels still up."""
+    """A scene that has just cleared a stage and stepped into the room after it."""
     scene = PlayScene(
         campaign(), BESTIARY, atlas, start_stage=start, hero_type_id=hero
     )
     for enemy in scene.world.enemies():
         enemy.hp = 0
+    scene.update(1.0)
+    return scene
+
+
+def at_a_stall(scene) -> PlayScene:
+    """Walk onto a shop stall in the reward room, which is what opens the shop."""
+    from hack_and_slash.core.level import PropKind
+
+    scene.world.props[0].kind = PropKind.STALL
+    scene.world.hero.pos = scene.world.props[0].pos
+    scene.update(1.0)
+    return scene
+
+
+def out_through_a_door(scene, door: int = 0) -> PlayScene:
+    """Leave the reward room, which is what starts the next arena."""
+    doors = [prop for prop in scene.world.props if prop.is_door]
+    scene.world.hero.pos = doors[door].pos
     scene.update(1.0)
     return scene
 
@@ -404,37 +422,58 @@ def test_a_run_is_saved_as_soon_as_it_is_being_played(atlas) -> None:
     assert save.read()["hero_type_id"] == "priest"
 
 
-def test_clearing_a_stage_saves_the_stage_that_was_entered(atlas) -> None:
+def test_clearing_a_stage_saves_the_room_and_then_the_stage(atlas) -> None:
+    """Two boundaries now, and both are clean.
+
+    A save is taken on the tick a *room* begins as readily as on the tick an
+    arena does, and for the same reason: `Run._enter_room` builds one out of a
+    level, a seed and the health carried in, and nothing has moved yet. Quitting
+    inside a fountain and being handed back the arena before it would be a stage
+    replayed for nothing.
+    """
     scene = cleared(atlas)
-    assert scene.run.stage_number == 2
+    assert scene.run.stage_number == 1, "a room does not advance the stage count"
 
-    press(scene, pygame.K_RETURN)  # close the shop
     scene.update(1.0)
+    assert save.read()["room"] == scene.run.room.value
+    assert save.read()["index"] == 0
 
+    out_through_a_door(scene)
+    scene.update(1.0)
     assert save.read()["index"] == 1
+    assert save.read()["room"] == "", "the arena was saved as though it were a room"
 
 
 def test_nothing_is_saved_while_a_panel_is_still_open(atlas) -> None:
     """The reason the write is armed on the transition and taken afterwards.
 
-    All three panels open on the tick a stage begins and all three change what
-    the run is. A save taken then records a run that has not promoted and has
-    not spent its gold.
+    The panel that opens on a transition is the promotion, and it changes what
+    the run is. A save taken with it still up records a run that has not
+    promoted -- and loading that save takes the fork away permanently, on the
+    one transition in the game where it is offered exactly once.
+
+    The shop used to be the example here, and it is not any more: it opens on
+    walking up to a stall, well after the transition has been saved. That is not
+    a hole. Nothing about the shop is *unrecorded* at the moment the room is
+    saved -- the purchase simply has not happened yet, and the save is taken
+    again the moment the panel closes.
     """
-    scene = cleared(atlas)
-    assert scene.shopping
+    scene = cleared(atlas, start=jobs.PROMOTION_STAGE - 2)
+    out_through_a_door(scene)
+
+    assert scene.promoting, "the fork did not open"
     assert scene._needs_save, "the new stage was not armed to be saved"
 
     scene.update(1.0)
-    assert save.read()["index"] == 0, (
-        "the new stage was saved with the shop still open -- anything bought or "
-        "chosen behind that panel would be missing from it"
+    assert save.read()["job_id"] == "", (
+        "the new stage was saved with the fork still open -- the branch chosen "
+        "behind that panel would be missing from it"
     )
 
     # And it is taken the moment the panel is answered.
-    press(scene, pygame.K_RETURN)
+    press(scene, pygame.K_1)
     scene.update(1.0)
-    assert save.read()["index"] == 1
+    assert save.read()["job_id"] == "dark_knight"
 
 
 def test_the_save_taken_at_the_fork_records_the_class_that_was_chosen(atlas) -> None:
@@ -445,10 +484,12 @@ def test_the_save_taken_at_the_fork_records_the_class_that_was_chosen(atlas) -> 
     finds out twenty stages later, as a difficulty problem.
     """
     scene = cleared(atlas, start=jobs.PROMOTION_STAGE - 2)
+    # The fork is offered on arriving at the *next arena*, and a reward room now
+    # sits between the two -- so clearing is only half of getting there.
+    out_through_a_door(scene)
     assert scene.promoting
 
     press(scene, pygame.K_1)  # take the first branch
-    press(scene, pygame.K_RETURN)  # close the shop underneath it
     scene.update(1.0)
 
     assert save.read()["job_id"] == "dark_knight"

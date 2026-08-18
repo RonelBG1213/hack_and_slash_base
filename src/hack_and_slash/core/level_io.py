@@ -3,6 +3,12 @@
 Carries a `schema_version` from the first file written. Adding it later means
 guessing at the shape of files already on disk; adding it now costs one integer
 and makes every future format change a migration instead of a break.
+
+Version 2 added `kind` and `props`. Both default, so a version-1 file still
+loads and still means an arena -- which is the whole point of having had the
+integer there from the start. The bump is for the other direction: a version-2
+room opened by a version-1 build would come back as an arena with no enemies,
+and `Level.problems()` would call it broken while it was merely newer.
 """
 
 from __future__ import annotations
@@ -11,9 +17,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .level import FLOOR, HERO_MARK, EnemySpawn, Level
+from .level import FLOOR, HERO_MARK, EnemySpawn, Level, Prop, PropKind, RoomKind
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class LevelFormatError(ValueError):
@@ -40,9 +46,21 @@ def to_dict(level: Level) -> dict[str, Any]:
         "name": level.name,
         "tile": level.tile,
         "rows": rows,
+        "kind": level.kind.value,
         "enemies": [
             {"type": spawn.type_id, "x": spawn.tile[0], "y": spawn.tile[1]}
             for spawn in level.enemy_spawns
+        ],
+        "props": [
+            {
+                "kind": prop.kind.value,
+                "x": prop.tile[0],
+                "y": prop.tile[1],
+                # Written only where it means something, so a fountain's entry
+                # in the file does not carry a null nobody reads.
+                **({"leads_to": prop.leads_to.value} if prop.leads_to else {}),
+            }
+            for prop in level.props
         ],
     }
 
@@ -75,6 +93,39 @@ def from_dict(payload: dict[str, Any]) -> Level:
         hero_spawn=hero_spawn,
         enemy_spawns=enemies,
         tile=int(payload.get("tile", 16)),
+        kind=_enum(RoomKind, payload.get("kind"), RoomKind.COMBAT, "kind"),
+        props=tuple(_prop(entry) for entry in payload.get("props", [])),
+    )
+
+
+def _enum(cls, raw, default, field: str):
+    """One of `cls`, or `default` when the key is absent.
+
+    A *present* value that names nothing raises, rather than falling back. The
+    default is there for version-1 files that never had the key; a typo in a
+    version-2 file is a broken room, and quietly turning it into an arena is how
+    a fountain full of grunts gets shipped.
+    """
+    if raw is None:
+        return default
+    try:
+        return cls(raw)
+    except ValueError:
+        raise LevelFormatError(
+            f"'{raw}' is not a {field}; the {len(cls)} are "
+            f"{', '.join(member.value for member in cls)}"
+        ) from None
+
+
+def _prop(entry: dict[str, Any]) -> Prop:
+    try:
+        tile = (int(entry["x"]), int(entry["y"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise LevelFormatError(f"a prop is missing {exc}") from exc
+    return Prop(
+        kind=_enum(PropKind, entry.get("kind"), None, "prop kind"),
+        tile=tile,
+        leads_to=_enum(RoomKind, entry.get("leads_to"), None, "kind"),
     )
 
 

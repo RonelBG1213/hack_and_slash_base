@@ -5,7 +5,8 @@ swing, roll to survive. Four attacks per class — light, neutral, heavy, ultima
 on ascending cooldowns. Pick one of five classes, then forty stages in eight acts,
 each ending on a boss. Your wounds come with you from one stage to the next, so
 how well you clear stage one is still with you at the end of the act — and so does
-your gold, which a shop between stages will take off you.
+your gold. Between two stages is a room — a fountain, a shop, a shrine or a
+chest — and three doors deciding what the next one will be.
 
 Clear stage twenty and your class forks in two. There is no declining it, and
 there are twenty more stages on the other side.
@@ -28,6 +29,7 @@ once; the stages are, so you only need to rebuild them after editing one:
 ```sh
 .venv/Scripts/python tools/gen_art.py       # assets/sprites.png
 .venv/Scripts/python tools/make_level.py    # levels/stage1..40.json + campaign.json
+.venv/Scripts/python tools/make_rooms.py    # levels/rooms/chamber.json
 ```
 
 Then:
@@ -95,14 +97,20 @@ gitignored, like `levels/` and `assets/`.
 | Esc | Back to the menu |
 | Up / down, Enter | Choose, on the menu and the Settings screen |
 | Left / right | Change a value, on the Settings screen |
-| `1`–`5` | Buy, in the shop between stages |
+| `1`–`5` | Buy, at a shop stall |
 | `1` `2` | Choose a path, on the promotion screen after stage twenty |
-| Enter / Space / Esc | Dismiss the shop and start the stage |
+| Enter / Space / Esc | Dismiss the shop or the level-up panel |
+
+Between two stages is a **reward room** you walk through: a fountain, a shop
+stall, a shrine or a chest, and three doors on the far wall naming what the room
+after the *next* stage will hold. Walk onto the fixture to use it and through a
+door to leave. There is no key for any of that — a room is somewhere you are,
+not a menu.
 
 The promotion screen is the one panel with no exit key. Twenty stages are
 tuned for the class you become, so there is nothing sensible for a refusal to
-mean — and Enter, which has started the next stage on every transition up to
-that point, would otherwise throw the run away by habit.
+mean — and Enter, which dismisses every other panel in the game, would otherwise
+throw the run away by habit.
 
 The light attack repeats while held. The three skills do not — each is one press,
 because deciding *when* to spend one is most of what makes it a skill, and a
@@ -121,10 +129,10 @@ take it. It never grants a roll the game would otherwise refuse.
 | | |
 | --- | --- |
 | [**Design**](docs/design.md) | What the game asks of the player — the fight, the enemies, the bosses, the five classes and the ten they promote into, the four attack slots, the shape of a run and the fork in the middle of it |
-| [**Loot and gold**](docs/loot.md) | Drop rates, the gold formula, rarity, the between-stage shop, and which of those numbers are measured |
+| [**Loot and gold**](docs/loot.md) | Drop rates, the gold formula, rarity, the shop and the room you reach it through, and which of those numbers are measured |
 | [**Architecture**](docs/architecture.md) | The two structural rules, the nine-phase tick, the `Intent` seam, determinism and the three RNG streams |
 | [**Balance**](docs/balance.md) | The brackets the game is held to, the four findings that overturned an assumption, and what to reach for when a bracket breaks |
-| [**Content and tuning**](docs/content.md) | Editing the JSON: adding an enemy, a variant, a class, a boss, a brain. The tools |
+| [**Content and tuning**](docs/content.md) | Editing the JSON: adding an enemy, a variant, a class, a boss, a brain, a room. The tools |
 | [**Testing**](docs/testing.md) | Running the suite, the three load-bearing tests, and the strict-xfail policy |
 | [**Known limits**](docs/limits.md) | What this does not do, and which of those were decisions |
 

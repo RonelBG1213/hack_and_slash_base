@@ -79,7 +79,13 @@ sys.path.insert(0, str(ROOT / "src"))
 from hack_and_slash import config  # noqa: E402
 from hack_and_slash.core import campaign_io, level_io  # noqa: E402
 from hack_and_slash.core.campaign import Campaign  # noqa: E402
-from hack_and_slash.core.level import FLOOR, WALL, EnemySpawn, Level  # noqa: E402
+from hack_and_slash.core.level import (  # noqa: E402
+    FLOOR,
+    WALL,
+    EnemySpawn,
+    Level,
+    RoomKind,
+)
 
 
 @dataclass(frozen=True)
@@ -131,6 +137,14 @@ class Stage:
     enemies: list[EnemySpawn]
     pillars: list[tuple[int, int, int, int]] = field(default_factory=list)
 
+    #: Declared, never derived. The eight act enders say `RoomKind.BOSS` in the
+    #: table below with their own hands, so `tests/test_playthrough.py` -- which
+    #: works the same eight indices out from `STAGES_PER_ACT` -- is checking a
+    #: second, independent statement of the fact rather than reading back its
+    #: own arithmetic. Two derivations from one formula agree even when the
+    #: formula is wrong.
+    kind: RoomKind = RoomKind.COMBAT
+
     def build(self) -> Level:
         grid = [[FLOOR] * self.width for _ in range(self.height)]
 
@@ -152,6 +166,7 @@ class Stage:
             hero_spawn=self.hero,
             enemy_spawns=tuple(self.enemies),
             tile=config.TILE,
+            kind=self.kind,
         )
 
 
@@ -274,6 +289,7 @@ STAGES = [
     Stage(
         name="The Keep",
         filename="stage5.json",
+        kind=RoomKind.BOSS,
         width=32,
         height=22,
         hero=(3, 11),
@@ -411,6 +427,7 @@ STAGES = [
     Stage(
         name="The Pit",
         filename="stage10.json",
+        kind=RoomKind.BOSS,
         width=34,
         height=22,
         hero=(3, 11),
@@ -577,6 +594,7 @@ STAGES = [
     Stage(
         name="The Grove",
         filename="stage15.json",
+        kind=RoomKind.BOSS,
         width=38,
         height=26,
         hero=(3, 13),
@@ -751,6 +769,7 @@ STAGES = [
     Stage(
         name="The Sovereign's Hall",
         filename="stage20.json",
+        kind=RoomKind.BOSS,
         width=40,
         height=26,
         hero=(3, 13),
@@ -942,6 +961,7 @@ STAGES = [
     Stage(
         name="The Herald's Gate",
         filename="stage25.json",
+        kind=RoomKind.BOSS,
         width=40,
         height=26,
         hero=(3, 13),
@@ -1118,6 +1138,7 @@ STAGES = [
     Stage(
         name="The Gaoler's Yard",
         filename="stage30.json",
+        kind=RoomKind.BOSS,
         width=42,
         height=28,
         hero=(3, 14),
@@ -1303,6 +1324,7 @@ STAGES = [
     Stage(
         name="The Choir Loft",
         filename="stage35.json",
+        kind=RoomKind.BOSS,
         width=44,
         height=28,
         hero=(3, 14),
@@ -1497,6 +1519,7 @@ STAGES = [
     Stage(
         name="The Hollow Throne",
         filename="stage40.json",
+        kind=RoomKind.BOSS,
         width=42,
         height=28,
         hero=(3, 14),
