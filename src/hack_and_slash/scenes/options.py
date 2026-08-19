@@ -1,4 +1,14 @@
-"""The Settings screen.
+"""The Settings screen: six preferences on the left, the controls on the right.
+
+The controls used to be printed down the side of the title screen. They are a
+reference and the title screen is a decision, and a player who wants to look up
+which key rolls is not a player who is choosing what to do next -- they are
+already in a run, and Escape brings them here. This is the screen you arrive at
+knowing what you want to find out.
+
+They are drawn, not editable. Rebinding is a real feature and this is not it; the
+column would be the same column with a cursor in it, and the day that lands it
+takes `CONTROLS` with it rather than replacing anything here.
 
 Six rows, and the discipline behind them is worth stating once: **five of them
 change how the game looks and the sixth changes what is remembered. None of them
@@ -48,11 +58,39 @@ ROWS = (
 #: fourth toggle is one entry in `ROWS` and one name here.
 TOGGLES = frozenset({"fullscreen", "screenshake", "damage_numbers"})
 
+#: What each key does, as `(key, action)`. Moved here from the title screen
+#: unchanged. Prose rather than key names on the right -- "dodge roll" is what
+#: the player is looking for and `space` is the answer, not the question.
+CONTROLS = (
+    ("WASD", "move"),
+    ("mouse", "aim"),
+    ("left click", "swing"),
+    ("space", "dodge roll"),
+    ("Q E F", "the other attacks"),
+    ("R", "restart the run"),
+    # "back here" while this list lived on the title screen, which it does not
+    # any more. Escape means the menu from inside a run and it means the menu
+    # from this screen, so the wording is true from wherever it is being read.
+    ("Esc", "back to the menu"),
+)
+
+# --- layout, in the 384x216 internal space -----------------------------------
+# Two columns now, so the preferences give up the right-hand half they had. The
+# widest value is "press twice" at 61px and the widest label "Damage numbers" at
+# 95px, which is what sets `VALUE_X`; `test_menu.py` measures both against the
+# real fonts rather than trusting these numbers to stay true.
 TITLE_Y = 18
 ROW_Y = 54
 ROW_H = 20
-LABEL_X = 44
-VALUE_X = 250
+LABEL_X = 30
+VALUE_X = 136
+
+CONTROLS_X = 224
+CONTROLS_ACTION_X = CONTROLS_X + 46
+CONTROLS_HEAD_Y = 54
+CONTROLS_Y = 70
+CONTROLS_H = 15
+
 HINT_Y = 186
 
 
@@ -233,12 +271,31 @@ class OptionsScene(Scene):
             text, color = self._value(row, selected)
             surface.blit(self.body.render(text, False, color), (VALUE_X, y))
 
+        self._draw_controls(surface)
+
         hint = self.small.render(
             "up / down  choose      left / right  change      Esc  back",
             False,
             config.GREY,
         )
         surface.blit(hint, ((config.INTERNAL_W - hint.get_width()) // 2, HINT_Y))
+
+    def _draw_controls(self, surface: pygame.Surface) -> None:
+        """The right-hand column: a reference, headed so it is not read as a row.
+
+        Without the heading this is six settings and then seven more lines in the
+        same grid, and the first thing a player tries is pressing right on one of
+        them.
+        """
+        head = self.small.render("CONTROLS", False, config.ACCENT)
+        surface.blit(head, (CONTROLS_X, CONTROLS_HEAD_Y))
+
+        for i, (key, action) in enumerate(CONTROLS):
+            y = CONTROLS_Y + i * CONTROLS_H
+            surface.blit(self.small.render(key, False, config.WHITE), (CONTROLS_X, y))
+            surface.blit(
+                self.small.render(action, False, config.GREY), (CONTROLS_ACTION_X, y)
+            )
 
     def _value(self, row: str, selected: bool) -> tuple[str, tuple[int, int, int]]:
         """What to draw in the right-hand column, and in what colour."""

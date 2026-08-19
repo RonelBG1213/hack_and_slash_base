@@ -1,4 +1,4 @@
-"""The title screen: six things you can do, and how to play on the right.
+"""The title screen: six things you can do, and nothing else.
 
 This used to be a splash. `handle_event` took *any* key as "start" and Escape as
 "quit", which is two answers to a screen that now has to ask six -- so the whole
@@ -7,9 +7,18 @@ input half is new. What is unchanged is the principle it was written under:
 destination and hands over. `CharacterSelectScene` builds a run; `save.restore`
 rebuilds one; neither of them is understood here.
 
-Layout is two columns because the six rows are a decision and the controls are a
-reference, and stacking a reference under a decision buries one of them. The
-highlighted row explains itself on one line at the bottom -- the same shape
+One centred column, because the screen asks one question. It was two columns for
+a while, with the key bindings printed down the right-hand side, and the argument
+for that was real: a reference stacked *under* a decision gets buried. But the
+controls were not a second column of the same question -- they were a different
+kind of thing sharing a screen with a menu, and the six rows read as the left
+half of something rather than as the whole of it.
+
+They now live on the Settings screen, which is where a player goes to look
+something up rather than to start. Nothing was deleted: `options.CONTROLS` is the
+same tuple, moved.
+
+The highlighted row explains itself on one line at the bottom -- the same shape
 `select.py` uses for the class it is sitting on, and for the same reason: a grid
 of names is a menu, and a line of prose is the difference between choosing and
 guessing.
@@ -60,33 +69,29 @@ DETAILS = {
     "quit": "close the game",
 }
 
-CONTROLS = (
-    ("WASD", "move"),
-    ("mouse", "aim"),
-    ("left click", "swing"),
-    ("space", "dodge roll"),
-    ("Q E F", "the other attacks"),
-    ("R", "restart the run"),
-    ("Esc", "back here"),
-)
-
 # --- layout, in the 384x216 internal space -----------------------------------
 # Named rather than inlined so `test_menu.py` can measure the real fonts against
-# the real numbers. A label that grows into the controls column is a rendering
-# bug that looks like a wording one, which is the failure `test_render.py`
-# already catches for the shop and the job panel.
+# the real numbers. A label that runs off its column is a rendering bug that
+# looks like a wording one, which is the failure `test_render.py` already catches
+# for the shop and the job panel.
 TITLE_Y = 14
 SUBTITLE_Y = 52
 
-MENU_X = 38
+#: The column is centred as a *block* -- caret included -- rather than each row
+#: being centred on its own. Centring the rows individually puts the caret in a
+#: different place on every row, and the caret is the thing the eye tracks while
+#: the arrow keys are held. Widest label is "Achievements" at 79px in `body`;
+#: with the 12px caret that is a 91px block, so 146 leaves 146 on the far side.
+MENU_X = 158
 ROW_Y = 78
 ROW_H = 17
 CARET_X = MENU_X - 12
 
-CONTROLS_X = 202
-CONTROLS_ACTION_X = CONTROLS_X + 78
-CONTROLS_Y = 78
-CONTROLS_H = 15
+#: How far right of `MENU_X` a click still counts as a row. Not measured off the
+#: font: the mouse handler runs before anything is drawn on the very first frame
+#: and a click target that depends on a rendered label is a click target that
+#: does not exist yet.
+ROW_LABEL_W = 84
 
 DETAIL_Y = 188
 
@@ -190,7 +195,10 @@ class MenuScene(Scene):
 
         win_w, win_h = window.get_size()
         x, y = config.window_to_internal(*window_pos, win_w, win_h)
-        if x < CARET_X or x > CONTROLS_X - 8:
+        # Bounded by the block itself now that there is nothing to its right.
+        # A generous right edge rather than a per-label one: a click two pixels
+        # past the end of "Settings" meant that row and nothing else.
+        if x < CARET_X or x > MENU_X + ROW_LABEL_W:
             return None
 
         row = (y - ROW_Y) // ROW_H
@@ -304,7 +312,6 @@ class MenuScene(Scene):
         surface.blit(subtitle, ((config.INTERNAL_W - subtitle.get_width()) // 2, SUBTITLE_Y))
 
         self._draw_rows(surface)
-        self._draw_controls(surface)
         self._draw_detail(surface)
 
     def _draw_rows(self, surface: pygame.Surface) -> None:
@@ -327,20 +334,12 @@ class MenuScene(Scene):
                 caret = self.body.render(">", False, config.ACCENT)
                 surface.blit(caret, (CARET_X, y))
 
-    def _draw_controls(self, surface: pygame.Surface) -> None:
-        for i, (key, action) in enumerate(CONTROLS):
-            y = CONTROLS_Y + i * CONTROLS_H
-            surface.blit(self.small.render(key, False, config.WHITE), (CONTROLS_X, y))
-            surface.blit(
-                self.small.render(action, False, config.GREY), (CONTROLS_ACTION_X, y)
-            )
-
     def _draw_detail(self, surface: pygame.Surface) -> None:
-        """One line about the highlighted row, centred under both columns.
+        """One line about the highlighted row, centred at the foot of the screen.
 
         Full width is available down here, which is the reason the saved run's
         description lives on this line rather than beside its own row: it is the
-        longest string on the screen and it would not fit in the left column.
+        longest string on the screen and it would not fit in the column.
         """
         action = ITEMS[self.index][0]
 

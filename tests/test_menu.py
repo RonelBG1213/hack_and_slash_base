@@ -569,28 +569,39 @@ def test_a_loaded_run_restarts_where_it_originally_began(atlas) -> None:
 
 
 # --- layout ------------------------------------------------------------------
-def test_no_menu_label_runs_into_the_controls_column(atlas) -> None:
-    """384 pixels, two columns, measured with the menu's own fonts.
+def test_the_menu_column_is_centred_and_nothing_else_is_on_the_screen(atlas) -> None:
+    """384 pixels, one column, measured with the menu's own fonts.
 
-    The same check `test_render.py` makes on the shop rows and the job panel
-    columns, and for the same reason: a label that overruns looks like a
-    rendering bug and is a wording one, and nothing headless sees it otherwise.
+    Centring is checked rather than assumed because `MENU_X` is a constant and
+    the labels are not: renaming "Achievements" to something longer moves the
+    block off centre and nothing headless would otherwise see it. The tolerance
+    is half a row height, which is the point at which a column stops reading as
+    centred and starts reading as slightly wrong.
+
+    The second half is the harder claim. The controls used to be printed down
+    the right of this screen and they are now on Settings; the tuple is gone
+    from this module, and this test fails if somebody puts one back rather than
+    moving it.
     """
     from hack_and_slash.scenes import menu as screen
 
     drawn = MenuScene(campaign(), BESTIARY, atlas)
-    for _, label in ITEMS:
-        right = screen.MENU_X + drawn.body.size(label)[0]
-        assert right <= screen.CONTROLS_X, (
-            f"'{label}' runs {right - screen.CONTROLS_X}px into the controls column"
-        )
+    widest = max(drawn.body.size(label)[0] for _, label in ITEMS)
 
-    for key, action in screen.CONTROLS:
-        key_right = screen.CONTROLS_X + drawn.small.size(key)[0]
-        assert key_right <= screen.CONTROLS_ACTION_X, f"'{key}' runs into its own action"
+    left = screen.CARET_X
+    right = screen.MENU_X + widest
+    assert left >= 0 and right <= config.INTERNAL_W, "the column is off the screen"
 
-        action_right = screen.CONTROLS_ACTION_X + drawn.small.size(action)[0]
-        assert action_right <= config.INTERNAL_W, f"'{action}' runs off the right edge"
+    drift = abs((left + right) / 2 - config.INTERNAL_W / 2)
+    assert drift <= 8, f"the menu column sits {drift:.0f}px off centre"
+
+    assert widest <= screen.ROW_LABEL_W, (
+        "a label is wider than the clickable row, so its right-hand end cannot "
+        "be clicked"
+    )
+    assert not hasattr(screen, "CONTROLS"), (
+        "the controls are back on the title screen -- they belong on Settings"
+    )
 
 
 def test_every_menu_row_fits_on_the_screen(atlas) -> None:
@@ -599,9 +610,6 @@ def test_every_menu_row_fits_on_the_screen(atlas) -> None:
     last_row = screen.ROW_Y + (len(ITEMS) - 1) * screen.ROW_H
     assert last_row + 13 <= screen.DETAIL_Y, "the last row is drawn over the detail line"
     assert screen.DETAIL_Y + 11 <= config.INTERNAL_H, "the detail line is off the bottom"
-
-    last_control = screen.CONTROLS_Y + (len(screen.CONTROLS) - 1) * screen.CONTROLS_H
-    assert last_control + 11 <= config.INTERNAL_H
 
 
 def test_no_settings_row_runs_into_its_own_value(atlas) -> None:
@@ -613,10 +621,35 @@ def test_no_settings_row_runs_into_its_own_value(atlas) -> None:
         assert right <= screen.VALUE_X, f"'{label}' runs into its value"
 
         text, _ = drawn._value(name, selected=True)
-        assert screen.VALUE_X + drawn.body.size(text)[0] <= config.INTERNAL_W, (
-            f"the value for '{label}' runs off the right edge"
+        assert screen.VALUE_X + drawn.body.size(text)[0] <= screen.CONTROLS_X, (
+            f"the value for '{label}' runs into the controls column"
         )
 
     last_row = screen.ROW_Y + (len(ROWS) - 1) * screen.ROW_H
     assert last_row + 13 <= screen.HINT_Y
     assert screen.HINT_Y + 11 <= config.INTERNAL_H
+
+
+def test_the_controls_column_fits_beside_the_settings(atlas) -> None:
+    """The check that moved here with the tuple it measures.
+
+    Settings is the tighter of the two screens for this: the menu had six short
+    labels beside the controls and this has six labels *and* six values. The
+    left column gives up the middle of the screen for it, which is exactly the
+    kind of change that fits until somebody adds a seventh setting.
+    """
+    from hack_and_slash.scenes import options as screen
+
+    drawn = OptionsScene(Settings(), None)
+    for key, action in screen.CONTROLS:
+        key_right = screen.CONTROLS_X + drawn.small.size(key)[0]
+        assert key_right <= screen.CONTROLS_ACTION_X, f"'{key}' runs into its own action"
+
+        action_right = screen.CONTROLS_ACTION_X + drawn.small.size(action)[0]
+        assert action_right <= config.INTERNAL_W, f"'{action}' runs off the right edge"
+
+    head_bottom = screen.CONTROLS_HEAD_Y + 11
+    assert head_bottom <= screen.CONTROLS_Y, "the heading is drawn over the first key"
+
+    last = screen.CONTROLS_Y + (len(screen.CONTROLS) - 1) * screen.CONTROLS_H
+    assert last + 11 <= screen.HINT_Y, "the last binding is drawn over the hint line"

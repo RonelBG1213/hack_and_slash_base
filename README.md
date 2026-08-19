@@ -59,7 +59,9 @@ Then:
 ## The main menu
 
 Six rows: New Game, Load Game, Settings, Achievements, Unlockables, Quit Game.
-Up/down to choose, Enter to take one, Esc to quit.
+Up/down to choose, Enter to take one, Esc to quit. That is the whole screen — the
+key bindings used to be printed down the right of it and are now on Settings,
+which is where you go to look something up rather than to start.
 
 **Load Game** is a single autosave slot, written on the tick a stage begins and
 deleted when the run ends. A save records the campaign index, the seed, the
@@ -69,7 +71,8 @@ stage that was saved rather than one that resembles it. There is deliberately no
 mid-fight save — see `src/hack_and_slash/game/save.py` for why.
 
 **Settings** covers window scale and fullscreen, screenshake, damage numbers, the
-seed for the next run, and erasing the save and profile. Nothing on that screen
+seed for the next run, and erasing the save and profile, with the controls listed
+beside them for reference. They are printed, not rebindable. Nothing on that screen
 can change how a fight resolves, which is the line it is drawn on: difficulty is
 a balance decision and balance decisions live in `data/` where they get swept.
 
@@ -83,6 +86,8 @@ taken deliberately rather than a screen to be filled in.
 gitignored, like `levels/` and `assets/`.
 
 ## Controls
+
+Also on the Settings screen, in short form — this table is the long one.
 
 | Input | Action |
 | --- | --- |
