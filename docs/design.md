@@ -181,8 +181,8 @@ what a run gives you that is not a fight.
 | Room | What is in it |
 | --- | --- |
 | **The Spring** | A fountain. Heals a percentage of your maximum, on top of what clearing the stage already gave you |
-| **The Stall** | The shop. **This is now the only way into it** |
-| **The Shrine** | A point to spend on an attribute — and the only way to reach that panel in the shipped game, since nothing earns experience |
+| **The Stall** | The shop. **This is now the only way into it.** Three pieces of gear rolled for this room, over the five consumables |
+| **The Shrine** | A point, and **three of the eight attributes** to spend it on — and the only way to reach that panel in the shipped game, since nothing earns experience |
 | **The Cache** | A chest, worth more the deeper you are |
 
 The doors name **the room after the *next* arena**, not the one you are about to
@@ -231,11 +231,12 @@ against rather than an index computed twice.
 > kill is ever worth anything and no level is ever reached.
 >
 > Two things reach the attributes anyway, and neither goes through experience.
-> **The Boots**, which the shop sells, buy move speed with gold. **The shrine**,
+> **The gear a stall rolls**, and **the Boots** beneath it, buy attributes with
+> gold. **The shrine**,
 > one of the four reward rooms, hands out a point directly — so the panel a
 > levelling system would have opened is opened by walking up to a standing stone
 > instead. See [the rooms between](#the-rooms-between) and
-> [Loot and gold](loot.md#the-shop).
+> [Loot and gold](loot.md#the-stall).
 >
 > That split is the point rather than an accident. Turning experience on would
 > pay out on every kill on all forty stages and move the recorded grid on the day

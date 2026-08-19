@@ -76,8 +76,13 @@
     "heal_percent": 15
   },
 
+  "stall": {
+    "offers": 3
+  },
+
   "shrine": {
-    "points": 1
+    "points": 1,
+    "offers": 3
   },
 
   "treasure": {
@@ -97,6 +102,22 @@
     "      For scale: heal_between_stages is already 56 of a Knight's 130 (43%)",
     "      on every transition, so this is about a third again on the",
     "      transitions it lands, not a new source of healing on its own.",
+    "",
+    "  stall.offers 3 -- how many rolled pieces of gear sit above the five",
+    "      consumables. The pieces themselves are data/equipment.json; this is",
+    "      only how many of them a shelf shows. Three because that is the number",
+    "      of doors, and a room that offers three of everything reads as one",
+    "      decision repeated rather than two unrelated ones.",
+    "      SET IT TO 0 AND THE STALL IS THE SHOP EXACTLY AS IT WAS -- the five",
+    "      goods and nothing above them. That is the narrow rollback for the",
+    "      gear layer, underneath the whole-layer 'enabled: false' above.",
+    "",
+    "  shrine.offers 3 -- how many of the eight attributes a shrine puts on its",
+    "      plinth, drawn distinct from its own stateless stream. Three of eight",
+    "      rather than all eight, so a point is a decision about what is in",
+    "      front of you rather than a menu that is the same at every shrine.",
+    "      SET IT TO 8 AND EVERY SHRINE OFFERS EVERYTHING, which is the shrine",
+    "      exactly as it was. Above 8 is refused by progression.offers.",
     "",
     "  shrine.points 1 -- one point, the same unit progression.json pays per",
     "      level. It is the ONLY route to the attribute layer in the shipped",

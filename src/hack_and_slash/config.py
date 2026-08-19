@@ -19,6 +19,7 @@ WEAPONS_DATA = DATA_DIR / "weapons.json"
 LOOT_DATA = DATA_DIR / "loot.json"
 PROGRESSION_DATA = DATA_DIR / "progression.json"
 ROOMS_DATA = DATA_DIR / "rooms.json"
+EQUIPMENT_DATA = DATA_DIR / "equipment.json"
 SPRITE_ATLAS = ASSETS_DIR / "sprites.png"
 
 # Written while the game runs, never committed and never read by the logic

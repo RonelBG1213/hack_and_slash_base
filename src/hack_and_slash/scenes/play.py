@@ -34,11 +34,23 @@ from .. import config
 from ..core.campaign import Campaign
 from ..core.level import PropKind
 from ..core.vec2 import ZERO, Vec2
-from ..game import actions, jobs, profile, progression, save, shop, skills
+from ..game import (
+    actions,
+    equipment,
+    jobs,
+    profile,
+    progression,
+    rooms,
+    save,
+    shop,
+    skills,
+)
 from ..game.entities import DEFAULT_HERO, Bestiary
 from ..game.intent import Intent
 from ..game.run import Run, RunOutcome
 from ..game.sim import Accumulator, step
+from ..render import level_panel as level_rows
+from ..render import shop_panel as shop_rows
 from ..render.atlas import Atlas
 from ..render.camera import Camera
 from ..render.effects import Effects
@@ -193,6 +205,20 @@ class PlayScene(Scene):
         #: up behind you is a decision taken badly.
         self.shopping = False
 
+        #: What the stall in front of the hero has on it, and what the shrine
+        #: has on its plinth. Rolled once, in `_open_panels_for_props`, and held
+        #: for as long as the panel is up.
+        #:
+        #: **Held rather than re-derived per frame, and re-derived rather than
+        #: saved.** Both rolls come from `(seed, index)` through the stateless
+        #: streams in `rooms.py`, so a `PlayScene` rebuilt from a save rolls
+        #: again and gets the same answer -- which is why `save.py` says nothing
+        #: about either and did not have to change. Holding them is what makes
+        #: the tuple the keys index and the tuple the panel draws provably the
+        #: same object rather than two calls that happen to agree.
+        self.stall_offers: tuple[equipment.Offer, ...] = ()
+        self.shrine_offers: tuple[str, ...] = ()
+
         #: Open once per run, on the way into `jobs.PROMOTION_STAGE`, and ahead
         #: of the shop on that one transition. Ordered that way so the Poultice
         #: clamps against the *promoted* maximum health -- buying 30 health and
@@ -344,24 +370,34 @@ class PlayScene(Scene):
         """Buy, or press on. Nothing else happens while the panel is up.
 
         A refused purchase is silent on purpose: the row was already greyed out
-        before the key was pressed, and `shop.can_buy` is what greyed it, so
-        there is nothing to explain that the panel was not already saying.
+        before the key was pressed, and `equipment.can_buy` / `shop.can_buy` are
+        what greyed it, so there is nothing to explain that the panel was not
+        already saying.
         """
         if event.type != pygame.KEYDOWN:
             return None
 
         if event.key in SHOP_EXIT_KEYS:
             self.shopping = False
+            # The shelf belongs to the room, not to the run. Dropped on the way
+            # out so a stall two rooms later cannot inherit it if anything ever
+            # opens this panel without rolling first.
+            self.stall_offers = ()
             return None
 
         if event.key in ROW_KEYS:
-            # `available`, not `stock` -- the shelves this run can see. The
-            # panel draws the same list, so a row and its key are the same
-            # digit in both halves of the campaign.
-            goods = shop.available(self.run)
+            # `shop_rows.rows`, which is the one list the panel draws from --
+            # gear on top, goods underneath, one continuous run of digits. A
+            # second call to `shop.available` here would be a list that merely
+            # happens to agree with the drawn one.
+            shelf = shop_rows.rows(self.run, self.stall_offers)
             index = ROW_KEYS.index(event.key)
-            if index < len(goods):
-                shop.buy(self.run, goods[index])
+            if index < len(shelf):
+                kind, item = shelf[index]
+                if kind == "gear":
+                    equipment.buy(self.run, item)
+                else:
+                    shop.buy(self.run, item)
         return None
 
     def _handle_level_event(self, event: pygame.event.Event) -> Optional[Scene]:
@@ -376,13 +412,19 @@ class PlayScene(Scene):
 
         if event.key in LEVEL_EXIT_KEYS:
             self.levelling = False
+            self.shrine_offers = ()
             return None
 
         if event.key in LEVEL_ROW_KEYS:
+            # The shrine's three, not all eight -- and through the same
+            # `rows()` the panel draws, for the reason the stall's shelf is.
+            plinth = level_rows.rows(self.shrine_offers)
             index = LEVEL_ROW_KEYS.index(event.key)
-            if index < len(progression.SPENDABLE):
-                progression.spend(self.run, progression.SPENDABLE[index])
+            if index < len(plinth):
+                progression.spend(self.run, plinth[index])
                 self.levelling = self.run.unspent_points > 0
+                if not self.levelling:
+                    self.shrine_offers = ()
         return None
 
     def restarted(self) -> "PlayScene":
@@ -523,6 +565,11 @@ class PlayScene(Scene):
             return False
 
         if PropKind.STALL in self.run.used:
+            # Rolled here, on the tick the stall is touched, and held. Both
+            # rolls are derived from `(seed, index)` and draw on their own
+            # stateless streams, so neither can reach `world.rng` and neither
+            # needs a line in the save file.
+            self.stall_offers = equipment.offers(self.run)
             self.shopping = True
 
         if PropKind.SHRINE in self.run.used and self.run.unspent_points > 0:
@@ -531,6 +578,9 @@ class PlayScene(Scene):
             # shrine that handed out a point and said nothing would look broken,
             # and the panel is the only thing in the game that says what a point
             # is worth.
+            self.shrine_offers = progression.offers(
+                self.run.seed, self.run.index, rooms.table().shrine_offers
+            )
             self.levelling = True
 
         return self.shopping or self.levelling
@@ -624,6 +674,13 @@ class PlayScene(Scene):
                 # resolved in, and gated on the count rather than on "did we
                 # level this stage" so points banked on an earlier transition
                 # are offered again rather than stranded.
+                #
+                # **This is not a shrine**, so the offer is cleared and the panel
+                # falls back to all eight attributes. A point banked at a shrine
+                # and spent here would otherwise be spent against that shrine's
+                # three, in a room the player is no longer standing in -- and the
+                # only symptom would be a plinth that looked oddly familiar.
+                self.shrine_offers = ()
                 self.levelling = self.run.unspent_points > 0
 
                 # Armed, not written. The three panels above are open on this
@@ -670,11 +727,11 @@ class PlayScene(Scene):
             # which is exactly how the banner started drawing over the shop when
             # the promotion panel was added between them.
             if self.shopping:
-                self.shop_panel.draw(surface, self.run)
+                self.shop_panel.draw(surface, self.run, self.stall_offers)
             if self.levelling:
                 # Over the shop and under the promotion, matching the order the
                 # three are resolved in and the order they take keys in.
-                self.level_panel.draw(surface, self.run)
+                self.level_panel.draw(surface, self.run, self.shrine_offers)
             if self.promoting:
                 # Over the shop, not instead of it. Both are open on the final
                 # transition, and the class is the choice being asked for.

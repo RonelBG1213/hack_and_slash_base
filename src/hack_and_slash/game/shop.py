@@ -44,7 +44,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from . import loot
+from . import loot, progression
 from .attributes import Attributes
 
 
@@ -111,23 +111,17 @@ def _charm(run, amount: int) -> bool:
 
 
 def _boots(run, amount: int) -> bool:
-    """The one good that writes an attribute rather than a `Run` integer.
+    """The first good that wrote an attribute rather than a `Run` integer.
 
-    Both halves, exactly as `progression.spend` writes them and for the same
-    reason: `run.earned` is what `Run._advance` hands the next stage's `World`
-    as `hero_bonus`, and `hero.bonus` is what the sim reads on the body standing
-    in this one. Writing only the first leaves the purchase inert until the next
-    stage boundary; writing only the second loses it at that boundary.
+    Both halves of that write are `progression.grant`, which `spend` and
+    `equipment.buy` also go through -- the reason both are necessary is in its
+    docstring, and it is in one place now rather than three.
 
     `amount` is percentage points, because that is what the panel shows. The
     attribute is per-mille, so it is scaled here -- the same shape as `_charm`
     turning 25 into 0.25.
     """
-    run.earned = run.earned + Attributes(move_speed=amount * 10)
-
-    hero = run.world.hero
-    if hero is not None:
-        hero.bonus = run.earned
+    progression.grant(run, Attributes(move_speed=amount * 10))
     return True
 
 

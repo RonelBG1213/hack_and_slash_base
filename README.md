@@ -102,15 +102,23 @@ Also on the Settings screen, in short form — this table is the long one.
 | Esc | Back to the menu |
 | Up / down, Enter | Choose, on the menu and the Settings screen |
 | Left / right | Change a value, on the Settings screen |
-| `1`–`5` | Buy, at a shop stall |
+| `1`–`8` | Buy, at a stall — three rolled pieces of gear over the consumables |
+| `1`–`3` | Spend a point, at a shrine — three of the eight attributes |
 | `1` `2` | Choose a path, on the promotion screen after stage twenty |
-| Enter / Space / Esc | Dismiss the shop or the level-up panel |
+| Enter / Space / Esc | Dismiss the stall or the shrine panel |
 
 Between two stages is a **reward room** you walk through: a fountain, a shop
 stall, a shrine or a chest, and three doors on the far wall naming what the room
 after the *next* stage will hold. Walk onto the fixture to use it and through a
 door to leave. There is no key for any of that — a room is somewhere you are,
 not a menu.
+
+**The stall and the shrine roll.** A stall shows three pieces of gear drawn from
+a pool of twelve, each at its own rarity, priced against the floor and gone when
+you leave — over the five consumables that are always there. A shrine shows
+three of the eight attributes to spend its point on. Both rolls come from the
+run's seed and the room's index, so quitting and coming back finds the same
+shelf.
 
 The promotion screen is the one panel with no exit key. Twenty stages are
 tuned for the class you become, so there is nothing sensible for a refusal to

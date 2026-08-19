@@ -49,15 +49,48 @@ MAP_STREAM = 0x4D0075
 #: and a different prime so the two do not march in step down a run.
 ROOM_STRIDE = 7919
 
+#: The fifth and sixth streams: what a stall has on its shelf, and what a shrine
+#: puts on its plinth. Two more unrelated constants, because the whole guarantee
+#: has always been that the sequences do not overlap and unrelated constants give
+#: unrelated sequences.
+#:
+#: They are *not* derived from `Run._room_seed`, which is the room's own world
+#: seed. That docstring says this layer was coming -- "it exists so that the day
+#: something in a room does roll, it is not drawing the sequence the arena beside
+#: it draws" -- and reusing it would have made the shelf correlated with the
+#: room world's rng and with the plinth, which is the thing these constants are
+#: for.
+STALL_STREAM = 0x57A11
+SHRINE_STREAM = 0x5E121
 
-def _stream(seed: int, index: int) -> random.Random:
-    """The map stream for one transition. Constructed, used, discarded.
+
+def _stream(seed: int, index: int, stream: int = MAP_STREAM) -> random.Random:
+    """One stream for one transition. Constructed, used, discarded.
 
     Parenthesised deliberately: `^` binds looser than `+` in Python, so
-    `seed ^ MAP_STREAM + index * ROOM_STRIDE` is a different -- and silently
+    `seed ^ stream + index * ROOM_STRIDE` is a different -- and silently
     plausible -- expression from this one.
+
+    `stream` defaults to the map so the doors read exactly as they always did;
+    the stall and the shrine pass their own, through the two thin wrappers below
+    rather than by naming a constant at every call site.
     """
-    return random.Random((seed ^ MAP_STREAM) + index * ROOM_STRIDE)
+    return random.Random((seed ^ stream) + index * ROOM_STRIDE)
+
+
+def stall_stream(seed: int, index: int) -> random.Random:
+    """What the stall at `index` has on its shelf. Never held -- see `offer`.
+
+    That is what makes a run loaded from disk find the same three pieces at the
+    same prices it was looking at when it was put down, with the save file
+    saying nothing about a shelf at all.
+    """
+    return _stream(seed, index, STALL_STREAM)
+
+
+def shrine_stream(seed: int, index: int) -> random.Random:
+    """What the shrine at `index` offers. Never held, for the same reason."""
+    return _stream(seed, index, SHRINE_STREAM)
 
 
 # --- the content file --------------------------------------------------------
@@ -77,6 +110,13 @@ class Table:
     shrine_points: int
     chest_gold: int
     chest_floor_step: float
+
+    #: How many rolled pieces a stall puts above its consumables, and how many
+    #: attributes a shrine offers. Zero is a meaningful value for both and is the
+    #: documented rollback: a stall with no gear is the shop exactly as it was,
+    #: and a shrine offering nothing falls back to every attribute at once.
+    stall_offers: int
+    shrine_offers: int
 
     @property
     def is_off(self) -> bool:
@@ -134,6 +174,17 @@ class Table:
                 f"{len(REWARD_KINDS)} reward kinds to draw distinct ones from"
             )
 
+        stall_offers = int(payload["stall"]["offers"])
+        shrine_offers = int(payload["shrine"]["offers"])
+        for name, count in (("stall.offers", stall_offers), ("shrine.offers", shrine_offers)):
+            if count < 0:
+                raise ValueError(f"{source}: {name} is {count}, which is not a count")
+        # The *upper* bound on shrine.offers is checked in `progression.offers`,
+        # and the one on stall.offers in `equipment.offers`. How many attributes
+        # there are, and how many pieces are in the pool, is those modules'
+        # knowledge -- reaching back for it from here would close an import cycle
+        # to move one error message a little earlier.
+
         return cls(
             enabled=bool(payload["enabled"]),
             doors=doors,
@@ -143,6 +194,8 @@ class Table:
             shrine_points=int(payload["shrine"]["points"]),
             chest_gold=int(payload["treasure"]["gold"]),
             chest_floor_step=float(payload["treasure"]["floor_step"]),
+            stall_offers=stall_offers,
+            shrine_offers=shrine_offers,
         )
 
 

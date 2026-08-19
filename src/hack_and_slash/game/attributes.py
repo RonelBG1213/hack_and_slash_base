@@ -118,6 +118,25 @@ class Attributes:
             }
         )
 
+    def scaled(self, factor: int) -> "Attributes":
+        """Every field multiplied by the same whole number.
+
+        Written over `dataclasses.fields` for the reason `__add__` is: a ninth
+        attribute scales correctly on the day it is declared, rather than on the
+        day somebody notices it was left out of a hand-written constructor call.
+
+        Integer throughout, like everything else here. A rarity multiplier is a
+        whole number in `data/equipment.json` precisely so that this cannot
+        round -- a scaled block has to replay exactly, and `2.5 * 25` is the sort
+        of thing that does not.
+        """
+        return Attributes(
+            **{
+                field.name: getattr(self, field.name) * factor
+                for field in dataclasses.fields(self)
+            }
+        )
+
     @classmethod
     def from_dict(cls, payload: dict | None) -> "Attributes":
         """Read a block out of the content files.

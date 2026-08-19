@@ -290,3 +290,74 @@ def test_earned_health_is_on_the_body_before_the_carry_is_clamped() -> None:
         assert run.max_hp == HERO.hp + 24
         assert run.world.hero.max_hp == HERO.hp + 24
         assert run.world.hero.hp == HERO.hp + 24, "the carry was clamped to the bare class"
+
+
+# --- what a shrine puts on its plinth ----------------------------------------
+def test_a_shrine_offers_distinct_attributes() -> None:
+    """Sampled without replacement, for the reason `rooms.offer` samples doors
+    that way: two identical rows read as a bug rather than as a repeated
+    option."""
+    for index in range(39):
+        offered = progression.offers(7, index, 3)
+        assert len(offered) == 3
+        assert len(set(offered)) == 3
+
+
+def test_the_same_shrine_offers_the_same_three() -> None:
+    """The determinism claim, and the reason no save field was needed for it.
+
+    Built from `(seed, index)` and thrown away, so a run loaded off disk finds
+    the plinth it was standing at when it was put down.
+    """
+    for index in range(39):
+        assert progression.offers(7, index, 3) == progression.offers(7, index, 3)
+
+
+def test_a_different_seed_is_a_different_run_of_shrines() -> None:
+    plinths = {progression.offers(seed, 0, 3) for seed in range(12)}
+    assert len(plinths) > 1, "every seed rolled the same first shrine"
+
+
+def test_a_different_shrine_is_a_different_three() -> None:
+    plinths = {progression.offers(7, index, 3) for index in range(39)}
+    assert len(plinths) > 1, "every shrine in a run offers the same three"
+
+
+def test_every_attribute_a_shrine_can_offer_is_spendable() -> None:
+    """So a ninth attribute is offerable on the day it is declared, rather than
+    on the day somebody remembers to add it to a list here."""
+    seen = {
+        name
+        for seed in range(12)
+        for index in range(39)
+        for name in progression.offers(seed, index, 3)
+    }
+    assert seen <= set(progression.SPENDABLE)
+    assert seen == set(progression.SPENDABLE), (
+        f"never offered: {sorted(set(progression.SPENDABLE) - seen)}"
+    )
+
+
+def test_offering_everything_is_the_shrine_exactly_as_it_was() -> None:
+    """`shrine.offers: 8` in `data/rooms.json`, the narrow rollback."""
+    assert set(progression.offers(7, 3, len(progression.SPENDABLE))) == set(
+        progression.SPENDABLE
+    )
+
+
+def test_offering_nothing_is_an_empty_plinth() -> None:
+    assert progression.offers(7, 3, 0) == ()
+
+
+def test_more_offers_than_attributes_is_refused() -> None:
+    """Raised here rather than as random's "Sample larger than population",
+    which would point at nothing."""
+    with pytest.raises(ValueError, match="shrine.offers"):
+        progression.offers(7, 3, len(progression.SPENDABLE) + 1)
+
+
+def test_the_shipped_shrine_count_is_offerable() -> None:
+    """Ties the number in the data file to the bound this module enforces."""
+    from hack_and_slash.game import rooms
+
+    progression.offers(7, 0, rooms.table().shrine_offers)

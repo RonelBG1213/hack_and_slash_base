@@ -1,13 +1,26 @@
-"""The shop, drawn over a paused arena between stages.
+"""The stall, drawn over a paused reward room.
 
 Lives here rather than in `scenes/play.py` for the same reason `hud.py` does:
 the scene decides *when* a thing is on screen, and this decides what it looks
-like. The scene keeps the two lines that say "the shop is open" and none of the
+like. The scene keeps the two lines that say "the stall is open" and none of the
 sixty that say where the third price goes.
 
-Reads a `Run` and never writes to one. Buying is `game.shop.buy`, called by the
-scene when a key arrives -- so the panel cannot get out of step with what a
-purchase actually does, because it does not do any of it.
+Two sections under one title. **Gear** on top -- three pieces rolled for this
+room, at a rarity that scaled both the block and the price, gone when you walk
+out. **Goods** underneath -- the five consumables that are on every shelf of
+every run. One continuous run of keys across both, because a player pressing 4
+is counting rows and does not know the sections are two different systems.
+
+Reads a `Run` and an offer tuple, and writes to neither. Buying is
+`game.equipment.buy` and `game.shop.buy`, called by the scene when a key arrives
+-- so the panel cannot get out of step with what a purchase actually does,
+because it does not do any of it.
+
+**The offers are passed in rather than re-derived here.** `equipment.offers` is
+deterministic, so calling it in `draw` would give the same answer -- but then the
+tuple the keys index and the tuple the rows are drawn from would be two calls
+that merely happen to agree, and the day one of them is given a different index
+a player buys a row they cannot see.
 """
 
 from __future__ import annotations
@@ -15,43 +28,107 @@ from __future__ import annotations
 import pygame
 
 from .. import config
-from ..game import shop
+from ..game import equipment, loot, shop
 
-#: Keys 1..5 in the order the shop stocks them. The row number a player reads
-#: and the key they press are the same digit, which is the whole reason the
-#: stock order is content rather than something sorted at load.
+#: Keys 1..8, spanning both sections. Three rolled pieces above five goods is
+#: the tallest the panel ever gets, and it is exactly eight.
 #:
-#: Five keys for a shop that shows four rows for the first twenty stages. The
-#: fifth is a late shelf, and both the rows and the hint line are counted from
-#: `shop.available(run)` rather than assumed -- so the panel is right in both
-#: halves of the campaign without knowing which half it is in.
-ROW_KEYS = (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5)
+#: The row number a player reads and the key they press are the same digit,
+#: which is the whole reason the stock order is content rather than something
+#: sorted at load -- and why `rows()` below is the single list both the drawing
+#: and the scene's key handling go through.
+ROW_KEYS = (
+    pygame.K_1,
+    pygame.K_2,
+    pygame.K_3,
+    pygame.K_4,
+    pygame.K_5,
+    pygame.K_6,
+    pygame.K_7,
+    pygame.K_8,
+)
 
-TITLE_Y = 26
+TITLE_Y = 10
+PURSE_Y = 28
 
-#: Was 68/24, when the shop had three rows for the whole game, then 62/24 for
-#: four. A fifth row put the hint line nineteen pixels under the HUD, so the
-#: rows tightened rather than the panel starting higher -- the title has to keep
-#: its air or the whole thing reads as a list rather than a shop.
+#: Was 56/20 when the shelf was five goods and nothing else. Three gear rows on
+#: top makes eight, and eight at 20px put the hint forty pixels under the HUD.
 #:
-#: `test_the_shop_rows_and_hint_fit_above_the_hud` measures the tallest the
-#: panel ever gets rather than the version that happens to be on screen, which
-#: is why this has twice been a failing test rather than a bug report from
-#: somebody playing act V.
-ROW_Y = 56
-ROW_H = 20
+#: These are `level_panel.py`'s numbers, which have already been proved to fit
+#: eight rows above a 188px viewport: the last row starts at 158 and the hint at
+#: 174 clears it. Drafted at 18 first, which fits the arithmetic in the fit test
+#: and draws the eighth row straight through the hint -- the same trap that file
+#: records.
+ROW_Y = 46
+ROW_H = 16
+HINT_Y = 174
+
+#: The gap between the last row and the hint line under it.
+GAP = 12
+
+
+def hint_y(count: int) -> int:
+    """Where the hint sits under `count` rows.
+
+    Follows the rows up rather than staying pinned at the bottom, because the
+    two panels this is in are both variable now -- a shrine draws three of eight
+    and a stall seven or eight -- and a hint marooned five rows below the last
+    one reads as a panel that failed to finish drawing.
+
+    **Clamped at `HINT_Y`, which is the ceiling and not the default.** At the
+    tallest the arithmetic would put it under the HUD, and that number has been
+    a failing test twice rather than a bug report from somebody playing act V.
+    """
+    return min(HINT_Y, ROW_Y + count * ROW_H + GAP)
+
+
 LEFT = 40
 
 #: Columns, as offsets from `LEFT`. Fixed rather than measured from the widest
-#: name, so the three rows line up whatever `data/loot.json` calls things.
+#: name, so the rows line up whatever `data/loot.json` and `data/equipment.json`
+#: call things.
 NAME_X = 16
 PRICE_X = 92
 BLURB_X = 142
 
-#: Where the sold-out tally is right-aligned to, and therefore how much room a
-#: blurb has: about 150px between `LEFT + BLURB_X` and here. `game/shop.py` keeps
-#: its templates short for exactly this reason.
+#: Where the rarity word and the sold-out tally are right-aligned to, and
+#: therefore how much room a blurb has: about 150px between `LEFT + BLURB_X` and
+#: here. The two never collide because the column is free on a gear row and the
+#: tally column is free on a goods row.
+#:
+#: `equipment.MAX_ATTRIBUTES` is the rule that keeps a rolled blurb inside it,
+#: and `shop.py` keeps its templates short for the same reason.
 TALLY_RIGHT = config.INTERNAL_W - LEFT
+
+#: What each rarity is drawn in. Anything the map does not name falls back to
+#: grey rather than raising -- a tier added to `data/loot.json` should look
+#: unremarkable, not crash somebody's thirtieth stage.
+RARITY_COLOURS = {
+    loot.Rarity.COMMON: config.GREY,
+    loot.Rarity.UNCOMMON: config.GOOD,
+    loot.Rarity.RARE: config.ACCENT,
+    loot.Rarity.EPIC: config.GOLD,
+    loot.Rarity.LEGENDARY: config.GOLD,
+}
+
+
+def rows(run, offers: tuple[equipment.Offer, ...]) -> tuple[tuple[str, object], ...]:
+    """Every row on the shelf, in the order the keys index them.
+
+    **This, and nothing else, is what the panel draws and what a keypress means.**
+    The scene calls it too, so a row and its key cannot come from two different
+    lists -- the contract `shop.available` already carries for the goods half,
+    now covering both halves.
+
+    Tagged rather than duck-typed: an `Offer` and a `Good` are two different
+    things bought through two different functions, and a caller guessing which
+    it holds from the attributes it happens to have is the shape that breaks
+    silently when one of them grows a `price`.
+    """
+    return tuple(
+        [("gear", offer) for offer in offers]
+        + [("good", good) for good in shop.available(run)]
+    )
 
 
 class ShopPanel:
@@ -60,55 +137,100 @@ class ShopPanel:
         self.font = pygame.font.Font(None, 16)
         self.small = pygame.font.Font(None, 13)
 
-    def draw(self, surface: pygame.Surface, run) -> None:
+    def draw(self, surface: pygame.Surface, run, offers=()) -> None:
         self._wash(surface)
 
-        heading = self.title.render("THE ROAD BETWEEN", False, config.ACCENT)
+        # Named for the room it stands in. It used to say THE ROAD BETWEEN,
+        # which was written when the shop opened on all thirty-nine transitions
+        # rather than in a room you gave up a fountain to reach.
+        heading = self.title.render("THE STALL", False, config.ACCENT)
         surface.blit(heading, ((config.INTERNAL_W - heading.get_width()) // 2, TITLE_Y))
 
         purse = self.font.render(f"{run.gold}g", False, config.GOLD)
-        surface.blit(purse, ((config.INTERNAL_W - purse.get_width()) // 2, TITLE_Y + 20))
+        surface.blit(purse, ((config.INTERNAL_W - purse.get_width()) // 2, PURSE_Y))
 
-        rows = shop.available(run)
-        for index, good in enumerate(rows):
-            self._row(surface, run, good, index, ROW_Y + index * ROW_H)
+        shelf = rows(run, offers)
+        for index, (kind, item) in enumerate(shelf):
+            y = ROW_Y + index * ROW_H
+            if kind == "gear":
+                self._gear_row(surface, run, item, index, y)
+            else:
+                self._good_row(surface, run, item, index, y)
 
         hint = self.small.render(
-            f"1-{len(rows)} to buy    Enter to press on", False, config.GREY
+            f"1-{len(shelf)} to buy    Enter to press on", False, config.GREY
         )
         surface.blit(
-            hint,
-            ((config.INTERNAL_W - hint.get_width()) // 2, ROW_Y + len(rows) * ROW_H + 12),
+            hint, ((config.INTERNAL_W - hint.get_width()) // 2, hint_y(len(shelf)))
         )
 
     def _wash(self, surface: pygame.Surface) -> None:
         """A dim wash, not a solid panel -- the same treatment the result screen
-        gets. The arena stays visible behind it, which is what keeps the shop
+        gets. The room stays visible behind it, which is what keeps the stall
         feeling like a pause in a run rather than a different screen."""
         wash = pygame.Surface((config.INTERNAL_W, config.VIEWPORT_H), pygame.SRCALPHA)
         wash.fill((10, 10, 14, 205))
         surface.blit(wash, (0, 0))
 
-    def _row(self, surface: pygame.Surface, run, good: shop.Good, index: int, y: int) -> None:
-        """One line of stock, greyed out when pressing its key would do nothing.
-
-        `shop.can_buy` decides that, and it is the same call the scene makes when
-        the key actually arrives -- so what a player is shown and what happens
-        cannot disagree. That matters most for the Poultice, which is refused at
-        full health rather than sold for nothing.
-        """
-        available = shop.can_buy(run, good)
-        sold_out = shop.sold_out(run, good)
-        color = config.WHITE if available else config.GREY
-
-        key = self.font.render(f"{index + 1}", False, config.ACCENT if available else config.GREY)
+    def _key(self, surface, index: int, y: int, live: bool) -> None:
+        key = self.font.render(
+            f"{index + 1}", False, config.ACCENT if live else config.GREY
+        )
         surface.blit(key, (LEFT, y))
 
-        name = self.font.render(good.name, False, color)
+    def _gear_row(self, surface, run, offer: equipment.Offer, index: int, y: int) -> None:
+        """One rolled piece, greyed out when pressing its key would do nothing.
+
+        `equipment.can_buy` decides that, and it is the same call the scene makes
+        when the key actually arrives -- so what a player is shown and what
+        happens cannot disagree. That matters most for a piece already bought,
+        which is refused rather than sold twice.
+        """
+        live = equipment.can_buy(run, offer)
+        colour = config.WHITE if live else config.GREY
+
+        self._key(surface, index, y, live)
+
+        name = self.font.render(offer.name, False, colour)
         surface.blit(name, (LEFT + NAME_X, y))
 
         price = self.font.render(
-            f"{good.price}g", False, config.GOLD if available else config.GREY
+            f"{offer.price}g", False, config.GOLD if live else config.GREY
+        )
+        surface.blit(price, (LEFT + PRICE_X, y))
+
+        blurb = self.small.render(offer.blurb, False, config.GREY)
+        surface.blit(blurb, (LEFT + BLURB_X, y + 3))
+
+        # The rarity sits where a good puts its sold-out tally. Two things never
+        # on the same row, so one column serves both.
+        word = "taken" if equipment.taken(run, offer) else offer.rarity.value
+        colour = (
+            config.BAD
+            if equipment.taken(run, offer)
+            else RARITY_COLOURS.get(offer.rarity, config.GREY)
+        )
+        tally = self.small.render(word, False, colour)
+        surface.blit(tally, (TALLY_RIGHT - tally.get_width(), y + 3))
+
+    def _good_row(self, surface, run, good: shop.Good, index: int, y: int) -> None:
+        """One line of stock, greyed out when pressing its key would do nothing.
+
+        `shop.can_buy` decides that, and it is the same call the scene makes when
+        the key actually arrives. That matters most for the Poultice, which is
+        refused at full health rather than sold for nothing.
+        """
+        live = shop.can_buy(run, good)
+        sold_out = shop.sold_out(run, good)
+        colour = config.WHITE if live else config.GREY
+
+        self._key(surface, index, y, live)
+
+        name = self.font.render(good.name, False, colour)
+        surface.blit(name, (LEFT + NAME_X, y))
+
+        price = self.font.render(
+            f"{good.price}g", False, config.GOLD if live else config.GREY
         )
         surface.blit(price, (LEFT + PRICE_X, y))
 

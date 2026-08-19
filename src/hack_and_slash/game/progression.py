@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .. import config
+from . import rooms
 from .attributes import Attributes
 
 #: Every attribute name, derived rather than listed, so a new one is spendable
@@ -176,24 +177,61 @@ def bank(run, amount: int) -> None:
         run.unspent_points += curve.points_per_level
 
 
+def grant(run, block: Attributes) -> None:
+    """Write an earned attribute block to both places it has to be written.
+
+    `run.earned` is what `Run._advance` hands the next stage's `World` as
+    `hero_bonus`; `Entity.bonus` is what the sim reads on the body standing in
+    this one. **Writing only the first leaves the gain inert until the next stage
+    boundary; writing only the second loses it at that boundary.**
+
+    Three callers now -- `spend` below, `shop._boots`, and `equipment.buy` -- and
+    that is why it is a function. The first two each held their own copy of these
+    four lines with their own comment explaining them, and a third copy is the
+    point at which one of them gets fixed and the others do not.
+    """
+    run.earned = run.earned + block
+
+    hero = run.world.hero
+    if hero is not None:
+        hero.bonus = run.earned
+
+
+def offers(seed: int, index: int, count: int) -> tuple[str, ...]:
+    """Which attributes a shrine puts on its plinth, for the room at `index`.
+
+    Distinct and in draw order, so which attribute is on key 1 is part of the one
+    roll rather than a second decision -- the same shape `rooms.offer` has for
+    the doors, drawn from the same kind of stateless stream.
+
+    **The upper bound is checked here rather than in `rooms.Table.load`.** How
+    many attributes there are to draw from is this module's knowledge, and
+    `rooms.py` importing it back would close a cycle for the sake of moving one
+    error message earlier. `random.sample` would raise anyway; it would just
+    raise "Sample larger than population" with nothing pointing at the JSON.
+    """
+    if not 0 <= count <= len(SPENDABLE):
+        raise ValueError(
+            f"a shrine cannot offer {count} of the {len(SPENDABLE)} attributes "
+            f"there are; see 'shrine.offers' in data/rooms.json"
+        )
+    if count == 0:
+        return ()
+    return tuple(rooms.shrine_stream(seed, index).sample(SPENDABLE, count))
+
+
 def spend(run, attribute: str, points: int = 1) -> bool:
     """Put points into one attribute. False if the run cannot afford it.
 
     Refused rather than clamped, the way `shop.buy` refuses: a partial purchase
     the player did not ask for is worse than one that visibly did not happen.
 
-    Writes both halves -- `run.earned`, which survives into the next stage, and
-    the live body's `Entity.bonus`, which is what the sim actually reads. Doing
-    only the first would leave the point inert until the next stage boundary,
-    and doing only the second would lose it at that boundary.
+    Both halves of the write are `grant`'s job, and the reason they are both
+    necessary is in its docstring.
     """
     if points <= 0 or run.unspent_points < points:
         return False
 
-    run.earned = run.earned + table().gain(attribute, points)
+    grant(run, table().gain(attribute, points))
     run.unspent_points -= points
-
-    hero = run.world.hero
-    if hero is not None:
-        hero.bonus = run.earned
     return True

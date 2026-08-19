@@ -17,23 +17,45 @@ with the same information.
 > dodge, health regen and move speed — and they ship **switched off**
 > (`xp_base: 0` in [`data/progression.json`](../data/progression.json)).
 >
-> **One of the eight is now on sale.** The Boots write `move_speed`, so the shop
-> does touch what a class is, and the sentence below survives only because
-> movement is not output: speed changes how a fight is fought and not how hard
-> the hero hits, which is what the rest of this section actually rests on. See
-> [The attribute layer](#the-attribute-layer) at the end of this section.
+> **All eight are now reachable, and this section's central claim no longer
+> holds unqualified.** The Boots were the first crack — `move_speed`, which the
+> sentence below survived because movement is not output. **The gear a stall
+> rolls broke it properly**: the pool in
+> [`data/equipment.json`](../data/equipment.json) carries `damage` and `max_hp`
+> among the eight, so the hero's output *can* now grow across a run. See
+> [The attribute layer](#the-attribute-layer) at the end of this section and
+> [Loot and gold](loot.md#the-gear-a-stall-rolls).
 
-The shop sells health now, health per stage, gold find and walking speed;
-nothing it stocks touches **damage or maximum health**, on any of the forty
-stages.
+The shop's five consumables sell health now, health per stage, gold find and
+walking speed; nothing among *them* touches damage or maximum health, on any of
+the forty stages. **The three rolled gear rows above them do.**
 
-That is load-bearing rather than squeamish. Because the hero's **output** does not
-grow across a run, health on a later boss buys fight *length* and nothing else —
-so the act bosses are not much tougher than the first and take their difficulty
-from reach, cadence and arena instead. Both act III and act IV bosses were
-drafted far tankier and were unwinnable on every seed; the four late bosses were
-built inside that finding rather than rediscovering it, and the heaviest of them
-is twenty health above the Sovereign.
+That claim was load-bearing rather than squeamish, and it is worth stating
+exactly what buying it back costs. Because the hero's **output** did not grow
+across a run, health on a later boss bought fight *length* and nothing else — so
+the act bosses are not much tougher than the first and take their difficulty from
+reach, cadence and arena instead. Both act III and act IV bosses were drafted far
+tankier and were unwinnable on every seed; the four late bosses were built inside
+that finding rather than rediscovering it, and the heaviest of them is twenty
+health above the Sovereign.
+
+> [!WARNING]
+> **This is the open question the gear layer leaves behind, and it is stated
+> rather than hidden.** A run that buys every damage piece it is offered could
+> roughly double its damage per swing over forty stages — a `whetstone` at
+> legendary is +12 flat, against a Knight's greatsword at 12. Nothing measures
+> whether that happens or what it does, because `autoplay` never enters a panel
+> and never spends: `run.earned` is neutral in every recorded sweep, which is
+> what keeps the grid provably unmoved and is *also* exactly why the grid has
+> nothing to say about this.
+>
+> So the late bosses are still tuned against a hero whose output does not grow,
+> and a well-bought run now meets them with one whose output did. That is a
+> difficulty question, not a correctness one, and the honest first check is hands
+> on a keyboard rather than `tools/balance.py`. The dials, in the order to reach
+> for them: the `damage` amounts in `data/equipment.json`, then `rarity_scale`,
+> then `stall.offers` in `data/rooms.json` — and `stall.offers: 0` puts this
+> paragraph back to the way it was.
 
 **The one exception is [promotion](design.md#promotion), and it is the seam the
 campaign is built around rather than a hole in this rule.** An advanced class
@@ -113,6 +135,23 @@ and reports it in the same units as difficulty. That is the
 turning `xp_base` up, not after.**
 
 Setting `xp_base` back to 0 is the rollback, and it is the state it ships in.
+
+**Two things reach these eight without experience being on, and they are now the
+only things that do.** A [shrine](design.md#the-rooms-between) hands out a point
+and offers three of the eight to spend it on; a [stall](loot.md#the-gear-a-stall-rolls)
+sells rolled gear that writes a block directly. Both go through
+`progression.grant`, which is the one place `run.earned` and the live
+`Entity.bonus` are written together — three callers, one write, because two of
+them used to hold their own copy of it and a third copy is the point at which one
+gets fixed and the others do not.
+
+Note what that split buys and what it costs. **Buys:** the attributes become
+reachable without turning on the half that would move the recorded grid, because
+a room is invisible to `Run.index` and the bot walks past every fixture.
+**Costs:** the same blindness, pointed the other way — the bot never spends a
+point and never buys a piece, so the sweep measures a hero with a neutral block
+whatever the shelves are selling. The warning above about teaching the bot to
+allocate applies to both, and it now applies to a feature that is switched *on*.
 
 ### The bosses have one phase change and no second moveset
 

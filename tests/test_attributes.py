@@ -225,3 +225,41 @@ def test_move_speed_moves_the_hero_further_in_the_same_ticks() -> None:
         return start.distance_to(hero.pos)
 
     assert distance(Attributes(move_speed=500)) > distance(NEUTRAL) * 1.4
+
+
+# --- scaling -----------------------------------------------------------------
+def test_scaling_a_neutral_block_changes_nothing() -> None:
+    """The identity claim, at every factor a rarity can carry."""
+    for factor in range(0, 7):
+        assert NEUTRAL.scaled(factor) == NEUTRAL
+
+
+def test_scaling_multiplies_every_field() -> None:
+    """Derived over `dataclasses.fields` rather than listed, so this is written
+    the same way -- a ninth attribute is covered on the day it is declared,
+    rather than on the day somebody remembers to add it here."""
+    import dataclasses
+
+    block = Attributes(**{f.name: i + 1 for i, f in enumerate(dataclasses.fields(Attributes))})
+    scaled = block.scaled(3)
+    for field in dataclasses.fields(Attributes):
+        assert getattr(scaled, field.name) == getattr(block, field.name) * 3
+
+
+def test_scaling_by_one_is_the_same_block() -> None:
+    assert Attributes(max_hp=10, defense=2).scaled(1) == Attributes(max_hp=10, defense=2)
+
+
+def test_scaling_by_zero_is_neutral() -> None:
+    """`rarity_scale` all set to 1 and every block emptied is the narrow
+    rollback in `data/equipment.json`; a zero factor is the same idea reached
+    from the other side, and it must not leave a stray field behind."""
+    assert Attributes(max_hp=10, regen=4).scaled(0) == NEUTRAL
+
+
+def test_scaling_stays_integer() -> None:
+    """Integers throughout, for the reason the module docstring gives: a run is
+    240,000 ticks and float accumulation over that many additions is a thing you
+    have to reason about."""
+    scaled = Attributes(max_hp=7, crit_chance=25).scaled(6)
+    assert isinstance(scaled.max_hp, int) and isinstance(scaled.crit_chance, int)

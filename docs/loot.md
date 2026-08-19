@@ -59,7 +59,7 @@ through the gold formula, and tilting the rarities as well is two dials doing on
 job. If loot ever starts feeling samey deep in a run, that is the moment to add a
 depth term — not before.
 
-## The shop
+## The stall
 
 **Reached by walking up to a stall in a shop room, and by nothing else.** It used
 to open on every one of the thirty-nine transitions; it is now one of the four
@@ -69,6 +69,81 @@ two rooms earlier. See [the rooms between](design.md#the-rooms-between).
 Opening it pauses the game, which nothing else in a run does — the between-stage
 banner deliberately does not. Spending gold is a decision, and a decision taken
 while a grunt walks up behind you is a decision taken badly.
+
+It has **two sections**, one continuous run of digits down both:
+
+- **Gear**, on top. Three pieces rolled for this room, at a rarity that scaled
+  the piece and its price by the same factor, priced against the floor, and gone
+  the moment you walk out. [Below](#the-gear-a-stall-rolls).
+- **Goods**, underneath. The five consumables, the same five on every shelf of
+  every run, [below](#the-goods).
+
+## The gear a stall rolls
+
+`data/equipment.json` holds a pool of twelve **pieces**. A piece is a name and an
+`Attributes` block — it is not a weapon, it is not worn, there are no slots and
+nothing is replaced. Buying one adds its block to `run.earned` permanently, which
+is exactly the road the Boots already travelled and deliberately not a second
+mechanism beside it.
+
+Three of the twelve are drawn per stall, without replacement, and each gets its
+own **rarity** roll off `data/loot.json`'s existing 60/25/10/4/1 weights. The
+rarity multiplies the block and the price by the same factor:
+
+| Rarity | Scale | A 300g Cuirass on floor 1 |
+| --- | --- | --- |
+| common | ×1 | 300g, +10 Health +1 Defense |
+| uncommon | ×2 | 600g, +20 Health +2 Defense |
+| rare | ×3 | 900g, +30 Health +3 Defense |
+| epic | ×4 | 1,200g, +40 Health +4 Defense |
+| legendary | ×6 | 1,800g, +60 Health +6 Defense |
+
+**A rarity is never a better deal, only a bigger one.** Both halves move by the
+same factor on purpose — if they came apart, one tier would be strictly the thing
+to hold out for and the other four would be noise. What a good roll buys is the
+*chance to spend a lot at once*, which matters precisely because a shelf is three
+rows in one room and then never again.
+
+The scale is deliberately **not** the loot table's `worth` (1/2/4/8/16). A 16×
+gold pile is a number, spent and gone; a 16× attribute block is permanent and
+compounds with everything bought after it, so the same curve there would make one
+lucky stall the whole run.
+
+Price carries the same 0.15 depth step a kill and a chest already use, so the
+fortieth floor prices a piece at 6.85× the first — about what the fortieth floor
+pays, which is what keeps a late stall roughly as affordable as an early one.
+
+Two rules are enforced at load rather than left to taste:
+
+- **At most two attributes per piece.** The blurb column has about 150px before
+  the rarity word, and a third field draws through it.
+- **Every rarity in `data/loot.json` must have a scale, and vice versa.** Both
+  directions, the way `shop.stock()` and `progression.Table.load` check theirs.
+
+**The roll is stateless.** It comes from a `Random` built out of `(seed, index)`
+and thrown away — `rooms.offer`'s trick, for `rooms.offer`'s two reasons. It
+cannot reach `world.rng`, and a run picked back up off disk finds the same three
+pieces at the same prices with the save file saying nothing about a shelf at all.
+The one thing that *is* recorded is which rows were bought, and that rides in
+`run.purchases` under an `eq:` prefix beside the shop's own tally — no save field
+and no migration.
+
+> [!WARNING]
+> **This re-opens a documented dead end, deliberately.** A stat upgrade in the
+> shop was refused for years because `EntityType` is frozen content shared by
+> every run of a class, so it needed a per-entity layer that did not exist. That
+> layer is `game/attributes.py` and the Boots were the first good through it.
+>
+> What has *not* changed is the caution underneath: `autoplay` never enters a
+> panel and never spends, so **nothing measures whether any of this is worth
+> buying**. Every price and every scale is an opening bid in the same sense every
+> number in `data/rooms.json` is. By the same token none of it moves a recorded
+> bracket — `run.earned` is neutral in every sweep.
+
+Rollback is a number: `stall.offers: 0` in `data/rooms.json` and the stall is the
+five-row shop it replaced.
+
+## The goods
 
 > [!NOTE]
 > **What that changes about the prices, which is nothing yet.** Every price here
@@ -112,7 +187,8 @@ So the whole sink is in the late shelf: 14,340 to max everything, a little over
 half a run, which is about the fraction 2,060 was of the run it was priced
 against.
 
-**The Boots are the one good that touches what a class is.** The other four are
+**The Boots are the one *good* that touches what a class is** — the gear above
+them all does, and the Boots are what opened the door. The other four are
 integers on the `Run`; the Boots write `move_speed` into the attribute block
 that `Entity.attrs` sums, which is the same road levelling travels. That used to
 be structurally impossible — `EntityType` is frozen content shared by every run
@@ -134,10 +210,14 @@ Its **price** is set against income like every other shelf. Its **amount is a
 guess** — the only shelf here of which that is true, and it is flagged in
 `data/loot.json` beside the drop rates for the same reason.
 
-Keys `1`–`5` buy; Enter, Space or Esc leaves. The shop draws four rows for the
-first twenty stages and five after, and the row a player reads is always the key
-they press — `shop.available()` is what both the panel and the key handler use. The shop swallows every other
-control while it is open, including Esc, which is "back to the menu" everywhere
+Keys `1`–`8` buy; Enter, Space or Esc leaves. The stall draws seven rows for the
+first twenty stages and eight after — three gear, then four or five goods — and
+the row a player reads is always the key they press. **`shop_panel.rows()` is the
+one list both the panel and the key handler index into**, which is what makes
+that true across two sections that are bought through two different functions.
+
+The stall swallows every other control while it is open, including Esc, which is
+"back to the menu" everywhere
 else — dropping somebody out of a forty-stage run because they reached for
 Escape to shut a panel is not a trade worth making. The promotion panel goes
 further and has no exit key at all; see [Design](design.md#promotion).

@@ -694,33 +694,209 @@ def test_no_shop_row_overflows_the_panel(atlas) -> None:
         assert name_right <= panel.LEFT + panel.PRICE_X, f"{good.id}: the name runs into the price"
 
 
-def test_the_shop_rows_and_hint_fit_above_the_hud(atlas) -> None:
-    """Measured against the fullest the shop ever gets, which is the late shelf.
+def test_no_gear_row_overflows_the_panel(atlas) -> None:
+    """The same measurement against the widest gear row that can ever be rolled.
+
+    Worst case rather than a sample: the widest blurb is the whole pool at the
+    top rarity, and the widest price is that piece on the last floor. Both are
+    computed rather than rolled for, because a shelf drawn from one seed proves
+    nothing about the seed that rolls a legendary Heartstone on floor forty.
+
+    `equipment.MAX_ATTRIBUTES` is the rule this is enforcing the pixels of. If
+    this fails, the answer is a shorter label or a narrower pool -- not a wider
+    column, which would take the space from the rarity word.
+    """
+    from hack_and_slash.game import equipment, loot
+    from hack_and_slash.render import shop_panel as panel
+
+    drawn = panel.ShopPanel()
+    table = equipment.table()
+    top = max(table.rarity_scale.values())
+    deepest = 40
+
+    for piece in table.pieces:
+        blurb = equipment.describe(piece.attributes.scaled(top))
+        blurb_right = panel.LEFT + panel.BLURB_X + drawn.small.size(blurb)[0]
+        widest_word = max(
+            drawn.small.size(tier.rarity.value)[0] for tier in loot.table().tiers
+        )
+        assert blurb_right <= panel.TALLY_RIGHT - widest_word, (
+            f"{piece.id}: '{blurb}' at the top rarity runs into the rarity word"
+        )
+
+        price = table.price_on(piece.price, top, deepest)
+        price_right = panel.LEFT + panel.PRICE_X + drawn.font.size(f"{price}g")[0]
+        assert price_right <= panel.LEFT + panel.BLURB_X, (
+            f"{piece.id}: {price}g on floor {deepest} runs into the blurb"
+        )
+        name_right = panel.LEFT + panel.NAME_X + drawn.font.size(piece.name)[0]
+        assert name_right <= panel.LEFT + panel.PRICE_X, f"{piece.id}: the name runs into the price"
+
+
+def tallest_stall() -> int:
+    """The most rows the stall can ever be asked to draw.
 
     `stock()` rather than `available(run)` on purpose: the panel grows a row in
     the second half of the campaign, and the layout has to hold for the tallest
-    version rather than the one that happens to be on screen first.
+    version rather than the one that happens to be on screen first. The gear
+    section is `rooms.table().stall_offers` on top of that, and it does not vary.
     """
-    from hack_and_slash.game import shop
+    from hack_and_slash.game import rooms, shop
+
+    return rooms.table().stall_offers + len(shop.stock())
+
+
+def test_the_shop_rows_and_hint_fit_above_the_hud(atlas) -> None:
+    """Measured against the fullest the stall ever gets: gear plus the late shelf.
+
+    This has been a failing test twice rather than a bug report from somebody
+    playing act V, which is the whole reason it measures the worst case instead
+    of what happens to be on screen.
+    """
     from hack_and_slash.render import shop_panel as panel
 
-    bottom = panel.ROW_Y + len(shop.stock()) * panel.ROW_H + 12 + 13
-    assert bottom <= config.VIEWPORT_H, "the shop's hint line is drawn under the HUD"
+    rows = tallest_stall()
+    last_row = panel.ROW_Y + (rows - 1) * panel.ROW_H
+    assert last_row < panel.hint_y(rows), "the last row of the stall draws through the hint"
+    assert panel.hint_y(rows) + 13 <= config.VIEWPORT_H, (
+        "the stall's hint line is drawn under the HUD"
+    )
+
+    # And the hint follows the rows up when there are fewer, rather than
+    # marooning itself at the bottom of a short shelf.
+    assert panel.hint_y(3) < panel.hint_y(rows)
 
 
 def test_the_shop_has_a_key_for_every_row_it_can_draw(atlas) -> None:
     """The half of the row/key contract that lives with the keys.
 
-    A good added to `data/loot.json` without a key here is a row a player can
-    read and cannot buy, and nothing else would say so.
+    A good added to `data/loot.json`, or an offer added to `data/rooms.json`,
+    without a key here is a row a player can read and cannot buy, and nothing
+    else would say so.
     """
+    from hack_and_slash.render import shop_panel as panel
+
+    assert tallest_stall() <= len(panel.ROW_KEYS), (
+        f"the stall can draw {tallest_stall()} rows and the panel has "
+        f"{len(panel.ROW_KEYS)} keys"
+    )
+
+
+def test_the_stall_draws_its_gear_above_its_goods(atlas) -> None:
+    """The row order is the key order, and gear is on top.
+
+    Asserted on `rows()` rather than on pixels because that tuple is the thing
+    both the panel and `PlayScene._handle_shop_event` index into -- if it were
+    ever built twice, this is where the two would be seen to disagree.
+    """
+    from hack_and_slash.game import equipment, shop
+    from hack_and_slash.render import shop_panel as panel
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    at_a_stall(scene)
+
+    shelf = panel.rows(scene.run, scene.stall_offers)
+    kinds = [kind for kind, _ in shelf]
+    assert kinds == ["gear"] * len(scene.stall_offers) + ["good"] * len(
+        shop.available(scene.run)
+    )
+    assert all(isinstance(item, equipment.Offer) for kind, item in shelf if kind == "gear")
+
+
+def test_walking_up_to_a_stall_rolls_a_shelf_of_gear(atlas) -> None:
+    """The stall is a decision now, not the same five rows every time."""
+    from hack_and_slash.game import rooms
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    at_a_stall(scene)
+
+    assert scene.shopping
+    assert len(scene.stall_offers) == rooms.table().stall_offers
+    assert len({offer.piece_id for offer in scene.stall_offers}) == len(scene.stall_offers)
+
+
+def test_the_scene_rolls_the_shelf_the_game_layer_would(atlas) -> None:
+    """The scene holds the tuple rather than re-deriving it per frame, so this
+    is what ties the held one to the derivation a reloaded run would repeat."""
+    from hack_and_slash.game import equipment
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    at_a_stall(scene)
+
+    assert scene.stall_offers == equipment.offers(scene.run)
+
+
+def test_pressing_a_gear_key_spends_gold_and_writes_the_bonus(atlas) -> None:
+    """End to end through the scene: the digit a player presses, the gold that
+    leaves the purse, and the block that lands on the body standing in the room."""
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    at_a_stall(scene)
+
+    scene.run.gold = 100000
+    offer = scene.stall_offers[0]
+    before = scene.run.gold
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_1))
+
+    assert scene.run.gold == before - offer.price
+    assert scene.run.earned == offer.attributes
+    assert scene.world.hero.bonus == scene.run.earned
+
+
+def test_pressing_a_gear_key_with_no_gold_does_nothing(atlas) -> None:
+    """A refused purchase is silent, and it is silent because the row was
+    already greyed out by the same call that refused it."""
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    at_a_stall(scene)
+
+    scene.run.gold = 0
+    earned = scene.run.earned
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_1))
+
+    assert scene.run.gold == 0
+    assert scene.run.earned == earned
+
+
+def test_a_goods_key_still_buys_the_good_under_the_gear(atlas) -> None:
+    """The digits run continuously across both sections, so the first good is
+    on key `stall_offers + 1` and not on key 1. A player counting rows and the
+    scene indexing a list have to reach the same row."""
     from hack_and_slash.game import shop
     from hack_and_slash.render import shop_panel as panel
 
-    assert len(shop.stock()) <= len(panel.ROW_KEYS), (
-        f"the shop stocks {len(shop.stock())} goods and the panel has "
-        f"{len(panel.ROW_KEYS)} keys"
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    at_a_stall(scene)
+
+    scene.run.gold = 100000
+    shelf = panel.rows(scene.run, scene.stall_offers)
+    first_good = next(i for i, (kind, _) in enumerate(shelf) if kind == "good")
+    good = shelf[first_good][1]
+    scene.world.hero.hp = 1  # so a Poultice is not refused for doing nothing
+
+    scene.handle_event(
+        pygame.event.Event(pygame.KEYDOWN, key=panel.ROW_KEYS[first_good])
     )
+
+    assert shop.bought(scene.run, good) == 1
 
 
 # --- promotion ---------------------------------------------------------------
@@ -993,15 +1169,107 @@ def test_the_level_panel_draws_every_attribute(atlas) -> None:
     assert set(LABELS) == set(progression.SPENDABLE)
 
 
+def test_the_level_panel_draws_only_what_the_shrine_offered(atlas) -> None:
+    """Three of eight, not all eight -- that is what makes a point a decision.
+
+    Asserted on `rows()` because that tuple is the thing both the panel and
+    `PlayScene._handle_level_event` index into. If it were ever built twice, a
+    digit would spend a point on the row above or below the one drawn and
+    nothing anywhere would report it.
+    """
+    from hack_and_slash.game import progression
+    from hack_and_slash.render import level_panel as panel
+
+    offered = progression.offers(5, 3, 3)
+    assert panel.rows(offered) == offered
+    assert len(offered) == 3
+
+
+def test_the_level_panel_falls_back_to_every_attribute(atlas) -> None:
+    """`shrine.offers: 8` is the rollback to the panel this used to be, and an
+    empty offer is what a level reached outside a reward room hands it -- which
+    is the shape the day `xp_base` stops being zero."""
+    from hack_and_slash.game import progression
+    from hack_and_slash.render import level_panel as panel
+
+    assert panel.rows(()) == progression.SPENDABLE
+
+
+def test_the_shrine_panel_is_named_for_the_room(atlas) -> None:
+    """`LEVEL n` is kept for a level reached on a stage boundary, where there is
+    no shrine standing in front of anybody to name."""
+    from hack_and_slash.core.level import RoomKind
+    from hack_and_slash.render.level_panel import LevelPanel
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.run.unspent_points = 1
+
+    drawn = LevelPanel()
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+
+    scene.run.room = RoomKind.SHRINE
+    drawn.draw(surface, scene.run, ("damage", "defense", "regen"))
+    shrine = surface.copy()
+
+    surface.fill((0, 0, 0))
+    scene.run.room = None
+    drawn.draw(surface, scene.run, ("damage", "defense", "regen"))
+
+    assert not is_blank(shrine)
+    assert pygame.image.tobytes(shrine, "RGB") != pygame.image.tobytes(surface, "RGB")
+
+
+def test_pressing_a_shrine_key_spends_on_the_row_that_was_drawn(atlas) -> None:
+    """The end-to-end version of the row/key contract, through the scene.
+
+    Key 1 must spend on offer 0 and not on `SPENDABLE[0]` -- those were the same
+    attribute before the shrine rolled anything, and a test that did not force
+    them apart would pass either way.
+    """
+    from hack_and_slash.game import progression
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.run.unspent_points = 1
+    scene.shrine_offers = ("regen", "defense", "damage")
+    scene.levelling = True
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_1))
+
+    assert scene.run.earned.regen == progression.table().points["regen"]
+    assert scene.run.earned.max_hp == 0, "key 1 spent on SPENDABLE[0] instead"
+    assert not scene.levelling, "the panel stayed up with no points left"
+
+
+def test_a_shrine_key_past_the_offer_does_nothing(atlas) -> None:
+    """Eight keys, three rows. Pressing 4 at a shrine must not reach a row that
+    is not on the plinth."""
+    from hack_and_slash.game.attributes import NEUTRAL
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.run.unspent_points = 1
+    scene.shrine_offers = ("regen", "defense", "damage")
+    scene.levelling = True
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_4))
+
+    assert scene.run.unspent_points == 1
+    assert scene.run.earned is NEUTRAL, "key 4 spent on a row that is not there"
+    assert scene.levelling
+
+
 def test_the_level_panel_fits_above_the_hud() -> None:
     """Seven rows is two more than any other panel in the game has, on a
     viewport 188px tall. Drafted at ROW_H 22 and the last row sat under the
     health bar."""
     from hack_and_slash.render import level_panel as panel
 
-    last_row = panel.ROW_Y + (len(panel.ROW_KEYS) - 1) * panel.ROW_H
-    assert last_row < panel.HINT_Y
-    assert panel.HINT_Y + 11 <= config.VIEWPORT_H
+    rows = len(panel.ROW_KEYS)
+    last_row = panel.ROW_Y + (rows - 1) * panel.ROW_H
+    assert last_row < panel.hint_y(rows)
+    assert panel.hint_y(rows) + 11 <= config.VIEWPORT_H
+
+    # A shrine draws three, and the hint comes up to meet them.
+    assert panel.hint_y(3) < panel.hint_y(rows)
 
 
 def test_the_hud_says_nothing_about_levels_until_there_is_one(atlas) -> None:
@@ -1017,3 +1285,28 @@ def test_the_hud_says_nothing_about_levels_until_there_is_one(atlas) -> None:
     scene.hud.draw(loud, scene.world, scene.run, 0)
 
     assert pygame.image.tobytes(quiet, "RGB") != pygame.image.tobytes(loud, "RGB")
+
+
+def test_a_level_panel_opened_on_a_stage_boundary_offers_everything(atlas) -> None:
+    """A point banked at a shrine and spent at the next transition is spent
+    against all eight, not against that shrine's three.
+
+    The shrine's roll belongs to the room it was rolled in. Left standing, the
+    player would be offered a plinth from a room they walked out of two stages
+    ago, and the only symptom would be that it looked oddly familiar.
+    """
+    from hack_and_slash.game import progression
+    from hack_and_slash.render import level_panel as panel
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.shrine_offers = ("regen", "defense", "damage")
+    scene.run.unspent_points = 1
+
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)          # into the reward room
+    out_through_a_door(scene)  # and on to the next arena
+
+    assert scene.levelling, "a banked point did not reopen the panel"
+    assert scene.shrine_offers == ()
+    assert panel.rows(scene.shrine_offers) == progression.SPENDABLE

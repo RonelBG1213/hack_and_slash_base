@@ -341,3 +341,81 @@ def test_the_menu_line_names_the_class_the_run_is_now(tmp_path) -> None:
     assert BESTIARY["dark_knight"].name in line
     assert "4200" in line
     assert str(run.stage_number) in line
+
+
+# --- what a stall and a shrine remember --------------------------------------
+def test_a_restored_stall_offers_the_same_three_pieces() -> None:
+    """The gear half of the claim `test_a_restored_reward_room...` makes for the
+    doors, and it is the same claim for the same reason.
+
+    **Nothing about a shelf is written down.** `equipment.offers` is a pure
+    function of the seed and the index, so a run picked back up finds the three
+    pieces it was looking at, at the prices it was looking at. If that ever
+    stops being true the symptom is quiet and specific: the player quits in
+    front of a legendary they were saving for and comes back to three commons,
+    and every one of them is plausible.
+    """
+    from hack_and_slash.game import equipment
+
+    run = mid_run()
+    run.room = RoomKind.SHOP
+    before = equipment.offers(run)
+
+    restored = save.restore(save.snapshot(run), campaign(), BESTIARY)
+
+    assert equipment.offers(restored) == before
+    assert before, "the stall rolled nothing, so this proves nothing"
+
+
+def test_a_restored_shrine_offers_the_same_three_attributes() -> None:
+    from hack_and_slash.game import progression
+
+    run = mid_run()
+    run.room = RoomKind.SHRINE
+    count = rooms.table().shrine_offers
+    before = progression.offers(run.seed, run.index, count)
+
+    restored = save.restore(save.snapshot(run), campaign(), BESTIARY)
+
+    assert progression.offers(restored.seed, restored.index, count) == before
+    assert before, "the shrine offered nothing, so this proves nothing"
+
+
+def test_a_bought_piece_is_still_bought_after_a_reload() -> None:
+    """The one thing about a shelf that *is* written down, and it rides in
+    `run.purchases` beside the shop's tally -- which is why no save field and no
+    migration were needed. A row that came back buyable would let a player bank
+    the same piece twice by quitting between purchases.
+    """
+    from hack_and_slash.game import equipment
+
+    run = mid_run()
+    run.room = RoomKind.SHOP
+    run.gold = 100000
+    offer = equipment.offers(run)[0]
+    assert equipment.buy(run, offer)
+
+    restored = save.restore(save.snapshot(run), campaign(), BESTIARY)
+
+    assert equipment.taken(restored, equipment.offers(restored)[0])
+    assert not equipment.can_buy(restored, equipment.offers(restored)[0])
+    assert restored.earned == offer.attributes
+
+
+def test_gear_keys_do_not_collide_with_the_shops_tally() -> None:
+    """Both namespaces live in one dict. `shop.bought` looks up bare good ids
+    and `equipment.taken` looks up `eq:`-prefixed ones, and this is the test
+    that says so rather than the comment that hopes so."""
+    from hack_and_slash.game import equipment, shop
+
+    run = mid_run()
+    run.gold = 100000
+    run.world.hero.hp = 1
+    poultice = next(g for g in shop.stock() if g.id == "poultice")
+    assert shop.buy(run, poultice)
+    assert equipment.buy(run, equipment.offers(run)[0])
+
+    restored = save.restore(save.snapshot(run), campaign(), BESTIARY)
+
+    assert shop.bought(restored, poultice) == 1
+    assert equipment.taken(restored, equipment.offers(restored)[0])
