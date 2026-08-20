@@ -16,7 +16,8 @@ import pytest
 from hack_and_slash.core.campaign import Campaign
 from hack_and_slash.core.level import EnemySpawn, Level
 from hack_and_slash.game import progression
-from hack_and_slash.game.attributes import NEUTRAL
+from hack_and_slash.game.attributes import NEUTRAL, Attributes
+from hack_and_slash.game.autoplay import into, play_run_out, spread
 from hack_and_slash.game.progression import Curve, Table
 from hack_and_slash.game.run import Run
 from hack_and_slash.game.sim import step
@@ -361,3 +362,116 @@ def test_the_shipped_shrine_count_is_offerable() -> None:
     from hack_and_slash.game import rooms
 
     progression.offers(7, 0, rooms.table().shrine_offers)
+
+
+# --- the instrument ----------------------------------------------------------
+# `autoplay` can now spend what a run earns. It ships not doing so, because that
+# is the hero every cell of the recorded balance grid was measured against --
+# see the note on `play_run_out`. These pin both halves of that: that the
+# default is still the old instrument exactly, and that the new one works.
+def played_out(allocate=None, seed: int = 1) -> Run:
+    """A whole run, driven the way `tools/balance.py` drives one.
+
+    Eight stages rather than the three the rest of this file uses, because a
+    point is spent on a *transition* and the last bank of a run has none after
+    it. A campaign short enough that the only level lands on the final stage
+    would report "the bot never spends" about a bot that spends.
+    """
+    run = Run.start(campaign(8), BESTIARY, seed=seed)
+    play_run_out(run, limit=80_000, allocate=allocate)
+    return run
+
+
+def test_the_reference_bot_still_spends_nothing_by_default() -> None:
+    """The load-bearing one.
+
+    `allocate=None` is the default, and every recorded number in
+    `docs/balance.md` was measured through it. A run that levels up under a
+    generous table and *still* reaches the end holding a neutral block is what
+    makes adding the argument a change to nothing.
+    """
+    with table(GENEROUS):
+        run = played_out()
+
+    assert run.unspent_points > 0, "the table was not generous enough to test this"
+    assert run.earned == NEUTRAL
+    assert run.world.hero is None or run.world.hero.bonus == NEUTRAL
+
+
+def test_a_bot_that_allocates_arrives_holding_nothing() -> None:
+    with table(GENEROUS):
+        run = played_out(allocate=spread)
+
+    assert run.unspent_points == 0, "points were banked and never spent"
+    assert run.earned != NEUTRAL
+
+
+def test_allocating_is_inert_while_the_table_is_off() -> None:
+    """The argument cannot move the grid on its own.
+
+    Shipped table, so nothing is earned, so the most spendthrift policy in the
+    module has nothing to spend -- which is why teaching the bot to allocate and
+    turning `xp_base` up are two commits rather than one.
+    """
+    run = played_out(allocate=spread)
+
+    assert (run.xp, run.hero_level, run.unspent_points) == (0, 1, 0)
+    assert run.earned == NEUTRAL
+
+
+def test_spread_puts_one_point_into_each_attribute_in_turn() -> None:
+    picks = [spread(None, nth) for nth in range(len(progression.SPENDABLE) * 2)]
+
+    assert picks[: len(progression.SPENDABLE)] == list(progression.SPENDABLE)
+    assert picks[len(progression.SPENDABLE) :] == list(progression.SPENDABLE)
+
+
+def test_spread_holds_no_cursor_of_its_own() -> None:
+    """The reason `nth` is an argument rather than state on the policy.
+
+    Two runs measured in one process share the policy object -- `tools/balance.py`
+    passes the same one to eight seeds in a row -- and a cursor kept on it would
+    make the second run start wherever the first stopped. Identical seeds must
+    spend identically however many ran before them.
+    """
+    with table(GENEROUS):
+        first = played_out(allocate=spread)
+        second = played_out(allocate=spread)
+
+    assert first.earned == second.earned
+
+
+def test_into_puts_the_whole_budget_in_one_place() -> None:
+    with table(GENEROUS):
+        run = played_out(allocate=into("max_hp"))
+
+    assert run.earned.max_hp > 0
+    assert run.earned == Attributes(max_hp=run.earned.max_hp)
+
+
+def test_into_refuses_an_attribute_that_does_not_exist() -> None:
+    """Loud at the flag rather than silent for the length of a sweep. Every
+    point into a typo reports as 'levelling changes nothing', which is a
+    plausible-looking answer to the question being asked."""
+    with pytest.raises(KeyError):
+        into("luck")
+
+
+def test_a_policy_that_holds_its_points_is_not_an_infinite_loop() -> None:
+    with table(GENEROUS):
+        run = played_out(allocate=lambda run, nth: "")
+
+    assert run.unspent_points > 0
+    assert run.earned == NEUTRAL
+
+
+def test_what_the_bot_spends_reaches_the_body_it_is_playing() -> None:
+    """Both halves of `grant`, through the instrument rather than through a
+    direct call: a policy that wrote only `run.earned` would look right here
+    until the assertion is about the hero standing in the arena."""
+    with table(GENEROUS):
+        run = Run.start(campaign(8), BESTIARY, seed=1)
+        play_run_out(run, limit=80_000, allocate=into("max_hp"))
+        if run.world.hero is not None:
+            assert run.world.hero.bonus == run.earned
+            assert run.world.hero.max_hp == run.hero_type.full_hp + run.earned.max_hp

@@ -126,13 +126,25 @@ patterns pointed at a new problem:
   less.
 
 **What is not answered is whether any of it is any good.** The values in
-`data/progression.json` are a first pass and the file says so. Worse than that,
-and stated plainly because it is the trap: `autoplay` does not spend points.
-Unlike gold — which a player might reasonably not spend — levels are always
-spent, so a sweep run against an unlevelled hero measures a game nobody plays
-and reports it in the same units as difficulty. That is the
-[flanker demon](balance.md#findings) again. **Teach the bot to allocate before
-turning `xp_base` up, not after.**
+`data/progression.json` are a first pass and the file says so.
+
+~~Worse than that, and stated plainly because it is the trap: `autoplay` does not
+spend points.~~ **It can now.** `play_run_out` takes an `allocate` policy and
+`tools/balance.py` takes `--allocate` — `spread` for one point into each
+attribute in turn, an attribute name for a whole budget in one dial. The reason
+it had to come first is the part that has not changed: unlike gold, which a
+player might reasonably not spend, levels are always spent, so a sweep run
+against an unlevelled hero measures a game nobody plays and reports it in the
+same units as difficulty. That is the [flanker demon](balance.md#findings) again.
+
+**The bot has the behaviour. The dial is still at zero, and that is the whole of
+what is left.** `allocate=None` is still the default and is still a branch that
+is never taken, so no recorded number moved when the instrument gained the
+ability — and on the shipped table the flag is inert anyway, because there is
+nothing to spend. What remains is the expensive half: turn `xp_base` up,
+re-baseline all 280 cells against `--allocate spread`, and expect to retune,
+including the two strict xfails. See
+[Balance](balance.md#the-instrument-can-spend-now-the-dial-is-still-at-zero).
 
 Setting `xp_base` back to 0 is the rollback, and it is the state it ships in.
 
@@ -150,8 +162,16 @@ reachable without turning on the half that would move the recorded grid, because
 a room is invisible to `Run.index` and the bot walks past every fixture.
 **Costs:** the same blindness, pointed the other way — the bot never spends a
 point and never buys a piece, so the sweep measures a hero with a neutral block
-whatever the shelves are selling. The warning above about teaching the bot to
-allocate applies to both, and it now applies to a feature that is switched *on*.
+whatever the shelves are selling.
+
+`--allocate` only half-answers that, and the half it does not answer is the
+important one. It teaches the bot what to do with a point *once it is holding
+one* — but the bot still walks past the shrine that would hand it one and past
+the stall that would sell it a block, so on the shipped table it still arrives at
+every fight neutral. Measuring the shrine means an instrument that detours to a
+fixture, and that is the change this project has refused three times because it
+stops the grid being a fixed reference. See
+[Nothing measures which door is worth taking](#nothing-measures-which-door-is-worth-taking).
 
 ### The bosses have one phase change and no second moveset
 
@@ -189,7 +209,9 @@ everything a sound cue needs.
 `autoplay` walks from a room's entrance to a door and **touches nothing on the
 way**. So no number in `data/rooms.json` is measured by anything: not whether a
 fountain should heal 15% or 40%, not whether a chest pays enough to be worth a
-door, not whether the shrine's point beats either.
+door, not whether the shrine's point beats either. `--allocate` does not change
+this: a policy for spending a point is not a route that walks onto the plinth
+handing them out.
 
 That is deliberate and it was arrived at the hard way. The first draft had the
 bot use the fixture. Three of the four rewards were inert to it regardless — it

@@ -60,9 +60,11 @@ from hack_and_slash.game.autoplay import (  # noqa: E402
     REACTION_SLOPPY,
     Autoplay,
     autoplay,
+    into,
     play_out,
     play_run_out,
     reckless,
+    spread,
 )
 from hack_and_slash.game import jobs  # noqa: E402
 from hack_and_slash.game.entities import DEFAULT_HERO, load_bestiary  # noqa: E402
@@ -108,18 +110,27 @@ def measure_stage(level, bestiary, policy, seeds: range, hero: str = DEFAULT_HER
 
 
 def measure_run(
-    campaign, bestiary, policy, seeds: range, hero: str = DEFAULT_HERO, job: str = ""
+    campaign,
+    bestiary,
+    policy,
+    seeds: range,
+    hero: str = DEFAULT_HERO,
+    job: str = "",
+    allocate=None,
 ) -> dict:
     """A whole run, with health carrying between stages.
 
     `job` is the branch taken at the fork. Empty means the run never promotes --
     which is what every number recorded before acts V-VIII was measured with,
     and is why the first half of the campaign still reads the same here.
+
+    `allocate` is how the hero spends what levelling pays. None -- the default,
+    and what every recorded number here was measured with -- spends nothing.
     """
     wins, seconds, hp_left = 0, [], []
     for seed in seeds:
         run = Run.start(campaign, bestiary, seed=seed, hero_type_id=hero)
-        ticks = play_run_out(run, policy, RUN_TICK_LIMIT, job)
+        ticks = play_run_out(run, policy, RUN_TICK_LIMIT, job, allocate)
         if run.outcome is RunOutcome.WON:
             wins += 1
             seconds.append(ticks / config.TICKS_PER_SEC)
@@ -128,7 +139,7 @@ def measure_run(
 
 
 def furthest_stage(
-    campaign, bestiary, policy, seeds: range, hero: str, job: str = ""
+    campaign, bestiary, policy, seeds: range, hero: str, job: str = "", allocate=None
 ) -> tuple[int, str]:
     """Where the worst run of the set died, for a class that cannot finish.
 
@@ -139,7 +150,7 @@ def furthest_stage(
     worst, name = len(campaign), ""
     for seed in seeds:
         run = Run.start(campaign, bestiary, seed=seed, hero_type_id=hero)
-        play_run_out(run, policy, RUN_TICK_LIMIT, job)
+        play_run_out(run, policy, RUN_TICK_LIMIT, job, allocate)
         if run.outcome is not RunOutcome.WON and run.index < worst:
             worst, name = run.index, run.level.name
     return worst + 1, name
@@ -241,7 +252,13 @@ def stages_for(campaign, bestiary, hero: str, only: int | None) -> list[int]:
 
 
 def measure_class(
-    campaign, bestiary, hero: str, seeds: range, full: bool, only: int | None = None
+    campaign,
+    bestiary,
+    hero: str,
+    seeds: range,
+    full: bool,
+    only: int | None = None,
+    allocate=None,
 ) -> list[str]:
     """One class, top to bottom. Returns whatever is out of balance about it."""
     name = bestiary[hero].name
@@ -271,18 +288,32 @@ def measure_class(
     print("\nwhole run, health carrying between stages")
     print(HEADER)
     print(RULE)
-    run_skilled = measure_run(campaign, bestiary, autoplay, seeds, base, branch)
-    run_tank = measure_run(campaign, bestiary, reckless, seeds, base, branch)
+    run_skilled = measure_run(campaign, bestiary, autoplay, seeds, base, branch, allocate)
+    run_tank = measure_run(campaign, bestiary, reckless, seeds, base, branch, allocate)
     print(row("skilled", run_skilled))
     print(row("face-tank", run_tank))
 
     if run_skilled["wins"] < run_skilled["total"]:
         stage, stage_name = furthest_stage(
-            campaign, bestiary, autoplay, seeds, base, branch
+            campaign, bestiary, autoplay, seeds, base, branch, allocate
         )
         print(f"\n  worst run ended on stage {stage} ({stage_name})")
 
     return [f"[{hero}] {note}" for note in verdict(stage_rows, run_skilled, run_tank)]
+
+
+def allocation(name: str):
+    """Turn the `--allocate` argument into a policy, or into a loud refusal.
+
+    Empty is `None` rather than a do-nothing policy, so the sweep runs the exact
+    code path every recorded number was measured through rather than one that
+    behaves the same.
+    """
+    if not name:
+        return None
+    if name == "spread":
+        return spread
+    return into(name)
 
 
 def main() -> int:
@@ -312,7 +343,23 @@ def main() -> int:
         "minutes, and at forty stages that is the difference between trying "
         "six numbers and trying one",
     )
+    parser.add_argument(
+        "--allocate",
+        default="",
+        metavar="POLICY",
+        help="how the hero spends what levelling pays: 'spread' for one point "
+        "into each attribute in turn, or an attribute name for all of them into "
+        "that one. Default is to spend nothing, which is what every recorded "
+        "number was measured with -- and which stops being the right default "
+        "the day data/progression.json sets xp_base above zero",
+    )
     args = parser.parse_args()
+
+    try:
+        allocate = allocation(args.allocate)
+    except KeyError as bad:
+        print(bad.args[0], file=sys.stderr)
+        return 1
 
     campaign = campaign_io.load(config.LEVELS_DIR / "campaign.json")
     bestiary = load_bestiary(config.ENTITIES_DATA, config.WEAPONS_DATA)
@@ -345,7 +392,8 @@ def main() -> int:
 
     print(
         f"{campaign.name}  --  {len(campaign)} stages, {args.seeds} seeds, "
-        f"{len(heroes)} class{'es' if len(heroes) > 1 else ''}"
+        f"{len(heroes)} class{'es' if len(heroes) > 1 else ''}, "
+        f"spending {args.allocate or 'nothing'}"
     )
 
     notes = []
@@ -355,7 +403,9 @@ def main() -> int:
         # the others it is opt-in, since what usually matters about them is
         # whether they can finish at all.
         full = args.stages or hero == DEFAULT_HERO or len(heroes) == 1
-        notes += measure_class(campaign, bestiary, hero, seeds, full, args.stage)
+        notes += measure_class(
+            campaign, bestiary, hero, seeds, full, args.stage, allocate
+        )
 
     if len(heroes) == 1 and args.stage is None:
         # Driven exactly as `measure_class` drives its own run, base class and
@@ -372,7 +422,9 @@ def main() -> int:
             print(
                 row(
                     f"{name} ({ticks})",
-                    measure_run(campaign, bestiary, Autoplay(ticks), seeds, base, branch),
+                    measure_run(
+                        campaign, bestiary, Autoplay(ticks), seeds, base, branch, allocate
+                    ),
                 )
             )
 

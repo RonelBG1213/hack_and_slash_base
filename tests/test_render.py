@@ -559,7 +559,8 @@ def test_the_shop_panel_draws_in_every_state(atlas) -> None:
     scene.draw(surface)
     assert not is_blank(surface)
 
-    # Rich, hurt, and with one good already capped out.
+    # Rich, hurt, and with every capped good bought out -- which now empties
+    # the shelf down to the one uncapped row rather than greying five.
     scene.run.gold = 100000
     scene.world.hero.hp = 10
     for good in shop.stock():
@@ -567,6 +568,10 @@ def test_the_shop_panel_draws_in_every_state(atlas) -> None:
             shop.buy(scene.run, good)
     scene.draw(surface)
     assert not is_blank(surface)
+
+    assert [g.id for g in shop.available(scene.run)] == ["poultice"], (
+        "the stall drew rows that can never be bought again"
+    )
 
 
 def test_the_shop_pauses_the_world_and_swallows_the_controls(atlas) -> None:
@@ -800,9 +805,9 @@ def test_the_stall_draws_its_gear_above_its_goods(atlas) -> None:
 
     shelf = panel.rows(scene.run, scene.stall_offers)
     kinds = [kind for kind, _ in shelf]
-    assert kinds == ["gear"] * len(scene.stall_offers) + ["good"] * len(
-        shop.available(scene.run)
-    )
+    assert kinds == ["gear"] * len(
+        equipment.available(scene.run, scene.stall_offers)
+    ) + ["good"] * len(shop.available(scene.run))
     assert all(isinstance(item, equipment.Offer) for kind, item in shelf if kind == "gear")
 
 
@@ -871,6 +876,133 @@ def test_pressing_a_gear_key_with_no_gold_does_nothing(atlas) -> None:
 
     assert scene.run.gold == 0
     assert scene.run.earned == earned
+
+
+# --- a bought row leaves the shelf -------------------------------------------
+# The stall used to keep everything and grey what was finished. It was honest
+# and it was also a receipt, and the rows a player still had a decision about
+# were the two at the bottom of eight.
+def test_a_bought_gear_row_is_gone_from_the_shelf(atlas) -> None:
+    """Through the scene, which is where the two halves have to agree: the panel
+    draws `rows()` and the key handler indexes the same call."""
+    from hack_and_slash.render import shop_panel as panel
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    at_a_stall(scene)
+    scene.run.gold = 100000
+
+    before = panel.rows(scene.run, scene.stall_offers)
+    bought = before[0][1]
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_1))
+
+    after = panel.rows(scene.run, scene.stall_offers)
+    assert len(after) == len(before) - 1, "the shelf did not lose the bought row"
+    assert bought not in [item for _, item in after]
+    assert list(after) == list(before[1:]), "the other rows did not simply move up"
+
+    # And the panel still draws, one row shorter.
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    scene.draw(surface)
+    assert not is_blank(surface)
+
+
+def test_the_row_that_moved_up_is_not_bought_by_the_same_press(atlas) -> None:
+    """The one hazard this feature introduces, and the only reason
+    `SHOP_SETTLE_FRAMES` exists.
+
+    A bought row leaves and the row under it inherits the digit. The second tap
+    of a fast double-tap used to be a no-op on a greyed row; without the guard it
+    is several hundred gold on a piece nobody chose.
+    """
+    from hack_and_slash.game import equipment
+    from hack_and_slash.render import shop_panel as panel
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    at_a_stall(scene)
+    scene.run.gold = 100000
+
+    shelf = panel.rows(scene.run, scene.stall_offers)
+    assert [kind for kind, _ in shelf[:2]] == ["gear", "gear"], (
+        "this test needs two gear rows to watch one slide up into the other"
+    )
+    first, second = shelf[0][1], shelf[1][1]
+    gold = scene.run.gold
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_1))
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_1))
+
+    assert scene.run.gold == gold - first.price, "the second press bought as well"
+    assert not equipment.taken(scene.run, second)
+
+    # It is a pause, not a lock. The guard runs down on frames the world is not
+    # being stepped on, and the row is buyable again once it has.
+    for _ in range(scene_settle_frames()):
+        scene.update(1 / 60)
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_1))
+    assert equipment.taken(scene.run, second), "the guard never let go"
+
+
+def scene_settle_frames() -> int:
+    from hack_and_slash.scenes.play import SHOP_SETTLE_FRAMES
+
+    return SHOP_SETTLE_FRAMES
+
+
+def test_a_purchase_that_removes_nothing_does_not_swallow_the_next_press(atlas) -> None:
+    """Buying the first of five Tonics moves no row, so nothing is guarded.
+
+    A key that mysteriously does nothing after an ordinary purchase would be a
+    worse bug than the one the guard is for, and it is the shape a guard on
+    *every* purchase would have.
+    """
+    from hack_and_slash.game import shop
+    from hack_and_slash.render import shop_panel as panel
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    at_a_stall(scene)
+    scene.run.gold = 100000
+
+    shelf = panel.rows(scene.run, scene.stall_offers)
+    row = next(
+        i
+        for i, (kind, item) in enumerate(shelf)
+        if kind == "good" and item.id == "tonic"
+    )
+    tonic = shelf[row][1]
+    assert tonic.limit > 2, "this test needs a good that survives two purchases"
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=panel.ROW_KEYS[row]))
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=panel.ROW_KEYS[row]))
+
+    assert shop.bought(scene.run, tonic) == 2, "the second press was swallowed"
+
+
+def test_the_hint_says_how_many_rows_there_actually_are() -> None:
+    """"1-8 to buy" was true while the row count was a property of the campaign.
+
+    Both ends are worth pinning: "1-1 to buy" reads as a typo and "1-0 to buy"
+    reads as a bug, and a shrinking shelf reaches both.
+    """
+    from hack_and_slash.render import shop_panel as panel
+
+    assert panel._hint_for(8).startswith("1-8 to buy")
+    assert panel._hint_for(2).startswith("1-2 to buy")
+    assert panel._hint_for(1).startswith("1 to buy")
+    assert "1-1" not in panel._hint_for(1)
+
+    empty = panel._hint_for(0)
+    assert "to buy" not in empty and "0" not in empty
+    assert "Enter" in empty, "the way out is the one thing a bare shelf must say"
 
 
 def test_a_goods_key_still_buys_the_good_under_the_gear(atlas) -> None:
@@ -1310,3 +1442,294 @@ def test_a_level_panel_opened_on_a_stage_boundary_offers_everything(atlas) -> No
     assert scene.levelling, "a banked point did not reopen the panel"
     assert scene.shrine_offers == ()
     assert panel.rows(scene.shrine_offers) == progression.SPENDABLE
+
+
+# --- the hero panel ----------------------------------------------------------
+def test_the_hero_panel_draws_every_attribute(atlas) -> None:
+    """Eight rows, every time. That is the one way it differs from the shrine's
+    plinth, which draws the three it rolled -- a decision is about what is in
+    front of you, and a readout that hid five of your numbers is a worse answer
+    to every question it gets opened for."""
+    from hack_and_slash.game import progression
+    from hack_and_slash.render.hero_panel import ROWS, HeroPanel
+    from hack_and_slash.render.level_panel import LABELS
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    HeroPanel().draw(surface, scene.run)
+
+    assert not is_blank(surface)
+    assert ROWS == progression.SPENDABLE
+    assert set(LABELS) == set(ROWS), "an attribute with no name to draw"
+
+
+def test_the_hero_panel_splits_the_class_from_what_the_run_earned(atlas) -> None:
+    """The middle column is the whole point of the panel.
+
+    A piece bought at a stall dissolves into `run.earned` on the way in, so
+    before this there was nowhere at all to see that it had done anything --
+    seven of the eight attributes had no readout in the shipped game.
+    """
+    from hack_and_slash.game.attributes import Attributes
+    from hack_and_slash.render.hero_panel import values
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    run = scene.run
+
+    base, earned, total = values(run, "crit_chance")
+    assert base == run.hero_type.attributes.crit_chance
+    assert earned == 0, "a fresh run has earned nothing"
+    assert total == base
+
+    run.earned = run.earned + Attributes(crit_chance=45)
+    base, earned, total = values(run, "crit_chance")
+    assert (earned, total) == (45, base + 45)
+
+
+def test_the_hero_panels_health_row_agrees_with_the_health_bar(atlas) -> None:
+    """`max_hp` is the one row that is not a field of two blocks, and it is the
+    one row a player can check against something else on screen.
+
+    A class's health lives in `EntityType.hp`, which predates the attribute
+    layer; its block carries only what is added on top. So the literal reading
+    prints `Health 0 + 24 = 24` beside a HUD saying `154/154` -- not a rounding
+    disagreement, but the panel and the health bar meaning different things by
+    one word.
+    """
+    from hack_and_slash.game.attributes import Attributes
+    from hack_and_slash.game.progression import grant
+    from hack_and_slash.render.hero_panel import values
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    grant(scene.run, Attributes(max_hp=24))
+
+    base, earned, total = values(scene.run, "max_hp")
+    assert base == scene.run.hero_type.full_hp
+    assert earned == 24
+    assert total == scene.run.max_hp
+    assert total == scene.world.hero.max_hp, "the sheet and the health bar disagree"
+
+
+def test_the_hero_panels_damage_row_is_a_light_swing(atlas) -> None:
+    """The second row that is not a field of two blocks, and it is not a
+    decoration.
+
+    Every hero in `data/entities.json` ships a fully neutral attribute block, so
+    read literally the class column would be zeroes all the way down for every
+    class in the game -- and a Knight whose sword does twelve would be told his
+    class brings 0 Damage.
+
+    `combat.resolve_damage` adds `Attributes.damage` flat to the rolled weapon
+    number before the crit, so the total here is exactly what a light swing hits
+    for before variance.
+    """
+    from hack_and_slash.game import skills
+    from hack_and_slash.game.attributes import Attributes
+    from hack_and_slash.game.progression import grant
+    from hack_and_slash.render.hero_panel import values
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    grant(scene.run, Attributes(damage=3))
+
+    light = scene.run.hero_type.weapons[skills.LIGHT].damage
+    assert light > 0, "the fixture class has no light attack to measure"
+
+    base, earned, total = values(scene.run, "damage")
+    assert base == light
+    assert (earned, total) == (3, light + 3)
+
+
+def test_the_hero_panels_class_column_is_never_empty(atlas) -> None:
+    """The panel has to say something about the class on a fresh run, for every
+    class in the game.
+
+    While the attribute blocks all ship neutral, health and damage are the only
+    two rows that can -- which is the whole argument for special-casing them, and
+    the day somebody puts crit on the Assassin this test goes on passing.
+    """
+    from hack_and_slash.render.hero_panel import ROWS, values
+
+    for hero_type in BESTIARY.hero_classes + BESTIARY.advanced_classes:
+        scene = PlayScene(campaign(), BESTIARY, atlas, hero_type_id=hero_type.id)
+        columns = [values(scene.run, name)[0] for name in ROWS]
+        assert any(columns), f"{hero_type.name} is told its class brings nothing"
+
+
+def test_the_hero_panel_follows_a_promotion(atlas) -> None:
+    """`Run.hero_type` reads `job_id or hero_type_id`, so a promoted sheet is the
+    advanced class's for free. Pinned because that property has been read
+    correctly and used wrongly once already -- see the note in `Run._advance`."""
+    from hack_and_slash.game import jobs
+    from hack_and_slash.render.hero_panel import values
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    offers = jobs.offers_for(scene.run)
+    if not offers:
+        pytest.skip("this class has no promotions declared")
+
+    jobs.promote(scene.run, offers[0])
+
+    assert scene.run.hero_type.id == offers[0].id
+    assert values(scene.run, "max_hp")[0] == scene.run.hero_type.full_hp
+
+
+def test_i_opens_and_closes_the_hero_panel(atlas) -> None:
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    assert not scene.inspecting
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_i))
+    assert scene.inspecting
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_i))
+    assert not scene.inspecting, "the sheet does not toggle"
+
+
+def test_the_hero_panel_stops_the_arena(atlas) -> None:
+    """It pauses, which is what makes it a panel rather than an overlay.
+
+    The accumulator is not fed either -- banking real seconds behind it would
+    fast-forward the fight the instant it closed, which is the trap the shop
+    already records.
+    """
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.update(1.0)
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_i))
+    tick = scene.world.tick
+    scene.update(1.0)
+    assert scene.world.tick == tick, "the arena was stepped behind the sheet"
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_i))
+    scene.update(1.0)
+    assert scene.world.tick > tick, "the arena did not resume"
+
+
+def test_the_hero_panel_changes_nothing_at_all(atlas) -> None:
+    """The one panel with no function in `game/` behind it. Every other one sits
+    in front of a decision; this one is a readout, and closing it has to leave
+    the run exactly what it was."""
+    from hack_and_slash.game import save
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.update(1.0)
+    before = save.snapshot(scene.run)
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_i))
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    scene.draw(surface)
+    # Not Space -- that is one of the exit keys, deliberately, because every
+    # other panel in the game closes on it.
+    for key in (pygame.K_1, pygame.K_q, pygame.K_j):
+        scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=key))
+    scene.update(1.0)
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_TAB))
+
+    assert not scene.inspecting, "Tab did not close the sheet"
+    assert save.snapshot(scene.run) == before
+
+
+def test_escape_closes_the_hero_panel_rather_than_leaving_the_run(atlas) -> None:
+    """The shop's trade, made again. Dropping somebody out of a forty-stage run
+    because they reached for Escape to shut a panel is not worth making."""
+    left = []
+
+    def on_exit():
+        left.append(True)
+        return "menu"
+
+    scene = PlayScene(campaign(), BESTIARY, atlas, on_exit=on_exit)
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_i))
+    result = scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
+
+    assert result is None and not left, "Escape left the run from behind the sheet"
+    assert not scene.inspecting
+
+    # And still means the menu once the sheet is shut.
+    onward = scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
+    assert onward == "menu"
+
+
+def test_the_hero_panel_cannot_open_over_a_decision(atlas) -> None:
+    """The other three panels are decisions and this is a readout. A readout has
+    no business interrupting one -- and the digits those panels are listening for
+    would be swallowed by the sheet's handler if it could sit in front of them."""
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+
+    for panel in ("shopping", "levelling", "promoting"):
+        setattr(scene, panel, True)
+        scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_i))
+        assert not scene.inspecting, f"the sheet opened over the {panel} panel"
+        setattr(scene, panel, False)
+
+
+def test_opening_the_hero_panel_drops_a_buffered_dodge(atlas) -> None:
+    """A roll pressed on the way in must not come out on the far side of the
+    pause -- the same reason the shop drops its edges rather than ageing them."""
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
+    assert scene._dodge_buffer > 0
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_i))
+    scene.update(1.0)
+    assert scene._dodge_buffer == 0
+
+
+def test_the_hero_panel_takes_the_screen_from_the_banner(atlas) -> None:
+    """A panel or the banner, never both. An `elif` on that chain is how the
+    banner started drawing over the shop when the promotion panel was added
+    between them, which is why the fourth panel is a fourth `if`."""
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.banner = 60
+    scene.inspecting = True
+
+    drawn = []
+    scene._draw_banner = lambda surface: drawn.append("banner")
+    scene.hero_panel.draw = lambda surface, run: drawn.append("sheet")
+
+    scene.draw(pygame.Surface((config.INTERNAL_W, config.INTERNAL_H)))
+    assert drawn == ["sheet"], "the banner drew over the character sheet"
+
+
+def test_the_hero_panel_fits_above_the_hud() -> None:
+    """Eight rows is the tallest any panel in this game gets, on a viewport
+    188px tall -- so this one is `level_panel.py`'s geometry at its limit, which
+    is exactly why it imports those constants rather than redrafting them."""
+    from hack_and_slash.render import hero_panel as panel
+
+    rows = len(panel.ROWS)
+    last_row = panel.ROW_Y + (rows - 1) * panel.ROW_H
+    assert last_row < panel.hint_y(rows)
+    assert panel.hint_y(rows) + 11 <= config.VIEWPORT_H
+
+    # The columns are inset by the same margin on both sides, and ascend.
+    assert panel.TOTAL_RIGHT == config.INTERNAL_W - panel.LEFT
+    assert panel.LEFT < panel.BASE_RIGHT < panel.EARNED_RIGHT < panel.TOTAL_RIGHT
+
+
+def test_the_hero_panels_columns_clear_its_labels_and_its_title(display) -> None:
+    """Measured against the real fonts and the longest class in the game, the way
+    `test_menu.py` measures the controls list -- fixed columns are only fixed
+    until somebody adds a name that runs through them."""
+    from hack_and_slash.render import hero_panel as panel
+    from hack_and_slash.render.hero_panel import HeroPanel
+    from hack_and_slash.render.level_panel import LABELS
+
+    drawn = HeroPanel()
+
+    widest = max(drawn.font.size(label)[0] for label in LABELS.values())
+    first_column = panel.BASE_RIGHT - max(
+        drawn.small.size(head)[0] for head, _ in panel.COLUMN_HEADS
+    )
+    assert panel.LEFT + widest < first_column, "a label runs into the class column"
+
+    # The name shares the column-head line, which is why it is left-aligned.
+    # Both halves of the roster: the longest name in the game belongs to an
+    # advanced class, and a sheet is read on the far side of the fork too.
+    every = BESTIARY.hero_classes + BESTIARY.advanced_classes
+    longest = max(every, key=lambda t: len(t.name)).name
+    line = f"{longest}  --  Lv 40"
+    assert panel.LEFT + drawn.font.size(line)[0] < first_column, (
+        f"'{line}' runs into the column heads"
+    )

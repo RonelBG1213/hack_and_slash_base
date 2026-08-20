@@ -324,6 +324,28 @@ def taken(run, offer: Offer) -> bool:
     return bool(run.purchases.get(offer.key, 0))
 
 
+def available(run, offers: tuple[Offer, ...]) -> tuple[Offer, ...]:
+    """The gear half of the shelf as this run sees it, in roll order.
+
+    `shop.available`'s opposite number, and the pair of them are what the panel
+    draws: a row is on the shelf while there is still a purchase in it. A gear
+    row holds exactly one, so a bought piece leaves immediately -- there is no
+    equivalent of the Poultice here.
+
+    **Takes the rolled tuple rather than calling `offers` itself.** The roll
+    belongs to the room and the scene is holding it, and re-deriving here would
+    make the drawn shelf and the held one two calls that merely happen to agree
+    -- the hazard `render/shop_panel.py` opens by explaining.
+
+    Filtering here rather than in `offers` is the load-bearing half. `offers` is
+    the room's roll and stays whole: `save.py` writes nothing about a shelf, so a
+    reloaded run finds its rows by re-rolling and indexing, and a filtered roll
+    would hand back a different piece at index 0 the moment anything was bought.
+    What survives a save is `run.purchases`, and this reads it.
+    """
+    return tuple(offer for offer in offers if not taken(run, offer))
+
+
 def can_buy(run, offer: Offer) -> bool:
     """Whether pressing the key would do anything.
 

@@ -5,6 +5,7 @@ python tools/balance.py                          # the reference class
 python tools/balance.py --class all --seeds 8    # every starting class
 python tools/balance.py --class advanced         # every class they promote into
 python tools/balance.py --class sage --stage 33  # one class, one arena
+python tools/balance.py --allocate spread        # ...with a hero that spends its levels
 ```
 
 Runs reference bots over many seeds and prints where the game sits. The point of
@@ -267,6 +268,9 @@ nobody has measured how much easier. `autoplay.skilful` presses all four slots
 and exists to answer exactly that question.
 
 **The shop.** `autoplay` never buys. See [Loot](loot.md#what-is-measured-and-what-is-not).
+It can now *spend levels* (`--allocate`, below) but still not gold, and the two
+are not the same argument: a frugal player is a player, while a player who never
+spends a level is nobody.
 
 **Every number in `data/rooms.json`.** The bot walks past all four fixtures, so
 nothing measures whether a fountain is worth 15% or 40%, whether a chest pays
@@ -311,6 +315,52 @@ here it lacks a behaviour every *player* has. Same lesson, and the same order of
 operations — **teach `autoplay` to allocate first, re-baseline the grid second,
 tune the curve third.** Turning the dial up before that produces a wall of
 plausible-looking numbers that mean nothing.
+
+### The instrument can spend now. The dial is still at zero.
+
+The first of those three is done. `play_run_out` takes an `allocate` policy and
+`tools/balance.py` takes `--allocate`, so a sweep can be run against a hero that
+spends what it earns.
+
+| `--allocate` | what it plays |
+| --- | --- |
+| *omitted* | spends nothing. **The reference**, and what every number on this page was measured with |
+| `spread` | one point into each attribute in turn, round and round |
+| an attribute name | every point of a run's budget into that one |
+
+Neither of the two is a player, and that is on purpose in both directions.
+`spread` picks no favourite, so what it measures is the **floor** — what
+levelling is worth to somebody who spends without thinking about it. `--allocate
+max_hp` and its seven siblings measure the **ceiling of one dial**, which is the
+question `data/progression.json` needs answered eight times before any of its
+prices stops being a guess. A real player is somewhere between, and nothing here
+claims to be them.
+
+Three things about the default are worth being explicit about, because they are
+what keep this page true:
+
+- **Omitting the flag runs the old code path**, not a policy that behaves like
+  it. `allocate=None` is a branch that is never taken, so a sweep without the
+  flag is byte-identical to one run before the argument existed.
+- **The flag is inert on the shipped table anyway.** `xp_base` is 0, so the
+  most spendthrift policy in the module has nothing to spend —
+  `test_allocating_is_inert_while_the_table_is_off` pins that. Adding the
+  instrument could not have moved a cell, which is exactly why it is a separate
+  commit from turning the dial up.
+- **Spending is timed to the transition**, where `scenes/play.py` opens the
+  panel — not to the level-up. A level earned mid-fight is banked and spent on
+  the way out, and after the promotion, because a point in health raises a
+  ceiling the class change is about to move. An instrument that spent earlier
+  than the game does would measure a hero the game cannot produce, which is the
+  same mistake `run_identity` exists to prevent one class-shaped version of.
+
+**What is still not done is the second and third.** Nothing here has been
+re-baselined against a levelling hero, so every figure on this page remains a
+figure about `xp_base: 0`. Turning the dial up is the commit that invalidates
+them, and it should be taken with `--allocate spread` output in hand and the
+expectation of retuning — including of the two recorded xfails, which are strict
+and will fail as XPASS the moment a levelled hero clears a cell that is currently
+recorded as unclearable. See [Testing](testing.md#known-bad-cells).
 
 ## Known-bad cells are recorded, not deleted
 

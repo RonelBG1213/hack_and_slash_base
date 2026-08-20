@@ -218,11 +218,13 @@ class EntityType:
     #: identity of its own operation, so a type that declares nothing fights
     #: exactly the way it did before the layer existed.
     #:
-    #: **One field rather than seven, and that is the point.**
+    #: **One field rather than one per attribute, and that is the point.**
     #: `test_a_variant_is_stat_identical_to_what_it_varies` iterates
     #: `dataclasses.fields`, so a variant is held to the whole block by the
-    #: test that already exists, and an eighth attribute is covered the day it
-    #: is added rather than the day somebody remembers to widen a list.
+    #: test that already exists, and the next attribute is covered the day it
+    #: is added rather than the day somebody remembers to widen a list. That
+    #: has since been collected on: the eighth (`move_speed`) needed no test
+    #: edit at all.
     attributes: Attributes = NEUTRAL
 
     @property

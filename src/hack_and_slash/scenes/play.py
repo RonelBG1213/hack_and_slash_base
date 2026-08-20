@@ -54,6 +54,7 @@ from ..render import shop_panel as shop_rows
 from ..render.atlas import Atlas
 from ..render.camera import Camera
 from ..render.effects import Effects
+from ..render.hero_panel import HeroPanel
 from ..render.hud import Hud
 from ..render.job_panel import CHOICE_KEYS, JobPanel
 from ..render.level_panel import ROW_KEYS as LEVEL_ROW_KEYS
@@ -118,6 +119,24 @@ BANNER_FRAMES = 110
 #: only trying to shut a panel on.
 SHOP_EXIT_KEYS = (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE, pygame.K_ESCAPE)
 
+#: How long a row key is ignored after a purchase that shortened the shelf.
+#:
+#: A bought row leaves the stall, so the row under it moves up and inherits the
+#: digit. Held keys are not the hazard -- `pygame.key.set_repeat` is never called
+#: here, so a KEYDOWN is a real press -- but a fast double-tap on 1 used to be a
+#: no-op on a greyed row and would now buy whatever slid into its place, which is
+#: a piece of gear nobody chose and several hundred gold.
+#:
+#: Counted in frames rather than seconds because the world is not being stepped
+#: and there are no ticks to count: `update` still runs every frame with a panel
+#: open, and this is the one thing it does there. Eight frames is about 130ms at
+#: `FPS`, which is under the gap between two presses a player means as two.
+#:
+#: Only a purchase that actually removed a row starts it. Buying the third of
+#: five Tonics moves nothing, and swallowing the next press there would be a key
+#: that mysteriously does not work.
+SHOP_SETTLE_FRAMES = 8
+
 #: The promotion panel has no exit key, which makes it the only screen in the
 #: game that a player cannot dismiss.
 #:
@@ -140,6 +159,27 @@ SHOP_EXIT_KEYS = (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE, pygame.K_E
 #: them away; a fork declined is half a campaign played with the wrong kit. A
 #: panel should only be inescapable when leaving it is unrecoverable.
 LEVEL_EXIT_KEYS = SHOP_EXIT_KEYS
+
+#: Opens the character sheet. Both keys were free: every other key this scene
+#: reads is spoken for, and `R` is deliberately not among these -- it is already
+#: "restart the run", and quietly rebinding it would cost somebody a run.
+#:
+#: Read only from the branch that runs when no panel is up, so the sheet cannot
+#: be opened over the shop, the shrine or the fork. Those three are decisions and
+#: this is a readout; a readout has no business interrupting one.
+SHEET_KEYS = (pygame.K_i, pygame.K_TAB)
+
+#: It toggles, so its own keys close it as well as open it -- and it takes the
+#: shop's exit keys too, which means **Escape closes the sheet rather than
+#: leaving to the menu**. The same trade the shop makes, for the same reason: a
+#: player reaching for Escape to shut a panel is not asking to end a forty-stage
+#: run.
+#:
+#: Unlike the shop's, this panel is *only* recoverable -- nothing is decided
+#: behind it and nothing is lost by closing it at any moment. So there is no
+#: argument here for the promotion panel's no-exit treatment, and every key that
+#: could plausibly mean "close" does.
+SHEET_EXIT_KEYS = SHOP_EXIT_KEYS + SHEET_KEYS
 
 
 class PlayScene(Scene):
@@ -169,6 +209,7 @@ class PlayScene(Scene):
         self.shop_panel = ShopPanel()
         self.job_panel = JobPanel()
         self.level_panel = LevelPanel()
+        self.hero_panel = HeroPanel()
         self.accumulator = Accumulator()
         self.effects = Effects(
             screenshake=self.settings.screenshake,
@@ -197,6 +238,10 @@ class PlayScene(Scene):
         self.camera = Camera(1, 1, config.INTERNAL_W, config.VIEWPORT_H)
         self.freeze = 0
         self.banner = 0
+
+        #: Frames left in which a row key means nothing, after a purchase moved
+        #: the rows up under the player's finger. See `SHOP_SETTLE_FRAMES`.
+        self._shop_settle = 0
 
         #: Open between stages. While it is up the world is not stepped at all,
         #: which is the one real pause in a run -- the between-stage banner
@@ -236,6 +281,17 @@ class PlayScene(Scene):
         #: Never opens at all while `data/progression.json` ships `xp_base: 0`,
         #: because no point is ever earned.
         self.levelling = False
+
+        #: Open on a keypress, and the only panel in the game that is. The other
+        #: three are opened *at* the player by something the run did -- a stall
+        #: touched, a level reached, a fork arrived at -- and each of them is a
+        #: decision. This one is asked for, and it decides nothing: closing it
+        #: leaves the run exactly what it was.
+        #:
+        #: It still pauses, which is what makes it a panel rather than an
+        #: overlay. Reading eight numbers off a strip that is being shaken by a
+        #: brute walking into you is not reading them.
+        self.inspecting = False
         self._enter_stage()
 
         #: Set whenever the run is standing at the start of a stage with nothing
@@ -311,6 +367,12 @@ class PlayScene(Scene):
 
     # --- input ---------------------------------------------------------------
     def handle_event(self, event: pygame.event.Event) -> Optional[Scene]:
+        if self.inspecting:
+            # First, and it is not a priority decision. The sheet can only be
+            # open when the other three are closed, because the key that opens
+            # it is read from the branch below that none of them reach.
+            return self._handle_sheet_event(event)
+
         if self.promoting:
             # Checked before the shop because it is drawn on top of it. Both are
             # open on this one transition and only the front one takes keys.
@@ -333,6 +395,12 @@ class PlayScene(Scene):
                 return self.on_exit() if self.on_exit else None
             if event.key == pygame.K_r:
                 return self.restarted()
+            if event.key in SHEET_KEYS:
+                self.inspecting = True
+                # Nothing else this frame. The world stops on the next update,
+                # and a swing queued on the way in would come out on the far
+                # side of the pause.
+                return None
             if event.key in DODGE_KEYS:
                 self._dodge_buffer = DODGE_BUFFER_TICKS
             if event.key in SKILL_KEYS:
@@ -366,6 +434,21 @@ class PlayScene(Scene):
                 self.promoting = False
         return None
 
+    def _handle_sheet_event(self, event: pygame.event.Event) -> Optional[Scene]:
+        """Close it. There is nothing else the sheet can be asked.
+
+        Every other key is swallowed, which is what the other panels do and is
+        the whole of why this is a panel: a swing or a roll pressed here would be
+        pressed against a world that is not being stepped, and would arrive on
+        the first tick after the sheet closed.
+        """
+        if event.type != pygame.KEYDOWN:
+            return None
+
+        if event.key in SHEET_EXIT_KEYS:
+            self.inspecting = False
+        return None
+
     def _handle_shop_event(self, event: pygame.event.Event) -> Optional[Scene]:
         """Buy, or press on. Nothing else happens while the panel is up.
 
@@ -383,9 +466,15 @@ class PlayScene(Scene):
             # out so a stall two rooms later cannot inherit it if anything ever
             # opens this panel without rolling first.
             self.stall_offers = ()
+            self._shop_settle = 0
             return None
 
         if event.key in ROW_KEYS:
+            if self._shop_settle:
+                # The rows moved a few frames ago and this press was aimed at
+                # where they were. See `SHOP_SETTLE_FRAMES`.
+                return None
+
             # `shop_rows.rows`, which is the one list the panel draws from --
             # gear on top, goods underneath, one continuous run of digits. A
             # second call to `shop.available` here would be a list that merely
@@ -398,6 +487,14 @@ class PlayScene(Scene):
                     equipment.buy(self.run, item)
                 else:
                     shop.buy(self.run, item)
+
+                # Measured rather than predicted: a purchase removes a row when
+                # it was the last one in it, and only `rows()` knows that -- the
+                # cap lives in `data/loot.json` and the gear rule in
+                # `equipment.taken`. Asking the list again is cheaper than
+                # teaching this handler either of them.
+                if len(shop_rows.rows(self.run, self.stall_offers)) < len(shelf):
+                    self._shop_settle = SHOP_SETTLE_FRAMES
         return None
 
     def _handle_level_event(self, event: pygame.event.Event) -> Optional[Scene]:
@@ -587,7 +684,7 @@ class PlayScene(Scene):
 
     # --- update --------------------------------------------------------------
     def update(self, elapsed_seconds: float) -> Optional[Scene]:
-        if self.promoting or self.levelling or self.shopping:
+        if self.promoting or self.levelling or self.shopping or self.inspecting:
             # Not stepped, and the accumulator is not fed either -- banking real
             # seconds while a panel is open would fast-forward the first moments
             # of the next stage the instant it closed.
@@ -598,6 +695,11 @@ class PlayScene(Scene):
             # next arena -- a roll nobody asked for, into a room the player has
             # not seen yet.
             self._drop_edges()
+
+            # The one thing this scene still counts with a panel up. Frames,
+            # because no tick is being paid out to count instead.
+            if self._shop_settle > 0:
+                self._shop_settle -= 1
             return None
 
         # Every panel is answered and the world has not been stepped since it
@@ -716,7 +818,7 @@ class PlayScene(Scene):
         self.renderer.draw(viewport, self.world, self.camera, self.effects)
         self.hud.draw(surface, self.world, self.run, self.world.tick)
 
-        if self.shopping or self.promoting or self.levelling:
+        if self.shopping or self.promoting or self.levelling or self.inspecting:
             # A panel, or the banner -- never both. Both at once puts the stage
             # name through the panel's title, and the banner is still counting
             # down underneath, so it gets its remaining frames once the panel is
@@ -736,6 +838,12 @@ class PlayScene(Scene):
                 # Over the shop, not instead of it. Both are open on the final
                 # transition, and the class is the choice being asked for.
                 self.job_panel.draw(surface, self.run, self.atlas)
+            if self.inspecting:
+                # Last, and alone -- it is the one panel that is never up at the
+                # same time as another. Written as a fourth `if` rather than an
+                # `elif` on the chain above, which is the shape this branch has
+                # been burned by once already; see the note at the top of it.
+                self.hero_panel.draw(surface, self.run)
         elif self.banner > 0:
             self._draw_banner(surface)
 

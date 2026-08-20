@@ -420,7 +420,11 @@ Four things that will bite:
   needed `ROW_Y` 62 → 56 and `ROW_H` 24 → 20; the gear section needed 56 → 46
   and 20 → 16, which is where the eight-row ceiling comes from.
 - **Keep the blurb short.** `test_no_shop_row_overflows_the_panel` measures it
-  with the panel's real font against the sold-out tally.
+  with the panel's real font against the tally column.
+- **A cap is also a disappearing act.** `shop.available` drops a good that has
+  reached its `limit`, so the row leaves the shelf rather than greying out --
+  and a good with `limit: 0` never leaves, which is the only reason the panel's
+  empty-shelf branch is unreachable with the shipped data.
 - **A good that writes an attribute writes two things.** `run.earned` is what
   `Run._advance` hands the next stage's `World`; `hero.bonus` is what the sim
   reads in the stage being played. Write only the first and the purchase does
@@ -542,6 +546,8 @@ python tools/balance.py                          # where the fight sits, referen
 python tools/balance.py --class all --seeds 8    # ...every starting class
 python tools/balance.py --class advanced         # ...every class they promote into
 python tools/balance.py --class sage --stage 33  # one class, one arena: the tuning loop
+python tools/balance.py --allocate spread        # ...with a hero that spends its levels
+python tools/balance.py --allocate crit_chance   # ...with the whole budget in one dial
 python tools/screenshot.py select out.png        # render a scene headlessly
 python tools/screenshot.py play out.png --stage 40 --class holy_priest --ticks 240
 ```
@@ -555,6 +561,14 @@ A sweep only covers the half of the campaign its class can reach — a base clas
 stops at the fork, an advanced class starts there. Asking for the other half
 prints a wall of zeroes that looks exactly like a balance failure and is not one,
 which is why the tool does not offer it.
+
+`--allocate` decides what the hero does with what levelling pays: `spread` puts
+one point into each attribute in turn, an attribute name puts every point into
+that one, and omitting it spends nothing. **Omitting it is the default and the
+reference** — every recorded number was measured that way, and while
+`data/progression.json` ships `xp_base: 0` there is nothing to spend either way.
+It exists for the day that changes; the reasoning, and the order the three steps
+have to happen in, is in [Balance](balance.md#the-instrument-can-spend-now-the-dial-is-still-at-zero).
 
 `assets/sprites.png` is **generated and gitignored**; `levels/*.json` is
 generated and *committed*, which is an inconsistency nobody has settled — see

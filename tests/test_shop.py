@@ -250,10 +250,73 @@ def test_available_is_stock_filtered_by_where_the_run_is() -> None:
     its key are the same digit in both halves of the campaign. The other half of
     that contract -- that the panel has a key for every row it can draw -- is in
     `test_render.py`, where the keys live.
+
+    Nothing is bought here, which is the only state in which `available` is
+    `stock()` filtered by the stage alone. The second filter is below.
     """
     for stage_number in (1, good("elixir").unlocks_at, 40):
         rows = shop.available(run_on_stage(stage_number))
         assert rows == tuple(g for g in shop.stock() if g.unlocks_at <= stage_number)
+
+
+# --- a bought-out row leaves the shelf ---------------------------------------
+# The shelf used to keep every row forever and say "sold out" beside the
+# finished ones, which is honest and is also a receipt: by the late campaign it
+# was eight rows to read to find the two that still did anything.
+#
+# The rule is narrow on purpose -- a row goes when it can never be bought again,
+# not when it has been bought once. The caps in `data/loot.json` are unchanged
+# and so is what they add up to.
+def test_a_good_leaves_the_shelf_when_it_is_bought_out() -> None:
+    run = run_on_stage(1)
+    tonic = good("tonic")
+
+    for bought in range(tonic.limit - 1):
+        assert shop.buy(run, tonic)
+        assert tonic in shop.available(run), (
+            f"the tonic left the shelf after {bought + 1} of {tonic.limit}"
+        )
+
+    assert shop.buy(run, tonic), "the last one in the cap was refused"
+    assert tonic not in shop.available(run), "a bought-out good is still on the shelf"
+
+    # Gone from the shelf, not from the game. `stock()` is content and says what
+    # the shop sells; `available` says what this run can still buy.
+    assert tonic in shop.stock()
+
+
+def test_the_uncapped_good_never_leaves_the_shelf() -> None:
+    """The Poultice is `limit: 0`, and that is what keeps the shelf non-empty.
+
+    Worth its own test because the panel's zero-row branch is unreachable while
+    this holds -- and giving the Poultice a cap is the one data edit that would
+    make it reachable.
+    """
+    run = run_on_stage(1)
+    poultice = good("poultice")
+
+    for _ in range(20):
+        run.world.hero.hp = 1
+        assert shop.buy(run, poultice)
+
+    assert poultice in shop.available(run)
+
+
+def test_a_good_that_has_not_arrived_and_one_that_is_finished_both_go() -> None:
+    """The two filters are opposite ends of the same idea, and they compose.
+
+    A run late enough for the Elixir that has already bought it out sees neither
+    end of the shelf: the early goods are gone because they are finished and the
+    late one because it is too.
+    """
+    run = run_on_stage(good("elixir").unlocks_at)
+
+    for entry in shop.stock():
+        if entry.limit:
+            for _ in range(entry.limit):
+                assert shop.buy(run, entry), f"{entry.id} was refused inside its cap"
+
+    assert [g.id for g in shop.available(run)] == ["poultice"]
 
 
 # --- the boots, and the one good that writes an attribute --------------------

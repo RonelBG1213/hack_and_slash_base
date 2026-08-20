@@ -131,6 +131,33 @@ def rows(offers: tuple[str, ...] = ()) -> tuple[str, ...]:
     return tuple(offers) if offers else progression.SPENDABLE
 
 
+def format_value(name: str, value: int) -> str:
+    """A stored integer as the thing a player reads.
+
+    The internals are per-mille and hundredths-per-tick because integers replay
+    exactly and floats accumulate -- but nobody reads "150 per mille" as fifteen
+    percent, so the conversion happens here, at the edge, and nowhere in the
+    arithmetic.
+
+    Module-level rather than a method on the panel because there are two panels
+    now: this one and `hero_panel.py`, which shows the same eight attributes as
+    base-plus-earned. `game/equipment.py` already carries its own copy of these
+    branches for the reason its docstring gives -- `game/` may not import
+    `render/` -- and its docstring is also what warns that two vocabularies for
+    eight attributes is a thing a player would have to learn twice. Two is the
+    number the architecture forces; a third, inside `render/`, would be the one
+    that starts disagreeing.
+    """
+    if name in ("crit_chance", "evasion", "move_speed"):
+        return f"{value * 100 / PER_MILLE:g}%"
+    if name == "crit_damage":
+        return f"{value * 100 / PER_MILLE:g}%"
+    if name == "regen":
+        # Unit-less: "Regen/tick" is the label. See LABELS above.
+        return f"{value / REGEN_SCALE:g}"
+    return str(value)
+
+
 class LevelPanel:
     def __init__(self) -> None:
         self.title = pygame.font.Font(None, 26)
@@ -198,18 +225,5 @@ class LevelPanel:
 
     @staticmethod
     def _format(name: str, value: int) -> str:
-        """A stored integer as the thing a player thinks they are buying.
-
-        The internals are per-mille and hundredths-per-tick because integers
-        replay exactly and floats accumulate -- but nobody reads "150 per mille"
-        as fifteen percent, so the conversion happens here, at the edge, and
-        nowhere in the arithmetic.
-        """
-        if name in ("crit_chance", "evasion", "move_speed"):
-            return f"{value * 100 / PER_MILLE:g}%"
-        if name == "crit_damage":
-            return f"{value * 100 / PER_MILLE:g}%"
-        if name == "regen":
-            # Unit-less: "Regen/tick" is the label. See LABELS above.
-            return f"{value / REGEN_SCALE:g}"
-        return str(value)
+        """Kept as a method because this panel's rows read better through it."""
+        return format_value(name, value)

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field, replace
 
 from ..core.collision import path_is_clear
 from ..core.vec2 import EPSILON, ZERO, Vec2
-from . import actions, jobs, skills
+from . import actions, jobs, progression, skills
 from .entities import ActionState, Entity
 from .intent import NOTHING, Intent
 from .sim import step
@@ -525,6 +525,111 @@ reckless = Reckless()
 skilful = Skilful()
 
 
+# --- spending what a run earns -----------------------------------------------
+# An **allocation policy** answers one question: the run has arrived at a
+# transition holding a point, so where does it go? It is a callable
+# `(run, nth) -> str`, where `nth` counts the points this run has already spent
+# and the return is an attribute name from `progression.SPENDABLE`. Returning an
+# empty string holds the point rather than spending it.
+#
+# `nth` is passed in rather than counted by the policy because every policy in
+# this module is frozen and stateless, and a round-robin that kept its own
+# cursor would be neither -- two runs measured in one process share the policy
+# object, so the second would start wherever the first stopped.
+#
+# **None of these is the reference.** `play_run_out(allocate=None)` spends
+# nothing and is the default, because that is the hero every recorded number on
+# the balance grid was measured against. See the note on `play_run_out`.
+
+
+@dataclass(frozen=True)
+class Spread:
+    """One point into each attribute in turn, round and round.
+
+    Deliberately the least interesting policy that can be written, and that is
+    the argument for it: which attribute is worth a point is exactly the
+    question nobody has answered yet, so an instrument that picks a favourite
+    would be answering it by assumption and then reporting the answer in the
+    same units as difficulty.
+
+    A player builds. This does not, so what it measures is a **floor** -- what
+    levelling is worth to somebody who spends without thinking. `into` measures
+    the other end, one dial at a time.
+    """
+
+    #: Which attributes, in which order. Empty means all of them, in the order
+    #: `Attributes` declares them -- so an attribute added to the dataclass is
+    #: in the rotation the day it lands, exactly as it becomes priceable and
+    #: shrine-offerable on that day.
+    order: tuple[str, ...] = ()
+
+    def __call__(self, run, nth: int) -> str:
+        names = self.order or progression.SPENDABLE
+        return names[nth % len(names)]
+
+
+@dataclass(frozen=True)
+class Into:
+    """Every point into one attribute, from the first to the last.
+
+    The single-dial instrument. `spread` says what levelling is worth; this says
+    what *one* attribute is worth when a whole run's budget goes into it, which
+    is the question `data/progression.json` needs answering eight times before
+    any of its prices stops being a guess.
+
+    It is also the honest ceiling. Nobody plays this way either, but a value
+    that breaks the game under it is a value that breaks the game.
+    """
+
+    attribute: str
+
+    def __call__(self, run, nth: int) -> str:
+        return self.attribute
+
+
+#: The no-build reference for a hero that spends. See `Spread`.
+spread = Spread()
+
+
+def into(attribute: str) -> Into:
+    """Everything into one attribute. Raises if it is not one.
+
+    Checked here rather than at the first spend, on the same reasoning
+    `play_run_out` refuses a branch that does not descend from the class being
+    played: a sweep that quietly measured nothing, because every point went into
+    a typo, is the failure worth being loud about -- and it would report as
+    "levelling changes nothing", which is a plausible-looking answer.
+    """
+    if attribute not in progression.SPENDABLE:
+        raise KeyError(
+            f"'{attribute}' is not an attribute; the "
+            f"{len(progression.SPENDABLE)} are {sorted(progression.SPENDABLE)}"
+        )
+    return Into(attribute)
+
+
+def _spend_what_arrived(run, allocate, spent: int) -> int:
+    """Empty the run's unspent points through `allocate`. Returns the new total.
+
+    Loops, because a transition can arrive holding several: a stage that pays
+    two levels, or a shrine's point still banked from the room before.
+
+    Two things stop it, and both have to, or a policy that holds is an infinite
+    loop rather than a decision. An empty return means "keep it", and a refusal
+    from `progression.spend` means the run cannot afford what was asked for --
+    which cannot happen while points are spent one at a time, and is guarded
+    anyway because the alternative to a guard here is the suite hanging.
+    """
+    while run.unspent_points > 0:
+        attribute = allocate(run, spent)
+        if not attribute:
+            break
+        if not progression.spend(run, attribute):
+            break
+        spent += 1
+    return spent
+
+
 def play_out(world, policy=autoplay, limit: int = 9000) -> int:
     """Run a world to its conclusion. Returns the tick it ended on.
 
@@ -538,7 +643,13 @@ def play_out(world, policy=autoplay, limit: int = 9000) -> int:
     return limit
 
 
-def play_run_out(run, policy=autoplay, limit: int = 240000, job: str = "") -> int:
+def play_run_out(
+    run,
+    policy=autoplay,
+    limit: int = 240000,
+    job: str = "",
+    allocate=None,
+) -> int:
     """Run a whole campaign to its conclusion. Returns the tick it ended on.
 
     `play_out` is one arena; this is the layer above it, and it exists because
@@ -558,7 +669,31 @@ def play_run_out(run, policy=autoplay, limit: int = 240000, job: str = "") -> in
     A branch that does not descend from the class being played raises out of
     `jobs.promote` rather than being ignored -- a sweep quietly measuring the
     wrong class is the failure worth being loud about.
+
+    `allocate` is the same idea for the attribute layer: an allocation policy
+    (see `Spread`), or `None` to spend nothing.
+
+    **`None` is the default and it is the reference.** Every number on the
+    recorded balance grid was measured by a hero that spends nothing, and while
+    `data/progression.json` ships `xp_base: 0` there is nothing to spend --
+    so the default is not a policy decision so much as a description.
+
+    **It stops being a description the moment `xp_base` goes above zero, and
+    that is what this argument is for.** Gold is optional; a bot that never buys
+    is a frugal player, which is *a* player. Points are not optional -- nobody
+    reaches a boss holding nine unspent levels -- so a sweep run against an
+    unlevelled hero would measure a game nobody plays and report the gap in the
+    same units as difficulty. Teach the instrument the behaviour first, then
+    re-baseline, then tune. See `docs/balance.md`.
+
+    Spending is timed to the transition, not to the level-up, because that is
+    where `scenes/play.py` opens the panel: a level earned mid-fight is banked
+    and spent on the way out, so a point cannot land on the body halfway through
+    the arena it was earned in. And it happens *after* the promotion for the
+    reason the scene orders the two panels that way -- a point in health raises
+    a ceiling the class change is about to move.
     """
+    spent = 0
     for tick in range(limit):
         if run.is_over:
             return tick
@@ -569,4 +704,6 @@ def play_run_out(run, policy=autoplay, limit: int = 240000, job: str = "") -> in
         # advanced classes turn the whole thing off.
         if run.just_advanced and job and run.at_promotion_point and jobs.can_promote(run):
             jobs.promote(run, run.bestiary[job])
+        if allocate is not None and run.just_advanced:
+            spent = _spend_what_arrived(run, allocate, spent)
     return limit

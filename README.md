@@ -98,6 +98,7 @@ Also on the Settings screen, in short form — this table is the long one.
 | `E` | Heavy skill |
 | `F` | Ultimate |
 | Space / Shift / right click | Dodge roll |
+| `I` / Tab | Character sheet — what the class brings, what the run earned, and the total |
 | `R` | Restart the run |
 | Esc | Back to the menu |
 | Up / down, Enter | Choose, on the menu and the Settings screen |
@@ -105,7 +106,7 @@ Also on the Settings screen, in short form — this table is the long one.
 | `1`–`8` | Buy, at a stall — three rolled pieces of gear over the consumables |
 | `1`–`3` | Spend a point, at a shrine — three of the eight attributes |
 | `1` `2` | Choose a path, on the promotion screen after stage twenty |
-| Enter / Space / Esc | Dismiss the stall or the shrine panel |
+| Enter / Space / Esc | Dismiss the stall, the shrine or the character sheet |
 
 Between two stages is a **reward room** you walk through: a fountain, a shop
 stall, a shrine or a chest, and three doors on the far wall naming what the room
@@ -119,6 +120,12 @@ you leave — over the five consumables that are always there. A shrine shows
 three of the eight attributes to spend its point on. Both rolls come from the
 run's seed and the room's index, so quitting and coming back finds the same
 shelf.
+
+**The stall only shows what you can still buy.** A piece of gear leaves the
+shelf the moment you buy it, and a consumable leaves when it hits its cap; the
+uncapped one stays for the whole run. The rows under a purchase move up, so the
+digits are what is on the shelf now rather than what was on it when you walked
+in.
 
 The promotion screen is the one panel with no exit key. Twenty stages are
 tuned for the class you become, so there is nothing sensible for a refusal to

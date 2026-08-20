@@ -78,6 +78,23 @@ It has **two sections**, one continuous run of digits down both:
 - **Goods**, underneath. The five consumables, the same five on every shelf of
   every run, [below](#the-goods).
 
+**A row you can never buy again is not drawn.** A piece of gear goes the moment
+it is bought — a rolled row holds exactly one purchase — and a good goes when it
+reaches its cap. The Poultice has no cap and so is always there, which is what
+keeps the shelf from ever being empty.
+
+Both halves used to stay and say so, `taken` in red on a bought piece and
+`sold out` in the tally column on a finished good. That was honest and it was
+also a receipt: late in a run it was eight rows to read to find the two that
+still had a decision in them. Nothing about the caps or the prices changed with
+it — the sink below is the same 14,340g it was.
+
+The cost is that **the digits renumber as you buy**, since a row that is not
+drawn cannot hold its key. `PlayScene` ignores a row key for
+`SHOP_SETTLE_FRAMES` after a purchase that shortened the shelf, and only after
+one that did: a double-tap on `1` should not buy whatever slid up into it, and a
+key that stops working after an ordinary purchase would be the worse bug.
+
 ## The gear a stall rolls
 
 `data/equipment.json` holds a pool of twelve **pieces**. A piece is a name and an
@@ -210,11 +227,17 @@ Its **price** is set against income like every other shelf. Its **amount is a
 guess** — the only shelf here of which that is true, and it is flagged in
 `data/loot.json` beside the drop rates for the same reason.
 
-Keys `1`–`8` buy; Enter, Space or Esc leaves. The stall draws seven rows for the
-first twenty stages and eight after — three gear, then four or five goods — and
-the row a player reads is always the key they press. **`shop_panel.rows()` is the
-one list both the panel and the key handler index into**, which is what makes
-that true across two sections that are bought through two different functions.
+Keys `1`–`8` buy; Enter, Space or Esc leaves. **Eight rows is the ceiling, not
+the count** — three gear over five goods, on a run in the second half that has
+bought nothing — and what is actually drawn is whatever still has a purchase in
+it. The row a player reads is always the key they press. **`shop_panel.rows()` is
+the one list both the panel and the key handler index into**, which is what makes
+that true across two sections that are bought through two different functions,
+and what makes it stay true as rows leave.
+
+Neither filter lives in the panel: `equipment.available` and `shop.available`
+decide what is on the shelf. What a player can still buy is a question about a
+run, and `render/` knows about pixels.
 
 The stall swallows every other control while it is open, including Esc, which is
 "back to the menu" everywhere

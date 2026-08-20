@@ -221,6 +221,17 @@ assertion has already failed — the hundreds of passing cells pay nothing.
 
 Both are the Magician, both are in acts I–IV, and neither moved when the
 campaign doubled — the second half cannot help a class that dies on stage 12.
+
+> [!WARNING]
+> **Both are strict, so both fail as `XPASS` the day levelling is switched on.**
+> A hero holding nineteen levels' worth of points may well clear The Terraces,
+> and a cell recorded as unclearable that starts clearing is a *failure* under
+> this policy, not a quiet win. That is the policy working — the entry is a
+> record of a fight nobody fixed, and the fix arriving by way of a global power
+> increase is exactly the thing worth being told about rather than absorbing.
+> Whoever raises `xp_base` re-baselines the grid and re-decides both entries in
+> the same commit. See
+> [Balance](balance.md#the-instrument-can-spend-now-the-dial-is-still-at-zero).
 Extending the run made the diagnosis sharper, though: across six seeds the
 Magician's losses land on stages 12, 12, 17 and 18 and **raising its
 between-stage heal by half changes none of them**, which rules the run layer out

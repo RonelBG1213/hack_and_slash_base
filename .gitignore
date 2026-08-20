@@ -12,3 +12,12 @@ assets/*.png
 # The save file, the settings and the profile. Written while the game runs;
 # one player's progress is not a fact about the project.
 state/
+
+# Test-run output. docs/testing.md tells you to redirect the suite to a file
+# rather than pipe it -- a pipe returns the exit code of `tail` and two real
+# failures once sat unnoticed on main that way. So these accumulate at the root
+# under whatever name the person running it picked, and three of them
+# (gate.txt, out.txt, out_full.txt) were committed before this rule existed.
+# Root only, so a .txt that is part of the project can still live in a folder.
+/*.txt
+!/requirements.txt

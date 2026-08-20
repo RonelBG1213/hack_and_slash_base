@@ -11,6 +11,18 @@ out. **Goods** underneath -- the five consumables that are on every shelf of
 every run. One continuous run of keys across both, because a player pressing 4
 is counting rows and does not know the sections are two different systems.
 
+**A row that can never be bought again is not drawn.** Both halves used to stay
+and say so -- `taken` in red on a bought piece, `sold out` in the tally column on
+a good at its cap -- which was honest and was also a receipt: by act V it was
+eight rows to read to find the two that still did anything. The consequence is
+that the digits renumber under the player as they buy, and that is the price of
+the feature rather than an oversight -- a row that is not shown cannot hold its
+key. `PlayScene` swallows the frames right after a purchase for it.
+
+Neither filter lives here. `equipment.available` and `shop.available` decide what
+is on the shelf, for the same reason the offers are passed in below: what a
+player can still buy is a question about a run, and this module knows pixels.
+
 Reads a `Run` and an offer tuple, and writes to neither. Buying is
 `game.equipment.buy` and `game.shop.buy`, called by the scene when a key arrives
 -- so the panel cannot get out of step with what a purchase actually does,
@@ -112,6 +124,23 @@ RARITY_COLOURS = {
 }
 
 
+def _hint_for(count: int) -> str:
+    """The line under the shelf, which now has to survive a shelf that shrinks.
+
+    "1-8 to buy" was true while the row count was a property of the campaign. It
+    is a property of what is left to buy now, and both ends of that are worth
+    spelling out: "1-1 to buy" reads as a typo and "1-0 to buy" reads as a bug.
+
+    Zero cannot happen with the shipped data -- the Poultice is uncapped -- so
+    this is a branch rather than a comment explaining why it is unreachable.
+    """
+    if count == 0:
+        return "Nothing left    Enter to press on"
+    if count == 1:
+        return "1 to buy    Enter to press on"
+    return f"1-{count} to buy    Enter to press on"
+
+
 def rows(run, offers: tuple[equipment.Offer, ...]) -> tuple[tuple[str, object], ...]:
     """Every row on the shelf, in the order the keys index them.
 
@@ -126,7 +155,7 @@ def rows(run, offers: tuple[equipment.Offer, ...]) -> tuple[tuple[str, object], 
     silently when one of them grows a `price`.
     """
     return tuple(
-        [("gear", offer) for offer in offers]
+        [("gear", offer) for offer in equipment.available(run, offers)]
         + [("good", good) for good in shop.available(run)]
     )
 
@@ -157,9 +186,7 @@ class ShopPanel:
             else:
                 self._good_row(surface, run, item, index, y)
 
-        hint = self.small.render(
-            f"1-{len(shelf)} to buy    Enter to press on", False, config.GREY
-        )
+        hint = self.small.render(_hint_for(len(shelf)), False, config.GREY)
         surface.blit(
             hint, ((config.INTERNAL_W - hint.get_width()) // 2, hint_y(len(shelf)))
         )
@@ -183,8 +210,13 @@ class ShopPanel:
 
         `equipment.can_buy` decides that, and it is the same call the scene makes
         when the key actually arrives -- so what a player is shown and what
-        happens cannot disagree. That matters most for a piece already bought,
-        which is refused rather than sold twice.
+        happens cannot disagree. It has one job left here: a piece that is merely
+        unaffordable. A piece already bought is not on the shelf to grey.
+
+        Which is why nothing asks `taken` any more. If the filter in `rows()`
+        were ever bypassed the row would come back grey and unbuyable rather than
+        claiming to be for sale, because `can_buy` still refuses it -- a missing
+        word, not a lie.
         """
         live = equipment.can_buy(run, offer)
         colour = config.WHITE if live else config.GREY
@@ -202,15 +234,13 @@ class ShopPanel:
         blurb = self.small.render(offer.blurb, False, config.GREY)
         surface.blit(blurb, (LEFT + BLURB_X, y + 3))
 
-        # The rarity sits where a good puts its sold-out tally. Two things never
-        # on the same row, so one column serves both.
-        word = "taken" if equipment.taken(run, offer) else offer.rarity.value
-        colour = (
-            config.BAD
-            if equipment.taken(run, offer)
-            else RARITY_COLOURS.get(offer.rarity, config.GREY)
+        # The rarity sits where a good puts its tally. Two things never on the
+        # same row, so one column serves both.
+        tally = self.small.render(
+            offer.rarity.value,
+            False,
+            RARITY_COLOURS.get(offer.rarity, config.GREY),
         )
-        tally = self.small.render(word, False, colour)
         surface.blit(tally, (TALLY_RIGHT - tally.get_width(), y + 3))
 
     def _good_row(self, surface, run, good: shop.Good, index: int, y: int) -> None:
@@ -218,10 +248,10 @@ class ShopPanel:
 
         `shop.can_buy` decides that, and it is the same call the scene makes when
         the key actually arrives. That matters most for the Poultice, which is
-        refused at full health rather than sold for nothing.
+        refused at full health rather than sold for nothing -- and which is now
+        the only thing this greys, since a good at its cap has left the shelf.
         """
         live = shop.can_buy(run, good)
-        sold_out = shop.sold_out(run, good)
         colour = config.WHITE if live else config.GREY
 
         self._key(surface, index, y, live)
@@ -240,9 +270,10 @@ class ShopPanel:
         if good.limit > 0:
             # Only the capped goods say how many are left; a count beside the
             # Poultice would imply a limit it does not have.
+            #
+            # A count and never "sold out": the purchase that reaches the cap
+            # takes the row with it, so the highest this reads is one short.
             tally = self.small.render(
-                "sold out" if sold_out else f"{shop.bought(run, good)}/{good.limit}",
-                False,
-                config.BAD if sold_out else config.GREY,
+                f"{shop.bought(run, good)}/{good.limit}", False, config.GREY
             )
             surface.blit(tally, (TALLY_RIGHT - tally.get_width(), y + 3))

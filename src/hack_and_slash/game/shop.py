@@ -184,12 +184,23 @@ def available(run) -> tuple[Good, ...]:
     """The shelves as this run sees them, in stock order.
 
     **This, not `stock()`, is what the panel draws and what the keys index
-    into.** The two agree for the first twenty stages and differ after, and a
-    caller that used `stock()` for one and this for the other would put a
-    player's key 4 on a row that is not there.
+    into.** The two agree only on a fresh run in act I, and a caller that used
+    `stock()` for one and this for the other would put a player's key 4 on a row
+    that is not there.
+
+    Two filters, and they are opposite ends of the same idea -- a row is on the
+    shelf while there is still a purchase in it. `stocked` is the good that has
+    not arrived yet; `sold_out` is the good that is finished. A bought-out row
+    used to stay and say "sold out", which is honest and is also a receipt: by
+    act V it was eight rows to read to find the two that still did anything.
+
+    The Poultice has no limit and therefore never leaves, which is what keeps
+    the shelf from ever being empty.
     """
     return tuple(
-        good for good in stock() if good.unlocks_at <= run.stage_number
+        good
+        for good in stock()
+        if stocked(run, good) and not sold_out(run, good)
     )
 
 

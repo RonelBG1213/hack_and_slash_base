@@ -67,6 +67,7 @@ CONTROLS = (
     ("left click", "swing"),
     ("space", "dodge roll"),
     ("Q E F", "the other attacks"),
+    ("I", "the character sheet"),
     ("R", "restart the run"),
     # "back here" while this list lived on the title screen, which it does not
     # any more. Escape means the menu from inside a run and it means the menu

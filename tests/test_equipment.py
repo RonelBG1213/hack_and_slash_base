@@ -290,6 +290,61 @@ def test_a_piece_cannot_be_bought_twice() -> None:
     assert not equipment.can_buy(run, offer)
 
 
+def test_a_bought_piece_leaves_the_shelf() -> None:
+    """One purchase per rolled row, so a bought one has nothing left to offer.
+
+    The stall used to keep it and write `taken` beside it in red, which said the
+    same thing and said it in the row a player was trying to read past.
+    """
+    run = rich_run()
+    offers = equipment.offers(run)
+
+    assert equipment.buy(run, offers[0])
+
+    shelf = equipment.available(run, offers)
+    assert offers[0] not in shelf
+    assert shelf == offers[1:], "the rows that were not bought moved or vanished"
+
+
+def test_the_roll_itself_is_never_filtered() -> None:
+    """**The one that would be expensive to find out about later.**
+
+    `offers` is the room's roll and a save records nothing about it: a run picked
+    back up re-derives its shelf and finds its rows by index. Filter here and the
+    piece at index 0 changes the moment anything is bought, so a reloaded run
+    quietly shows a different shelf than the one it was put down in front of --
+    and `run.purchases`, which is all that survives, would then be pointing at
+    rows nobody chose.
+
+    `test_save.py` is the end-to-end version of this. It passes unchanged, and
+    that it did not have to change is the point.
+    """
+    run = rich_run()
+    before = equipment.offers(run)
+
+    for offer in before:
+        assert equipment.buy(run, offer)
+
+    assert equipment.offers(run) == before, "buying changed the roll"
+    assert equipment.available(run, before) == (), "a bought-out stall kept a row"
+
+
+def test_available_and_can_buy_never_disagree_about_a_bought_row() -> None:
+    """The panel draws one and greys with the other, and a row that is drawn
+    and refused is the failure both of them exist to rule out.
+
+    Affordability is deliberately not in this claim: a row too expensive to buy
+    stays on the shelf and greys, because the answer to it is more gold rather
+    than a shorter shelf.
+    """
+    run = rich_run(gold=100000)
+    offers = equipment.offers(run)
+    assert equipment.buy(run, offers[1])
+
+    for offer in equipment.available(run, offers):
+        assert equipment.can_buy(run, offer), "a drawn row would refuse its own key"
+
+
 def test_a_purchase_that_cannot_be_afforded_costs_nothing() -> None:
     """Refused rather than partial, the way `shop.buy` refuses."""
     run = rich_run(gold=0)
