@@ -153,11 +153,11 @@ take it. It never grants a roll the game would otherwise refuse.
 
 | | |
 | --- | --- |
-| [**Design**](docs/design.md) | What the game asks of the player — the fight, the enemies, the bosses, the five classes and the ten they promote into, the four attack slots, the shape of a run and the fork in the middle of it |
+| [**Design**](docs/design.md) | What the game asks of the player — the fight, the enemies, the bosses, the five classes and the ten they promote into, the four attack slots, the shape of a run, the traps the floor puts under you, and the fork in the middle of it |
 | [**Loot and gold**](docs/loot.md) | Drop rates, the gold formula, rarity, the shop and the room you reach it through, and which of those numbers are measured |
-| [**Architecture**](docs/architecture.md) | The two structural rules, the nine-phase tick, the `Intent` seam, determinism and the three RNG streams |
+| [**Architecture**](docs/architecture.md) | The two structural rules, the nine-phase tick, the `Intent` seam, determinism and the four RNG streams |
 | [**Balance**](docs/balance.md) | The brackets the game is held to, the four findings that overturned an assumption, and what to reach for when a bracket breaks |
-| [**Content and tuning**](docs/content.md) | Editing the JSON: adding an enemy, a variant, a class, a boss, a brain, a room. The tools |
+| [**Content and tuning**](docs/content.md) | Editing the JSON: adding an enemy, a variant, a class, a boss, a brain, a room, a trap. The tools |
 | [**Testing**](docs/testing.md) | Running the suite, the three load-bearing tests, and the strict-xfail policy |
 | [**Known limits**](docs/limits.md) | What this does not do, and which of those were decisions |
 

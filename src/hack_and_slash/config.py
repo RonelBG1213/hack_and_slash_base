@@ -19,6 +19,7 @@ WEAPONS_DATA = DATA_DIR / "weapons.json"
 LOOT_DATA = DATA_DIR / "loot.json"
 PROGRESSION_DATA = DATA_DIR / "progression.json"
 ROOMS_DATA = DATA_DIR / "rooms.json"
+HAZARDS_DATA = DATA_DIR / "hazards.json"
 EQUIPMENT_DATA = DATA_DIR / "equipment.json"
 SPRITE_ATLAS = ASSETS_DIR / "sprites.png"
 
@@ -185,6 +186,18 @@ SPRITE_ORDER = (
     "shrine",
     "chest",
     "door",
+    # what the floor itself does at depth. Appended for the third time and for
+    # the third statement of the same reason: a cell is found by index, so a
+    # spike filed next to the wall it is set into would renumber all forty-odd
+    # sprites after it.
+    #
+    # One cell each, drawn in the dangerous state. The dormant state is the same
+    # sprite through the atlas's existing `shaded()`, which is what a spent
+    # fountain already uses -- a second cell per trap would be a second thing to
+    # keep in sync for no pixel anybody could not already read.
+    "spike",
+    "flame",
+    "blade",
 )
 ATLAS_COLUMNS = 8
 

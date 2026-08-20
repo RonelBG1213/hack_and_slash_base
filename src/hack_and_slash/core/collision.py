@@ -219,6 +219,39 @@ def path_is_clear(a: Vec2, b: Vec2, is_solid: SolidFn, tile: int) -> bool:
     return True
 
 
+def closest_point_on_segment(point: Vec2, a: Vec2, b: Vec2) -> Vec2:
+    """The nearest point to `point` that lies on the segment `a`..`b`.
+
+    The *segment*, not the infinite line through it, and the clamp below is the
+    whole of the difference: a blade that has swept past you is behind you, not
+    still beside you, and an unclamped projection says otherwise.
+
+    A degenerate segment (`a == b` -- a spike, or a blade at the end of its
+    travel turning around) returns `a`. That case is reached constantly rather
+    than pathologically, which is why it is an early return and not a guard.
+    """
+    span = b - a
+    length_sq = span.length_sq()
+    if length_sq < EPSILON:
+        return a
+
+    # How far along the segment the perpendicular foot lands, as a fraction,
+    # clamped into 0..1 so the answer is on the segment itself.
+    t = (point - a).dot(span) / length_sq
+    return a + span * max(0.0, min(1.0, t))
+
+
+def segment_distance(point: Vec2, a: Vec2, b: Vec2) -> float:
+    """Shortest distance from a point to the segment `a`..`b`.
+
+    Written for a swept hazard test -- where a body sits relative to the arc a
+    blade travelled this tick -- which is the same shape of question
+    `path_is_clear` asks of a wall, from the other end. That one asks whether a
+    segment met the grid; this asks how near it came to one body.
+    """
+    return point.distance_to(closest_point_on_segment(point, a, b))
+
+
 def line_of_sight(a: Vec2, b: Vec2, is_solid: SolidFn, tile: int) -> bool:
     """True when nothing solid stands between two points.
 

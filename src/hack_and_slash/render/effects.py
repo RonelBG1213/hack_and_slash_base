@@ -103,6 +103,16 @@ class Effects:
                         self.shake,
                         SHAKE_ON_HERO_HURT if event.is_hero else SHAKE_ON_HIT,
                     )
+                case EventKind.TRAP:
+                    # The same number and the same shake a blow gets. Being
+                    # burned should not feel cheaper than being hit, and the
+                    # damage number is the only thing that tells a player how
+                    # much that mistake cost.
+                    self._add_number(event)
+                    self.shake = max(
+                        self.shake,
+                        SHAKE_ON_HERO_HURT if event.is_hero else SHAKE_ON_HIT,
+                    )
                 case EventKind.DEATH:
                     self.shake = max(self.shake, SHAKE_ON_DEATH)
                 case EventKind.PICKUP:

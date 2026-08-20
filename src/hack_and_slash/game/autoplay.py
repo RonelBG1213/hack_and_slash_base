@@ -23,7 +23,7 @@ from dataclasses import dataclass, field, replace
 
 from ..core.collision import path_is_clear
 from ..core.vec2 import EPSILON, ZERO, Vec2
-from . import actions, jobs, progression, skills
+from . import actions, hazards, jobs, progression, skills
 from .entities import ActionState, Entity
 from .intent import NOTHING, Intent
 from .sim import step
@@ -55,6 +55,22 @@ RANGED_TOO_CLOSE = 70.0
 REACTION_PERFECT = 0  # reacts on the tick a telegraph opens
 REACTION_SHARP = 12  # ~200ms, a decent reaction to a clear tell
 REACTION_SLOPPY = 24  # ~400ms, distracted or reading the wrong enemy
+
+#: How far ahead the policy looks for a trap that is about to fire, in ticks.
+#: Half a second: long enough to be walking out of a spike's tile before the
+#: teeth arrive, short enough that it does not spend the whole fight avoiding a
+#: trap that is dormant for two more seconds.
+#:
+#: Deliberately NOT derived from `reaction_ticks`. That dial models how fast the
+#: hero notices an *attack*, and the reaction ladder in `tools/balance.py`
+#: sweeps it precisely to show that reflexes are not the axis. Tying a trap tell
+#: to it would make every row of that ladder a measurement of two things.
+TRAP_LOOKAHEAD = 30
+
+#: Extra room the policy wants around a trap, on top of its own body. A hero
+#: that steps out to exactly the edge is a hero standing on the edge, and the
+#: knockback off the last hit is enough to put it back in.
+TRAP_CLEARANCE = 10.0
 
 
 @dataclass(frozen=True)
@@ -91,6 +107,43 @@ class Autoplay:
         if not enemies:
             return NOTHING
 
+        return self._mind_the_traps(world, hero, self._fight(world, hero, enemies))
+
+    def _mind_the_traps(self, world, hero: Entity, intent: Intent) -> Intent:
+        """Steer the fight's own intent out of a trap, changing nothing else.
+
+        **A trap is a movement problem, not a reason to stop fighting**, and the
+        first draft of this got that wrong in a way worth recording. It returned
+        an intent of its own -- walk this way, do not attack -- and the bot
+        stopped swinging every time it stood near a spike. Trap damage went to
+        zero and the runs got *worse*: fights ran long, the extra ticks were
+        spent being hit by things that were not traps, and two seeds ran the
+        whole run out of `RUN_TICK_LIMIT` at floor 28. The reference hero had
+        been taught to respect traps so much it forgot to play.
+
+        So this overrides `move` and nothing else. The swing, the aim and the
+        target are the fight's business and are handed back untouched.
+
+        A roll is left alone entirely: its i-frames already carry the hero
+        through anything, so a dodge *is* the answer to a trap and second-
+        guessing its direction would only make it a worse answer to the attack
+        it was rolling away from.
+        """
+        if intent.dodge:
+            return intent
+
+        step_off = self._trap_underfoot(world, hero)
+        if step_off is None:
+            return intent
+        return replace(intent, move=step_off)
+
+    def _fight(self, world, hero: Entity, enemies: list[Entity]) -> Intent:
+        """Close in, swing when in range, roll away from anything about to land.
+
+        The policy exactly as it was before traps existed -- every recorded
+        number in the project was measured against this function, and the trap
+        layer deliberately sits outside it rather than inside.
+        """
         threat = self._noticed_threat(hero, enemies)
         if threat is not None and hero.dodge_cooldown <= 0 and actions.can_act(hero):
             away = (hero.pos - threat.pos).normalized()
@@ -169,6 +222,56 @@ class Autoplay:
         # right at 0 and 2. Door 0 clears the fixture by 45.5px at worst, over
         # all four walls the room can be entered by, against a reach under 15px.
         return Intent(move=self._toward(world, hero, doors[0].pos))
+
+    def _trap_underfoot(self, world, hero: Entity) -> Vec2 | None:
+        """The way out of a trap that is about to bite, or None to carry on.
+
+        **This returns on the first line in every arena the balance grid
+        measured before traps existed**, and in every arena today with
+        `data/hazards.json` switched off, because `world.traps` is empty in all
+        of them. So the instrument is unchanged for the recorded campaign --
+        bit for bit, not approximately -- which is what
+        `test_the_policy_is_untouched_when_the_layer_is_off` asserts.
+
+        **Why the bot was taught this at all**, since teaching an instrument to
+        answer the thing it is measuring deserves an argument:
+
+        A trap is the first mechanic in this game the reference hero could not
+        perceive. It walked down a burning lane because the shortest line to the
+        nearest enemy went through it, and over a forty-stage run that cost half
+        the health the run-level bracket has to spare. The bracket then reported
+        the campaign as too hard -- but what it had measured was a hazard that
+        cannot be answered, which is not a difficulty and is not what any player
+        would meet.
+
+        That is the same reading `data/entities.json` records against the
+        flanker demon and `_in_a_room` records against the fountain, and it
+        points the same way: **an instrument that cannot see a mechanic does not
+        measure it neutrally, it measures it as unavoidable.** A bot that steps
+        off a spike is not a bot playing traps well -- it is a bot that has
+        stopped playing them impossibly badly.
+
+        Crude on purpose, and much worse than a person: it looks one lookahead
+        ahead, steps out by the shortest route, and has no idea whether it is
+        stepping into a second trap or into a brute. Which is the right level --
+        the point is a floor under the measurement, not a ceiling on it.
+        """
+        if not world.traps:
+            return None
+
+        tick = world.tick
+        for trap in world.traps:
+            # Live now, or live by the time a step could get clear. Only the
+            # second half does any work: a policy that waits until the spikes
+            # are already through its feet has learned nothing.
+            if not (trap.is_live(tick) or trap.is_live(tick + TRAP_LOOKAHEAD)):
+                continue
+            if not trap.touches(tick, hero.pos, hero.radius + TRAP_CLEARANCE):
+                continue
+
+            a, b = trap.segment(tick)
+            return hazards.escape_from(a, b, hero.pos)
+        return None
 
     def _toward(self, world, hero: Entity, point: Vec2) -> Vec2:
         """Straight at it, sliding along anything in the way.

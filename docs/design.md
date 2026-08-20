@@ -226,6 +226,51 @@ oversight — the reference bot walks past all of them, which is what keeps ever
 recorded number in the project meaning what it meant. See
 [Balance](balance.md#the-brackets) for what happened when it did not.
 
+### What the floor does at depth
+
+Until floor three the ground is safe and the only thing you read is what is
+walking at you. After it, the arena itself is part of the fight.
+
+| Trap | From | The question it asks |
+| --- | --- | --- |
+| **Spike** | floor 3 | *Are you standing still?* A floor plate that blinks — dormant, a tell, then teeth |
+| **Flame** | floor 9 | *When do you cross?* Bolted to a side wall, firing a lane inward on a long cycle |
+| **Blade** | floor 16 | *Where will it be?* A pendulum on a track, and the only one that cannot be waited out |
+
+They arrive one per act, in that order, because a mechanic gets taught alone or
+it does not get taught. **How many an arena carries also comes from the floor** —
+one at first, four by the thirties — so depth means both new traps and more of
+them. The numbers are all in [`data/hazards.json`](../data/hazards.json).
+
+**The roll is the answer to all three.** A dodge's i-frames pass through a jet
+exactly as they pass through a sword, which is the whole reason the layer could
+be added without a new defensive verb. What a trap will *not* do is stagger you
+or cancel the swing you were mid-way through: a mistimed step should cost health,
+not health and the attack, because the two together is more than the mistake was
+worth.
+
+> [!IMPORTANT]
+> **Traps hurt you and not them, and that is deliberate.** Nothing in this game
+> paths around anything — enemies walk in straight lines at you, which is the
+> constraint half of `tools/make_level.py` is about. Faction-neutral traps would
+> therefore make the best play *stand behind the spikes and let the pack walk
+> in*, and a floor-forty arena with four traps would be easier than a floor-three
+> arena with one. The mechanic would invert its own intent.
+>
+> `harms` in [`data/hazards.json`](../data/hazards.json) flips it, and the day
+> anything in this game paths, that is the line to revisit.
+
+The eight act enders carry no traps. Not because a boss with traps is a bad idea
+— because those are the most tuned cells in the game and the boss brain is
+positional, so shoving one around should be a decision rather than a side effect
+of switching this layer on. `bosses` is that switch.
+
+Unlike the fixtures above, **every number here is on a measured tick** and the
+campaign was re-swept with the traps in it. Read
+[Balance](balance.md#what-the-bot-cannot-see) before trusting the sweep further
+than it goes: the reference bot does not know traps exist and will walk straight
+down a flame lane.
+
 A reward room is **not a fight, and the code knows the difference by being told**
 rather than by noticing there is nothing in it. `Level.kind` says what a room is
 for; a room outside `FIGHTING_KINDS` is never cleared by being empty, which is

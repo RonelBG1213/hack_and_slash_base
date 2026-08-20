@@ -5,14 +5,21 @@ that is `sim.step`. The split is what makes the sim testable: a test builds a
 world, steps it a known number of ticks, and asserts on what it finds, with no
 window, no clock and no input device anywhere in the picture.
 
-Randomness lives here, in *three* seeded `Random`s, and the split matters. `rng`
+Randomness lives here, in *four* seeded `Random`s, and the split matters. `rng`
 is the fight: damage rolls, and nothing else. `loot_rng` is what a kill leaves
-behind. `attr_rng` is crit and evasion. All three are derived from the one seed,
-so a run still replays exactly -- but neither a loot roll nor a crit roll can
-shift the sequence a damage roll draws from, which is what let the loot layer
-and then the attribute layer each be added to a tuned game without moving a
-single recorded number. `test_loot.py` and `test_attributes.py` assert that
-rather than trusting it.
+behind. `attr_rng` is crit and evasion. `hazard_rng` is where the traps stand.
+All four are derived from the one seed, so a run still replays exactly -- but
+neither a loot roll nor a crit roll can shift the sequence a damage roll draws
+from, which is what let the loot layer and then the attribute layer each be added
+to a tuned game without moving a single recorded number. `test_loot.py` and
+`test_attributes.py` assert that rather than trusting it.
+
+`hazard_rng` is the odd one and worth reading twice. It is drawn from **once**,
+while this object is being constructed, and never again for the length of the
+stage -- everything a trap does afterwards is arithmetic on `world.tick`. So the
+hazard layer needed the offset for placement and then deliberately arranged to
+need nothing else, because a die rolled on a *measured* tick is the one thing
+none of these splits can protect against.
 
 The rule for the next one: **a new subsystem that rolls dice gets its own
 offset.** Two generators seeded identically are one generator, so the offset is
@@ -32,6 +39,7 @@ from enum import Enum
 from ..core.level import Direction, Level, PropKind, RoomKind
 from ..core.spatial import SpatialHash
 from ..core.vec2 import Vec2
+from . import hazards
 from .attributes import NEUTRAL, Attributes
 from .entities import DEFAULT_HERO, Bestiary, Entity, Faction, spawn
 from .events import Event
@@ -177,6 +185,17 @@ class World:
         #: would make each subsystem's dice depend on how the other went.
         self.attr_rng = random.Random(seed ^ ATTR_STREAM)
 
+        #: Where the traps stand. The same trick a fourth time, and the last
+        #: subsystem so far to need it -- see `hazards.HAZARD_STREAM`.
+        #:
+        #: What is unusual about this one is how little it is used: it is drawn
+        #: from exactly once, by `hazards.place` below, and never again for the
+        #: length of the stage. Everything a trap does afterwards is arithmetic
+        #: on `world.tick`. That is deliberate and it is what let a hazard layer
+        #: be added to a tuned campaign at all -- a die rolled on a measured tick
+        #: would shift every damage roll after it.
+        self.hazard_rng = random.Random(seed ^ hazards.HAZARD_STREAM)
+
         self.tick = 0
         self.outcome = Outcome.RUNNING
 
@@ -199,6 +218,18 @@ class World:
             RoomProp(prop.kind, level.tile_center(*prop.tile), prop.leads_to, prop.wall)
             for prop in level.props
         ]
+
+        #: What the floor itself does at this depth, and empty on floors that
+        #: have not unlocked a trap yet, in every reward room, and whenever
+        #: `data/hazards.json` says `enabled: false`.
+        #:
+        #: Note the difference from `props` above. That list is empty in all
+        #: forty arenas, which is what makes the interaction phase free on a
+        #: measured tick. **This one is not**, and that is the feature: a trap
+        #: is in the arena and the balance grid was re-measured with it there.
+        self.traps: tuple[hazards.Trap, ...] = hazards.place(
+            level, self.purse.floor, self.hazard_rng
+        )
 
         #: What the hero has used in this room, in the order it was used.
         #: Drained by `Run` exactly as `gold` and `xp` are, and for the same

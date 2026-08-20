@@ -263,6 +263,41 @@ In order:
 
 ---
 
+## What the bot cannot see
+
+**The traps are measured, and the measurement is worth less than it looks.**
+
+Everything in `data/rooms.json` is provably free — the bot walks past every
+fixture, so the recorded numbers mean exactly what they meant before rooms
+existed. The hazard layer is the opposite: a trap stands in the arena, on the
+floor the bot walks across, and the sweep was re-run with all of them live.
+
+So the grid *did* move, and it was re-tuned until it landed back on the same
+brackets. What that does not mean is that the traps are tuned.
+
+`autoplay.py` does not know traps exist. It has no term for one in `_toward`, it
+will not step around a lane, and it does not roll to answer a tell — it rolls
+when an *enemy* is about to land something. It walks straight down a burning
+corridor because the shortest line to the thing it is fighting goes through it.
+
+That is the same instrument error `data/entities.json` records against the
+flanker demon, and it points the same way both times: **the bot is the worst
+case.** A player who reads a tell takes a fraction of what the bot takes. So the
+sweep has exactly one honest use here —
+
+> A bracket the bot still clears **with** traps is one a player certainly can.
+
+— and it cannot answer any of the questions that actually matter about a trap:
+whether the tell is long enough to react to, whether a blade's track is readable
+at 1x, whether the flame cycle is a decision or a wait, or whether being caught
+feels like a mistake you made rather than a tax you paid. Nothing in this
+project can answer those. They need hands on a keyboard.
+
+The honest reading of the current numbers is therefore: *the traps do not break
+the campaign for a hero who ignores them entirely.* That is a floor, deliberately
+set low, and the first person to actually play a late floor should expect to move
+`data/hazards.json` upward rather than down.
+
 ## What is not measured
 
 Three holes, all deliberate and all stated where somebody will trip over them.

@@ -17,7 +17,7 @@ The three rules worth stating outright:
 from __future__ import annotations
 
 from ..core.collision import circles_overlap, cone_hits
-from ..core.vec2 import from_angle
+from ..core.vec2 import Vec2, from_angle
 from . import actions
 from .attributes import PER_MILLE, Attributes
 from .entities import ActionState, Entity, Weapon
@@ -25,6 +25,13 @@ from .events import Event, EventKind
 
 #: A hit always lands for at least this much.
 MIN_DAMAGE = 1
+
+#: How hard a trap throws what it caught. A constant rather than a number per
+#: trap kind, because what the shove is for is getting a body clear of the
+#: hazard -- not expressing how heavy the hazard is. Sits between a light
+#: weapon's knockback and a heavy one's, so being caught reads as an impact
+#: without taking control away for longer than the mistake was worth.
+HAZARD_KNOCKBACK = 2.2
 
 
 def roll_damage(weapon: Weapon, rng) -> int:
@@ -144,6 +151,57 @@ def apply_hit(world, attacker: Entity, target: Entity, weapon: Weapon, rng) -> b
     if crit:
         world.emit(Event(EventKind.CRIT, target.pos, target.id, amount=damage,
                          is_hero=target.is_hero))
+    if not target.is_alive:
+        world.emit(Event(EventKind.DEATH, target.pos, target.id, is_hero=target.is_hero))
+    return True
+
+
+def apply_hazard(world, target: Entity, damage: int, push: Vec2) -> bool:
+    """Hurt a body with something that is not a body. Returns False if it missed.
+
+    A trap has no attacker and no weapon, which is why this exists rather than
+    `apply_hit` growing two optional arguments. Three differences, and every one
+    of them is load-bearing rather than a simplification:
+
+    1. **It rolls nothing.** `damage` arrives already decided -- a flat number
+       off the floor curve in `data/hazards.json` -- and there is no crit or
+       evasion roll on top. So a trap draws from neither `world.rng` nor
+       `world.attr_rng`, and cannot shift the sequence a damage roll or a crit
+       roll reads from. That is the whole reason the hazard layer could be added
+       to a tuned campaign, and it is the same guarantee `loot.py` gets from
+       having its own stream.
+    2. **`last_hit_by` is left alone.** Nothing killed you; the floor did. A
+       trap that claimed the kill would put an id in there that belongs to no
+       entity, and everything downstream of that field would have to learn what
+       a trap is.
+    3. **No stagger and no interrupt.** A trap that cancelled the swing you were
+       mid-way through would make a mistimed step cost the attack as well as the
+       health, and the two together is more than the mistake was worth. It still
+       shoves, because being thrown clear of a hazard is how you stop taking it.
+
+    Invulnerability is checked exactly as it is for a blow, and that is the
+    design: **the roll is the answer to every trap.** A dodge passes through a
+    jet the way it passes through a sword.
+    """
+    if target.is_invulnerable:
+        # Reuses BLOCKED, exactly as an evaded blow does: to a player these are
+        # the same event -- something arrived and did nothing -- and
+        # `effects.py` already draws it.
+        world.emit(Event(EventKind.BLOCKED, target.pos, target.id, is_hero=target.is_hero))
+        return False
+
+    target.hp = max(0, target.hp - damage)
+    target.flash = actions.FLASH_TICKS
+
+    if not push.is_zero():
+        # No knockback number of its own: a trap shoves by a fixed amount,
+        # because what the shove is for is getting the body clear of the hazard
+        # rather than expressing how heavy the hazard is.
+        target.velocity = target.velocity + push * HAZARD_KNOCKBACK
+
+    world.emit(
+        Event(EventKind.TRAP, target.pos, target.id, amount=damage, is_hero=target.is_hero)
+    )
     if not target.is_alive:
         world.emit(Event(EventKind.DEATH, target.pos, target.id, is_hero=target.is_hero))
     return True

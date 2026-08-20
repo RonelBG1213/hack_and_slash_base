@@ -30,6 +30,12 @@ class EventKind(str, Enum):
     SHOOT = "shoot"
     PROJECTILE_SPENT = "projectile_spent"
     PICKUP = "pickup"  # gold or a valuable was collected
+    #: A trap caught somebody. Separate from HIT because the presentation layer
+    #: wants something different from each -- a blow comes from a body and points
+    #: somewhere, a trap comes from the floor -- and because anything counting
+    #: what the *enemies* did to the hero would otherwise count the room's
+    #: spikes among them. `amount` is the damage, exactly as on a HIT.
+    TRAP = "trap"
     #: A reward room's fixture was used, or one of its doors was walked
     #: through. One kind for both, because the presentation layer wants the
     #: same thing from each -- a flash where it happened -- and `amount` is

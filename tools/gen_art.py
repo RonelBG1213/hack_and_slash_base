@@ -717,6 +717,65 @@ def paint_door(surface: pygame.Surface) -> None:
     pygame.draw.rect(surface, (78, 70, 56), (mid - 6, mid + 5, 12, 2))
 
 
+# --- what the floor does at depth --------------------------------------------
+# Three traps, each drawn in its DANGEROUS state. The dormant state is this same
+# cell through the atlas's `shaded()`, which is what a spent fountain already
+# uses -- a second cell per trap would be a second thing to keep in sync for no
+# pixel a player could not already read.
+#
+# All three are deliberately *warm*. Nothing else on the floor is: the arena is
+# blues and greys, loot is gold, and the fixtures are muted. So "orange on the
+# ground" means one thing in this game and it means it before the shape has
+# resolved, which is the only budget a 16px cell has at 1x in a crowded fight.
+def paint_spike(surface: pygame.Surface) -> None:
+    # Four teeth through a floor plate. Drawn as triangles because every other
+    # hazard here is a bar or a blade -- at this size the silhouette is the
+    # whole of what tells them apart.
+    mid = CELL // 2
+    pygame.draw.rect(surface, (46, 44, 52), (mid - 7, mid - 7, 14, 14))
+    pygame.draw.rect(surface, (68, 64, 76), (mid - 7, mid - 7, 14, 1))
+    for i in range(4):
+        x = mid - 6 + i * 4
+        pygame.draw.polygon(
+            surface, (218, 214, 226), [(x, mid + 5), (x + 3, mid + 5), (x + 1, mid - 5)]
+        )
+        # One bright column down each tooth: a flat grey triangle reads as a
+        # pillar, a highlighted one reads as metal.
+        pygame.draw.rect(surface, (255, 255, 255), (x + 1, mid - 4, 1, 6))
+    pygame.draw.rect(surface, (176, 60, 48), (mid - 7, mid + 6, 14, 1))
+
+
+def paint_flame(surface: pygame.Surface) -> None:
+    # A jet, painted across the cell rather than up it: the renderer tiles this
+    # along a horizontal lane, so the bright band has to run edge to edge or the
+    # lane reads as a row of separate blobs.
+    mid = CELL // 2
+    pygame.draw.rect(surface, (176, 52, 30), (0, mid - 5, CELL, 10))
+    pygame.draw.rect(surface, (232, 118, 36), (0, mid - 3, CELL, 6))
+    pygame.draw.rect(surface, (252, 200, 92), (0, mid - 1, CELL, 3))
+    # A ragged top and bottom edge so a long lane does not read as a painted
+    # stripe on the floor. Alternating, not random -- the atlas has to be the
+    # same PNG every build.
+    for x in range(0, CELL, 4):
+        pygame.draw.rect(surface, (232, 118, 36), (x, mid - 6, 2, 1))
+        pygame.draw.rect(surface, (232, 118, 36), (x + 2, mid + 5, 2, 1))
+
+
+def paint_blade(surface: pygame.Surface) -> None:
+    # A disc on a shaft. Round on purpose: it is the only circular thing on the
+    # floor, and roundness is what reads as *rotating* when the sprite itself
+    # never animates -- the motion comes from the trap moving across the arena.
+    mid = CELL // 2
+    pygame.draw.rect(surface, (58, 60, 74), (mid - 1, 0, 2, CELL))
+    pygame.draw.circle(surface, (188, 196, 214), (mid, mid), 7)
+    pygame.draw.circle(surface, (236, 242, 252), (mid, mid), 5)
+    pygame.draw.circle(surface, (92, 98, 118), (mid, mid), 2)
+    # Teeth around the rim, at the diagonals so they survive the scale-up.
+    for dx, dy in ((-5, -5), (5, -5), (-5, 5), (5, 5)):
+        pygame.draw.rect(surface, (248, 252, 255), (mid + dx - 1, mid + dy - 1, 2, 2))
+    pygame.draw.rect(surface, (176, 60, 48), (mid - 1, mid - 7, 2, 2))
+
+
 PAINTERS = {
     "floor": paint_floor,
     "wall": paint_wall,
@@ -770,6 +829,9 @@ PAINTERS = {
     "shrine": paint_shrine,
     "chest": paint_chest,
     "door": paint_door,
+    "spike": paint_spike,
+    "flame": paint_flame,
+    "blade": paint_blade,
 }
 
 

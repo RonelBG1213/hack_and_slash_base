@@ -33,7 +33,7 @@ tests/      803 tests, all headless
 | --- | --- |
 | `game/sim.py` | The heart of it: one function that advances the world by one fixed tick |
 | `game/intent.py` | The seam — the sim takes an `Intent` and nothing else |
-| `game/world.py` | All state for one stage. Owns the two RNG streams |
+| `game/world.py` | All state for one stage. Owns four of the five RNG streams |
 | `game/run.py` | The layer above a stage: what carries between them |
 | `game/skills.py` | Names the four attack-slot indices, so they are not bare integers in three places |
 | `core/spatial.py` | Broadphase hash. `World` builds it with cell 48 — a little wider than the longest reach in the game, so a swing query sweeps four buckets at worst |
@@ -148,13 +148,13 @@ results of the last, and moving any of them changes the game.
 
 | # | Phase | What it does |
 | --- | --- | --- |
-| 1 | timers | i-frames, cooldowns and stagger expire before anything consults them, and health regeneration accrues |
+| 1 | timers | i-frames, cooldowns and stagger expire before anything consults them, a trap's re-arm counter moves on, and health regeneration accrues |
 | 2 | decide | the hero's intent arrives from outside; enemies produce theirs |
 | 3 | begin | new swings and dodges start, committing facing |
 | 4 | move | walking, dashes and knockback, resolved against walls |
 | 5 | separate | bodies pushed out of each other |
 | 6 | index | the broadphase is rebuilt **after** everything has moved, so a hit test never consults last tick's positions |
-| 7 | strike | open hitboxes and arrows resolve against where things are *now* |
+| 7 | strike | open hitboxes and arrows resolve against where things are *now* — and then the traps do, last of the three |
 | 8 | advance | state machines move on, opening hitboxes and loosing arrows for the tick to come |
 | 9 | settle | the run is judged, the dead drop what they were carrying, and *then* they are removed |
 
@@ -179,16 +179,17 @@ stage would draw the same rolls in the same order, which is both duller and a
 worse test — a bug that only shows up on a particular sequence would never appear
 twice.
 
-### Four random streams, not one
+### Five random streams, not one
 
-Three live on the `World` and are derived from its seed; the fourth belongs to
-the layer above and is derived from the run's.
+Four live on the `World` and are derived from its seed; the fifth belongs to the
+layer above and is derived from the run's.
 
 | Stream | Seeded | Draws for |
 | --- | --- | --- |
 | `world.rng` | `seed` | the fight — damage rolls, and nothing else |
 | `world.loot_rng` | `seed ^ 0x10071` | what a kill leaves behind |
 | `world.attr_rng` | `seed ^ 0x2A771` | crit and dodge |
+| `world.hazard_rng` | `seed ^ 0x7A0B5` | where an arena's traps stand — drawn from **once**, at construction |
 | the map stream | `(seed ^ 0x4D0075) + index * 7919` | which three doors a reward room offers |
 
 The map stream is the one that is **not held anywhere**. `rooms._stream` builds a
@@ -239,6 +240,30 @@ generators seeded identically are one generator — the offset *is* the mechanis
 > Experience needed **no** stream. It is `xp_base * monster_level` and rolls
 > nothing, which is why the progression layer cannot disturb a damage roll
 > however it is tuned.
+
+> [!IMPORTANT]
+> **The hazard layer is the interesting case, because it is the first one that
+> lands on a measured tick.** Loot pays out on a kill and rooms happen between
+> stages; a trap is in the arena, on the floor the reference bot walks across.
+>
+> So it could not be made free the way those were — and instead it was arranged
+> to need almost nothing. `hazard_rng` is drawn from **once**, while the `World`
+> is being constructed, to decide where the traps stand. After that a trap is
+> arithmetic on `world.tick`: `is_live` is modular arithmetic, a blade's position
+> is a triangle wave, and the damage is a flat number off the floor curve with
+> **no crit or evasion roll on top** — which is why `combat.apply_hazard` exists
+> rather than `apply_hit` growing two optional arguments.
+>
+> The result is a layer that changes how a fight *goes* while provably not
+> changing the sequence of dice it draws.
+> `test_traps_do_not_disturb_the_damage_stream` is the third sibling of the two
+> tests above, and it is what makes `"enabled": false` in `data/hazards.json` a
+> bit-for-bit rollback rather than an approximate one.
+>
+> The other half of the same idea: a trap's state is a pure function of the tick,
+> so there is nothing for `game/save.py` to record and a loaded run is standing
+> in exactly the traps it was standing in. Same property the map stream has, from
+> the other direction.
 
 One related trap: the weighted rarity draw is written long-hand as a single
 `random()` against a cumulative sum rather than with `random.choices`, because

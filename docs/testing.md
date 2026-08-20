@@ -74,7 +74,7 @@ That only matters for the handful of render tests; everything under `core/` and
 | others | | vectors, camera, spatial hash, level IO |
 | `test_architecture.py` | 1 | **the rule the project rests on** |
 
-## The six tests that are load-bearing
+## The seven tests that are load-bearing
 
 Each of these guards something that would otherwise fail **silently** — no
 assertion anywhere else would notice.
@@ -97,7 +97,7 @@ never reads back; this is what keeps that true.
 
 Runs the same seeded fight with a deliberately generous loot table and a silent
 one, and asserts the damage lists are identical. Written before the code it
-guards. See [Architecture](architecture.md#three-random-streams-not-one) for why
+guards. See [Architecture](architecture.md#five-random-streams-not-one) for why
 a single shared generator would have invalidated every recorded number without
 anything failing.
 
@@ -134,6 +134,26 @@ Its sibling `test_an_arena_carries_no_props_at_all` is the other half of the
 claim: `sim._touch_props` opens on `if not world.props: return`, so the phase is
 free on every tick the grid has ever measured — and that is only true while no
 stage file grows a prop, which is asserted rather than assumed.
+
+### `test_hazards.py::test_traps_do_not_disturb_the_damage_stream`
+
+The same test a fourth time, and the one with the most to guard, because the
+hazard layer is the first that lands on a **measured** tick. Loot pays out on a
+kill and a room happens between stages; a trap is in the arena, on the floor the
+reference bot walks across.
+
+So it could not be kept off the measured path, and was instead built to need
+almost no dice: `hazard_rng` is drawn from once, at world construction, to decide
+where the traps stand, and after that a trap is arithmetic on `world.tick` with a
+flat damage number and **no crit or evasion roll**. This runs one seeded fight
+with a trap chewing on the hero the whole time and one with none, and demands the
+damage the hero *dealt* comes out identical.
+
+Read the assertion carefully, because it claims less than it looks like it does.
+Traps absolutely change how a fight goes — the hero is poorer in health and gets
+shoved around, and that is the feature. What is pinned is the *sequence of dice*,
+which is what makes `"enabled": false` in `data/hazards.json` a bit-for-bit
+rollback rather than an approximate one.
 
 ### `test_rooms.py::test_the_door_the_bot_takes_clears_the_fixture_by_a_margin`
 

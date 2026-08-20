@@ -1,0 +1,184 @@
+{
+  "_comment": [
+    "The traps in the arenas: which ones the floor has unlocked, how many it",
+    "carries, and what standing in one costs. game/hazards.py holds the",
+    "arithmetic and none of the values, the way game/rooms.py and game/loot.py",
+    "do.",
+    "",
+    "*** enabled: false IS THE ROLLBACK. ***",
+    "",
+    "Switched off, no trap is ever placed, world.traps is empty, and the two",
+    "phases that read it return on a falsy test. The campaign is then the",
+    "campaign as measured before traps existed -- and BIT FOR BIT so, not",
+    "approximately so, because of the guarantee in the next paragraph.",
+    "",
+    "THE HAZARD LAYER DRAWS NO DICE ON A MEASURED TICK. Placement rolls once,",
+    "at world construction, from world.hazard_rng and from nothing else. The",
+    "damage a trap deals is a flat number off the floor curve below: no damage",
+    "roll, and deliberately no crit or evasion roll either, so attr_rng is",
+    "untouched as well. A trap therefore cannot shift the sequence a damage roll",
+    "draws from however these numbers are tuned. That is the same property",
+    "progression.py has, and it is what makes the rollback exact.",
+    "",
+    "UNLIKE data/rooms.json, EVERY NUMBER BELOW IS ON A MEASURED TICK. The",
+    "rooms file can say nothing here moves a bracket, because the reference bot",
+    "walks a room's entrance to its door and touches nothing. A trap is in the",
+    "arena, and the bot walks through it. So these numbers DO move the grid and",
+    "they were tuned against it.",
+    "",
+    "But read what that tuning means. game/autoplay.py does not know traps",
+    "exist -- it will walk straight down a flame lane. So the sweep measures a",
+    "hero that CANNOT READ TRAPS, which is the same instrument error",
+    "data/entities.json records against the flanker demon. It has one honest",
+    "use and one only: the bot is the worst case, so a bracket the bot still",
+    "clears is one a player certainly can. It cannot tell you whether a trap is",
+    "fun, or whether its telegraph is readable, and no sweep ever will."
+  ],
+
+  "enabled": true,
+
+  "harms": "hero",
+
+  "_harms_comment": [
+    "Who a trap damages: 'hero' or 'all'.",
+    "",
+    "'hero' is a DELIBERATE ASYMMETRY and it is the one thing in this file that",
+    "is not a tuning number. Nothing in this game paths around anything --",
+    "enemies walk straight at you, which is the constraint tools/make_level.py",
+    "spends four paragraphs on. Faction-neutral traps would therefore make the",
+    "optimal play 'stand behind the spikes and let the pack funnel in', and a",
+    "deeper floor with more traps would be EASIER than a shallow one. The",
+    "mechanic would invert its own intent.",
+    "",
+    "Set it to 'all' and traps become terrain that does not take sides, which",
+    "is the truer rule and the more fun one if the enemies could avoid them.",
+    "The day something in this game paths, this is the line to revisit."
+  ],
+
+  "bosses": false,
+
+  "_bosses_comment": [
+    "Whether the eight act-enders carry traps. False, and not because a boss",
+    "with traps is a bad idea -- because those eight cells are the most tuned",
+    "in the game and the boss brain is positional (see docs/content.md). A trap",
+    "that shoves a boss fight around is a change to the most expensive thing",
+    "here, and it should be made on purpose rather than as a side effect of",
+    "switching this layer on."
+  ],
+
+  "damage": {
+    "base": 5,
+    "floor_step": 0.06
+  },
+
+  "_damage_comment": [
+    "What one trap hit costs, by floor. Same shape as the chest payout and the",
+    "kill payout: base * (1 + floor_step * (floor - 1)), reusing the depth curve",
+    "rather than inventing a third idea of what deeper is worth.",
+    "",
+    "5 at floor 3 and 17 at floor 40. For scale, a Rogue has 70 health and a",
+    "Knight 130, so a trap hit is 7% of a Rogue early and 24% of one late. That",
+    "is meant to be a mistake you feel and not a mistake that kills you, on the",
+    "grounds that a hazard which one-shots is a hazard nobody experiments with.",
+    "",
+    "Conservative on purpose. The bot cannot dodge these, so every point here is",
+    "paid by the brackets at full price -- tune UP only with a sweep in hand."
+  ],
+
+  "count": {
+    "base": 1,
+    "floor_step": 0.1,
+    "cap": 4
+  },
+
+  "_count_comment": [
+    "How many traps an arena carries: round(base + floor_step * (floor - 1)),",
+    "capped. 1 from the first unlocked floor, 2 by floor 10, 3 by floor 20, and",
+    "the cap bites at floor 32.",
+    "",
+    "Capped rather than left to climb, because the placement pass draws distinct",
+    "positions from the arena's open floor and a late stage is not much bigger",
+    "than an early one. Uncapped, a floor-40 arena becomes a grid of hazards and",
+    "the thing the player is reading stops being the fight."
+  ],
+
+  "rearm": 45,
+
+  "_rearm_comment": [
+    "Ticks before one trap can hit the same body twice. 45 is three quarters of",
+    "a second.",
+    "",
+    "Without it, standing in a flame lane costs sixty hits a second and every",
+    "trap is instant death regardless of the damage number. With it, a trap is",
+    "a cost per mistake rather than a rate, which is the unit the damage curve",
+    "above is expressed in and the only one worth tuning."
+  ],
+
+  "spike": {
+    "from_floor": 3,
+    "period": 150,
+    "active": 40,
+    "radius": 7.0
+  },
+
+  "_spike_comment": [
+    "A floor tile that blinks. Dormant 110 ticks, spikes out 40, and the cycle",
+    "is a pure function of the tick so it needs nothing saved.",
+    "",
+    "Floor 3 because act I is where a mechanic gets taught and stage 3 is the",
+    "one arena whose numbers are on record -- if a spike breaks something, it",
+    "breaks it where there is a reference to compare against.",
+    "",
+    "The question it asks: are you standing still? It is the cheapest of the",
+    "three to avoid and the easiest to stop noticing."
+  ],
+
+  "flame": {
+    "from_floor": 9,
+    "period": 240,
+    "active": 70,
+    "reach": 7,
+    "radius": 6.0
+  },
+
+  "_flame_comment": [
+    "Mounted on a SIDE wall -- east or west, never the top or bottom -- firing a",
+    "lane inward across the arena. reach is in tiles and the lane is clipped at",
+    "the first solid tile it meets, so a jet never burns through a pillar.",
+    "",
+    "Longer cycle than the spike and a longer active window, because a lane is a",
+    "thing you cross rather than a thing you stand on: the window has to be wide",
+    "enough to still be burning when you arrive at it, or it is not a decision.",
+    "",
+    "Floor 9 puts it late in act II, one act after the spike. The question it",
+    "asks: when do you cross? The spike moves your feet, this one moves your",
+    "route."
+  ],
+
+  "blade": {
+    "from_floor": 16,
+    "period": 300,
+    "span": 9,
+    "radius": 7.0
+  },
+
+  "_blade_comment": [
+    "A pendulum blade on a fixed track, span tiles long, sweeping there and back",
+    "in period ticks. No active window: it is dangerous on every tick, and what",
+    "changes is WHERE.",
+    "",
+    "That is the whole reason it is the third one. A spike and a jet both blink,",
+    "so both are answered by waiting -- and a hazard answered by waiting is a",
+    "hazard that punishes a player for being aggressive, which is the opposite",
+    "of what this game wants. The blade cannot be waited out. The safe tile",
+    "travels, so you reposition continuously and the fight keeps moving.",
+    "",
+    "It is the only trap tested against the segment it swept this tick rather",
+    "than the point it occupies (core/collision.segment_distance), because at",
+    "span 9 over 300 ticks it crosses most of its own width in a tick at the",
+    "middle of the swing and a point test would let it pass through a body.",
+    "",
+    "Floor 16 is the opening of act IV, the act that puts everything together,",
+    "and it is the last new idea before the class forks at 20."
+  ]
+}

@@ -20,6 +20,7 @@ from .. import config
 from ..core.level import REWARD_PROP
 from ..core.vec2 import Vec2, from_angle
 from ..game.entities import ActionState, Entity
+from ..game.hazards import TrapKind
 from ..game.world import World
 from .atlas import Atlas
 from .camera import Camera
@@ -61,6 +62,13 @@ class Renderer:
         # you are standing on it, and nothing in a reward room is going to walk
         # in front of one -- there is nothing in a reward room.
         self._draw_props(surface, world, view)
+        # Beneath every body, and that is a rule rather than a preference: a
+        # trap the player cannot see under the crowd standing on it is a trap
+        # that reads as unfair damage. Drawing it *under* is what makes the
+        # dormant state legible -- you see the plate, you learn the tell, and
+        # the bodies never hide the tell itself because a dormant trap is the
+        # one you are allowed to stand on.
+        self._draw_traps(surface, world, view)
         self._draw_shadows(surface, world, view)
         # Under the bodies. A coin is never the thing you need to see, and one
         # drawn over a charger's telegraph is a coin that got somebody killed.
@@ -146,6 +154,107 @@ class Renderer:
                     sy - icon.get_height() // 2 - self.ICON_LIFT,
                 ),
             )
+
+
+    # --- traps ---------------------------------------------------------------
+    #: What a dormant trap is multiplied by. Darker than `SPENT`, because a spent
+    #: fountain is finished with and a sleeping spike is not -- it has to stay
+    #: visible enough to be learned, while never once being mistaken for live.
+    #: The whole readability of the layer is this one constant.
+    DORMANT = (70, 72, 86)
+
+    #: How many ticks before a trap fires it starts to warn. A trap that goes
+    #: from dormant to lethal on one frame is a trap nobody can answer, and the
+    #: answer -- a roll -- takes longer than a frame to start.
+    TELL_TICKS = 24
+
+    #: The rail a blade hangs from. Dim enough to sit under the fight, bright
+    #: enough to be followed to its end.
+    TRACK_COLOR = (72, 74, 92)
+
+    def _draw_traps(self, surface: pygame.Surface, world: World, camera: Camera) -> None:
+        """Spikes, flame lanes and blades. Nothing outside an arena.
+
+        Each kind is drawn from its own geometry rather than from a shared
+        "at this point" rule, because the three occupy the floor differently: a
+        spike is a tile, a lane is a run of them, and a blade is one moving cell
+        on a track that is itself worth drawing.
+
+        **The track is drawn even when the blade is elsewhere on it.** That is
+        the whole readability of the trap -- a blade you can only see is a blade
+        you cannot plan around, and where it is *going* is the thing the player
+        needs.
+        """
+        tick = world.tick
+        for trap in world.traps:
+            live = trap.is_live(tick)
+
+            if trap.is_moving:
+                self._draw_blade(surface, trap, tick, camera)
+                continue
+
+            if trap.kind is TrapKind.FLAME:
+                self._draw_flame(surface, trap, live, self._warning(trap, tick), camera)
+                continue
+
+            self._draw_trap_cell(surface, "spike", trap.a, live, self._warning(trap, tick), camera)
+
+    def _warning(self, trap, tick: int) -> bool:
+        """Whether this trap is about to fire and should be showing the tell."""
+        if trap.is_live(tick):
+            return False
+        return trap.is_live(tick + self.TELL_TICKS)
+
+    def _draw_trap_cell(
+        self, surface: pygame.Surface, name: str, pos: Vec2, live: bool, warning: bool, camera: Camera
+    ) -> None:
+        """One 16px trap cell, in whichever of its three states it is in."""
+        if not camera.is_on_screen(pos):
+            return
+
+        if live:
+            sprite = self.atlas[name]
+        elif warning:
+            # Part way back toward full brightness: the tell is the sprite
+            # waking up, not a separate symbol laid on top of it.
+            sprite = self.atlas.shaded(name, (150, 150, 160))
+        else:
+            sprite = self.atlas.shaded(name, self.DORMANT)
+
+        sx, sy = camera.to_screen(pos)
+        surface.blit(sprite, (sx - sprite.get_width() // 2, sy - sprite.get_height() // 2))
+
+    def _draw_flame(
+        self, surface: pygame.Surface, trap, live: bool, warning: bool, camera: Camera
+    ) -> None:
+        """A jet, tiled from its nozzle to the end of its lane.
+
+        Always drawn along the whole lane rather than only where it currently
+        reaches, so the shape of the danger is the same picture whether or not
+        it is burning. What changes is the brightness -- which means a player
+        learns where a jet *will* fire by looking at the floor, and the active
+        window is a timing problem rather than an ambush.
+        """
+        span = trap.b - trap.a
+        steps = max(1, int(span.length() // config.TILE))
+        for i in range(steps + 1):
+            point = trap.a + span * (i / steps)
+            self._draw_trap_cell(surface, "flame", point, live, warning, camera)
+
+    def _draw_blade(self, surface: pygame.Surface, trap, tick: int, camera: Camera) -> None:
+        """The blade, plus the track it runs along.
+
+        The track is a dim line drawn under everything. It is not decoration --
+        it is the only way to know where the blade will be in a second, and a
+        hazard you cannot predict is one you can only be hit by.
+        """
+        if camera.is_on_screen(trap.a) or camera.is_on_screen(trap.b):
+            ax, ay = camera.to_screen(trap.a)
+            bx, by = camera.to_screen(trap.b)
+            pygame.draw.line(surface, self.TRACK_COLOR, (ax, ay), (bx, by), 1)
+
+        # Live on every tick -- what the tick decides is where, not whether.
+        self._draw_trap_cell(surface, "blade", trap.at(tick), True, False, camera)
 
     # --- loot ----------------------------------------------------------------
     def _draw_pickups(self, surface: pygame.Surface, world: World, camera: Camera) -> None:

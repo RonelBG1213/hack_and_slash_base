@@ -19,6 +19,7 @@ from hack_and_slash.core.collision import (
     move_and_collide,
     path_is_clear,
     resolve_circle_vs_tiles,
+    segment_distance,
 )
 from hack_and_slash.core.vec2 import Vec2
 
@@ -244,3 +245,33 @@ def test_line_of_sight_is_blocked_by_a_wall_between_two_points() -> None:
     assert not line_of_sight(Vec2(8, 40), Vec2(56, 40), blocked, TILE)
     # A route that passes below it is clear.
     assert line_of_sight(Vec2(8, 56), Vec2(56, 56), blocked, TILE)
+
+
+# --- point against a segment -------------------------------------------------
+def test_a_point_on_the_segment_is_no_distance_from_it() -> None:
+    a, b = Vec2(0, 0), Vec2(100, 0)
+    assert segment_distance(a, a, b) == pytest.approx(0.0)
+    assert segment_distance(b, a, b) == pytest.approx(0.0)
+    assert segment_distance(Vec2(50, 0), a, b) == pytest.approx(0.0)
+
+
+def test_distance_is_measured_to_the_perpendicular_foot() -> None:
+    # Straight out from the middle of the span.
+    assert segment_distance(Vec2(50, 30), Vec2(0, 0), Vec2(100, 0)) == pytest.approx(30.0)
+
+
+def test_a_point_past_the_end_measures_to_the_end_not_the_line() -> None:
+    """The clamp, and the whole reason this is not a line test.
+
+    A blade that has swept past you is behind you. Projected onto the infinite
+    line, the point below is 3 away; on the segment it is 5, and 5 is the answer
+    that stops a blade hitting things it has already gone by.
+    """
+    assert segment_distance(Vec2(104, 3), Vec2(0, 0), Vec2(100, 0)) == pytest.approx(5.0)
+    assert segment_distance(Vec2(-4, 3), Vec2(0, 0), Vec2(100, 0)) == pytest.approx(5.0)
+
+
+def test_a_segment_of_no_length_falls_back_to_point_to_point() -> None:
+    """Reached every tick a blade sits at the end of its travel and turns."""
+    still = Vec2(20, 20)
+    assert segment_distance(Vec2(20, 25), still, still) == pytest.approx(5.0)

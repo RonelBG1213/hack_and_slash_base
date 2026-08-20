@@ -10,15 +10,19 @@ The phase order below is not arbitrary. Each phase reads the results of the last
 one, and moving any of them changes the game:
 
 1. **timers** -- i-frames, cooldowns and stagger expire before anything consults
-   them, and health regeneration accrues. Still one phase and not two: both are
-   per-tick counters moving on before the tick reads any of them
+   them, a trap's re-arm counter moves on, and health regeneration accrues.
+   Still one phase and not three: they are all per-tick counters moving on
+   before the tick reads any of them
 2. **decide** -- the hero's intent arrives from outside; enemies produce theirs
 3. **begin** -- new swings and dodges start, committing facing
 4. **move** -- walking, dashes and knockback, resolved against walls
 5. **separate** -- bodies pushed out of each other
 6. **index** -- the broadphase is rebuilt *after* everything has moved, so a hit
    test never consults last tick's positions
-7. **strike** -- open hitboxes and arrows resolve against where things are *now*
+7. **strike** -- open hitboxes and arrows resolve against where things are
+   *now*, and then the traps do, last of the three. A blow and a spike landing
+   on the same tick have one readable order rather than an order that depends
+   on which side of the phase somebody dropped the call
 8. **advance** -- state machines move on, opening hitboxes and loosing arrows for
    the tick to come
 9. **settle** -- the run is judged, the dead drop what they were carrying, and
@@ -31,7 +35,7 @@ from __future__ import annotations
 from .. import config
 from ..core.collision import circle_separation, move_and_collide, path_is_clear
 from ..core.vec2 import ZERO, Vec2, from_angle
-from . import actions, ai, attributes, combat, loot, progression
+from . import actions, ai, attributes, combat, hazards, loot, progression
 from .entities import ActionState, Entity, Faction
 from .events import Event, EventKind
 from .intent import NOTHING, Intent
@@ -70,6 +74,7 @@ def step(world: World, hero_intent: Intent = NOTHING) -> None:
 
     for entity in world.entities:
         actions.tick_timers(entity)
+    hazards.tick_timers(world)
     _regen(world)
 
     intents = _gather_intents(world, hero_intent)
@@ -87,6 +92,7 @@ def step(world: World, hero_intent: Intent = NOTHING) -> None:
 
     combat.resolve_swings(world)
     combat.resolve_projectile_hits(world)
+    hazards.resolve(world)
 
     for entity in list(world.entities):
         _advance_state(world, entity)
