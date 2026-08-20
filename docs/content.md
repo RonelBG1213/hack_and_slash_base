@@ -578,7 +578,8 @@ python -m pytest tests/test_playthrough.py -q     # ~11 minutes, and not optiona
 > Everything in `data/rooms.json` is provably free because the reference bot
 > walks past it. Nothing here is. Adding a kind, moving a `from_floor` or nudging
 > the damage curve re-opens all 280 cells, and the acceptance criterion is what
-> it has always been: **exactly two xfails, the same two.**
+> it has always been, with the count now at zero: **exactly the xfails that are
+> recorded, and no others.**
 >
 > `tools/balance.py --stage N` is the fast loop — one arena answers in seconds
 > where the full sweep takes eleven minutes.

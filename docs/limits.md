@@ -142,8 +142,8 @@ what is left.** `allocate=None` is still the default and is still a branch that
 is never taken, so no recorded number moved when the instrument gained the
 ability — and on the shipped table the flag is inert anyway, because there is
 nothing to spend. What remains is the expensive half: turn `xp_base` up,
-re-baseline all 280 cells against `--allocate spread`, and expect to retune,
-including the two strict xfails. See
+re-baseline all 280 cells against `--allocate spread`, and expect to retune.
+There are no strict xfails left for it to invalidate. See
 [Balance](balance.md#the-instrument-can-spend-now-the-dial-is-still-at-zero).
 
 Setting `xp_base` back to 0 is the rollback, and it is the state it ships in.

@@ -270,7 +270,17 @@ class Autoplay:
                 continue
 
             a, b = trap.segment(tick)
-            return hazards.escape_from(a, b, hero.pos)
+            away = hazards.escape_from(a, b, hero.pos)
+
+            # The shortest way out is not always a way out. `place` refuses a
+            # trap with a wall against it, so there is always an open side --
+            # but the *nearer* side can still be the closed one, and a policy
+            # that walks into stone and holds there is worse than one that
+            # stood in the fire.
+            tile = world.level.tile
+            if path_is_clear(hero.pos, hero.pos + away * tile * 1.5, world.is_solid, tile):
+                return away
+            return -away
         return None
 
     def _toward(self, world, hero: Entity, point: Vec2) -> Vec2:

@@ -208,6 +208,13 @@ UNTUNED_STAGES = {
 }
 ```
 
+**Both dictionaries are empty today**, and the entry above is what one looked
+like — the Magician, whose two cells stood for long enough to accumulate four
+recorded dead ends before the fifth attempt closed them. The comment block above
+them in `test_playthrough.py` is kept as the record of that, which is the shape
+this section is really arguing for: the value was never the marker, it was the
+reason string growing a paragraph every time somebody tried something.
+
 Three properties make this work:
 
 - **`strict=True` is the whole point.** A non-strict xfail that starts passing
@@ -215,10 +222,12 @@ Three properties make this work:
   suite goes red and somebody has to decide: was it fixed, or did the test rot?
 - **The reason string is the documentation**, and it appears in every run's short
   summary. It says what has been *ruled out*, not just that something is wrong.
-- **The count is the gate.** "Exactly *two* xfails, the same two" is the
-  acceptance criterion for any change to this repo. A new one appearing is as much
-  a failure as a regression, and it catches the class of change that breaks
-  something without breaking an assertion.
+- **The count is the gate.** "Exactly *N* xfails, the same N" is the acceptance
+  criterion for any change to this repo, and **N is zero today**. A new one
+  appearing is as much a failure as a regression, and it catches the class of
+  change that breaks something without breaking an assertion. Zero is the
+  strongest version of the gate rather than the end of it: with nothing on the
+  list, any xfail at all is a new one.
 
 > [!NOTE]
 > **It was three until the campaign doubled, and the third one was removed by
@@ -250,31 +259,45 @@ shipped with the second fault and cost an afternoon of tuning the wrong dial.
 It is inside the assertion message, so Python only evaluates it when the
 assertion has already failed — the hundreds of passing cells pay nothing.
 
-### The two currently recorded
+### None currently recorded
 
 | Test | Why |
 | --- | --- |
-| `test_every_stage_is_clearable_by_every_class[magician-stage12]` | clears The Terraces on 2/3 seeds — open balance work |
-| `test_every_class_can_finish_the_campaign[magician]` | completes 1/3 runs, dying on stage 12 both times |
+| — | — |
 
-Both are the Magician, both are in acts I–IV, and neither moved when the
-campaign doubled — the second half cannot help a class that dies on stage 12.
+The list was these two until the Magician was fixed:
 
-> [!WARNING]
-> **Both are strict, so both fail as `XPASS` the day levelling is switched on.**
-> A hero holding nineteen levels' worth of points may well clear The Terraces,
-> and a cell recorded as unclearable that starts clearing is a *failure* under
-> this policy, not a quiet win. That is the policy working — the entry is a
-> record of a fight nobody fixed, and the fix arriving by way of a global power
+| Test | Why it was there |
+| --- | --- |
+| `test_every_stage_is_clearable_by_every_class[magician-stage12]` | cleared The Terraces on 2/3 seeds |
+| `test_every_class_can_finish_the_campaign[magician]` | completed 1/3 runs, dying on stage 12 |
+
+Both were the Magician and both were in acts I–IV. Neither moved when the
+campaign doubled — the second half cannot help a class that dies on stage 12 —
+and neither moved for any of the four dials tried on damage, health and
+commitment. What closed them was two numbers nobody had looked at: the bolt's
+`projectile_speed` and `projectile_radius`. **The bolt was missing**, at a hit
+rate near half against the Archer's two thirds, and every dial tried before it
+was downstream of a shot that connects. See
+[Balance](balance.md#the-magician-was-missing).
+
+> [!NOTE]
+> **This used to carry a warning that both entries would `XPASS` the day
+> levelling was switched on**, and that whoever raised `xp_base` would have to
+> re-decide them. That particular hazard is gone with the entries — but the
+> general one is not, and it is worth restating in the form that outlives them:
+> a cell recorded as unclearable that starts clearing is a *failure* under this
+> policy, not a quiet win, because the fix arriving by way of a global power
 > increase is exactly the thing worth being told about rather than absorbing.
-> Whoever raises `xp_base` re-baselines the grid and re-decides both entries in
-> the same commit. See
+> Whoever raises `xp_base` still re-baselines all 280 cells. See
 > [Balance](balance.md#the-instrument-can-spend-now-the-dial-is-still-at-zero).
 Extending the run made the diagnosis sharper, though: across six seeds the
-Magician's losses land on stages 12, 12, 17 and 18 and **raising its
-between-stage heal by half changes none of them**, which rules the run layer out
-and points back at commitment, exactly where `UNTUNED_STAGES` already says the
-fix has to come from.
+Magician's losses landed on stages 12, 12, 17 and 18 and **raising its
+between-stage heal by half changed none of them**, which ruled the run layer out.
+That was read at the time as pointing back at commitment. It pointed one step
+further than that — past commitment to whether the bolt arrived at all — and the
+heal finding is still correct and still the reason `heal_between_stages` is not
+the Magician's lever.
 
 ## Adding a test
 

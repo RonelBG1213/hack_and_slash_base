@@ -175,6 +175,43 @@ def test_two_traps_never_share_the_same_floor() -> None:
             assert first.a.distance_to(second.a) > first.radius, "two traps are stacked"
 
 
+def test_nothing_is_placed_where_a_body_could_not_step_off_it() -> None:
+    """A trap with a wall against it is a hazard with no answer.
+
+    The regression this pins: a blade track was laid along the row immediately
+    inside the top wall of stage 28. A body caught on it has open floor on one
+    side and stone on the other, so being shoved the wrong way pins it there
+    while the trap keeps firing -- and reading the tell perfectly does not help.
+
+    Found through the reference bot, which walked into that corner and spent
+    198,000 ticks pressed against the wall instead of the 2,500 the stage takes.
+    But the bot is only how it was noticed: the trap was unfair to a person
+    first.
+
+    Swept over every real arena rather than a fixture, because the whole point
+    is the shapes `tools/make_level.py` actually produces.
+    """
+    from hack_and_slash import config
+    from hack_and_slash.core import level_io
+
+    for floor in range(1, 41):
+        level = level_io.load(config.LEVELS_DIR / f"stage{floor}.json")
+        for trap in hazards.place(level, floor, random.Random(floor * 31)):
+            span = trap.b - trap.a
+            axis = None
+            if not span.is_zero():
+                axis = (1, 0) if abs(span.x) >= abs(span.y) else (0, 1)
+
+            # Every tile the trap occupies, walked end to end.
+            steps = max(1, int(span.length() // level.tile))
+            for i in range(steps + 1):
+                tx, ty = level.tile_at(trap.a + span * (i / steps))
+                assert hazards._can_step_off(level, tx, ty, axis), (
+                    f"stage {floor}: the {trap.kind.value} covers ({tx}, {ty}), "
+                    f"which has a wall on the side you would step to"
+                )
+
+
 def test_a_reward_room_is_somewhere_you_are_safe() -> None:
     """A trap in a fountain room would punish the player for taking the door the
     game offered them."""

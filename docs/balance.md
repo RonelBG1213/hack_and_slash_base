@@ -23,7 +23,7 @@ never gets tense (the heal is too large). Plus a ceiling.
 | | must | currently |
 | --- | --- | --- |
 | **every stage**, entered at full health | clear on every seed | 6/6 each, 4–39s |
-| **whole run**, health carrying | clear on every seed | 6/6, ~17min, worst finish 53/115 |
+| **whole run**, health carrying | clear on every seed | 6/6 with `hazards.enabled: false`; **see the trap finding below** |
 | **face-tank** — walks in swinging, never disengages | **lose every run** | 0/6, dying on stage 2–3 |
 
 The run figures are the Knight promoting into the Dark Knight, which is what a
@@ -40,9 +40,10 @@ Only the floor and the game is unfair; only the ceiling and there is no game.
 >
 > The class×stage grid **cannot see a room at all.** `_stage_world` builds a
 > `World` straight out of `campaign()[index]` at full health, and a reward room
-> is not in `campaign.stages` — so no cell of either grid can reach one, and the
-> two recorded xfails are per-stage cells and are untouched. That is a fact about
-> the code, not a result that was checked.
+> is not in `campaign.stages` — so no cell of either grid can reach one. That is
+> a fact about the code, not a result that was checked. (It was written when two
+> per-stage xfails were recorded; there are none now, and the argument is the
+> same one for every cell.)
 >
 > The **run-level** bracket and the **face-tank ceiling** do not see one either,
 > and that took a second attempt to arrange. `autoplay` walks from a room's
@@ -144,7 +145,7 @@ run — and the fix was not a global multiplier:
 | Knight | 56 | **84** | 1/6 runs at 56, 6/6 at 84 |
 | Rogue | 38 | **60** | 1/6 → 4/6; the two seeds still lost die in the first half |
 | Archer | 30 | 30 | 6/6 unchanged — fights at range and arrives healthy |
-| Magician | 46 | 46 | every loss is in acts I–IV; +50% moves none of them |
+| Magician | 46 | 46 | every loss was in acts I–IV; +50% moved none of them, which is what ruled the heal out as the Magician's lever |
 | Priest | 62 | 62 | both losses are on stage 20, same reason |
 
 Two lines needed half again as much and three needed nothing, which is the same
@@ -246,6 +247,67 @@ late it dies.*
 
 ---
 
+### The Magician was missing
+
+The hero-side twin of the finding above, and it closed the last two xfails in
+the project. The Magician failed stage 12 at 6/12 seeds and finished 1/6 runs
+where the other four classes cleared everything; four dials had been tried on it
+and recorded as dead ends.
+
+**All four were downstream of a shot that connects.** Damage per hit, health and
+recovery all assume the bolt arrives. Instrumenting a stage-12 fight is what
+showed it does not:
+
+| | Magician | Archer |
+| --- | --- | --- |
+| light attack | 15 damage | 9 damage |
+| shots per fight | 37–42 | 37–41 |
+| **damage landed per shot** | **6.1–8.1** | **5.5–6.9** |
+| implied hit rate | ~half | ~two thirds |
+| damage taken | 105+ on a loss | 44–64 |
+| fight length | 1355–1619 ticks | 1152–1438 |
+
+A bolt worth 15 landing 7 is a bolt that misses half the time. At
+`projectile_speed: 3.4` one crossing the 120px `RANGED_PREFERRED` holds is **35
+ticks in the air**; a grunt walks 1.05px per tick and has moved 37px — four body
+widths — by the time it arrives, and nothing in this game leads a target. The
+class was paying the game's longest commitment for a coin flip.
+
+The fix is two numbers in `data/weapons.json`, `projectile_speed` 3.4 → **4.0**
+and `projectile_radius` 3.5 → **4.5**, and deliberately nothing else. Damage and
+commitment *are* the class — *"the hardest single hit in the game, behind the
+longest commitment"* — and neither moves.
+
+| | base grid, 20 stages × 12 seeds | runs |
+| --- | --- | --- |
+| before | 228/240 — st12 6/12, st14 10/12, st16 9/12, st17 11/12 | 1/6 |
+| after | **240/240** | **6/6** |
+
+Sage and Wizard inherit `arcane_bolt` and were swept across all twenty late
+stages: unmoved. The other four classes cannot move — neither number is theirs —
+which is structural rather than a result that was checked.
+
+**Both numbers, and it is a plateau rather than a spike.** Speed alone leaves
+stage 12 at 10/12; radius alone leaves the run bracket at 2/3. Every combination
+from 4.5/4.0 upwards scores the same 72/72 on the six tight stages, and the step
+below it, 4.0/3.8, falls back to 70/72 — so there is room to tune, in one
+direction. 4.0 is the largest value that keeps the Archer's shortbow (4.2) the
+faster projectile, which is the Archer's half of the difference between the two
+ranged classes.
+
+Two cautions worth carrying:
+
+- **A four-stage screen lied.** The first candidate to score 48/48 on the tight
+  stages was `recovery 16 → 12, damage 15 → 13`; swept over all twenty it broke
+  stage 3 — the recorded arena — to 7/12 and took runs to 0/6. Lowering damage
+  raises commitment whenever it crosses an enemy's hit points: at 13 a bolt can
+  no longer one-shot a 14hp bowman or two-shot a 30hp charger.
+- **Fixes do not add.** `speed 1.80` and `proj 4.2` each fixed half the problem
+  and scored *worse* combined than either alone. The sim is deterministic and
+  chaotic; two changes are a third change, not a sum.
+
+---
+
 ## If the bracket breaks, reach for durability first
 
 An enemy that dies before its attack cadence lets it swing again applies no
@@ -263,40 +325,103 @@ In order:
 
 ---
 
-## What the bot cannot see
+## Traps, and the limit of the run-level bracket
 
-**The traps are measured, and the measurement is worth less than it looks.**
+**This is the most important finding in this file, and it is about the
+instrument rather than the game.**
 
-Everything in `data/rooms.json` is provably free — the bot walks past every
-fixture, so the recorded numbers mean exactly what they meant before rooms
-existed. The hazard layer is the opposite: a trap stands in the arena, on the
-floor the bot walks across, and the sweep was re-run with all of them live.
+The per-stage brackets hold with the hazard layer at full strength. All 280
+class x stage cells pass, `test_every_stage_can_be_cleared` passes on every
+seed, the ceiling still refuses the face-tank, and the two strict xfails are the
+same two. **No arena in the campaign becomes unclearable because of a trap.**
 
-So the grid *did* move, and it was re-tuned until it landed back on the same
-brackets. What that does not mean is that the traps are tuned.
+The two *run-level* brackets do not hold, and they cannot be made to:
 
-`autoplay.py` does not know traps exist. It has no term for one in `_toward`, it
-will not step around a lane, and it does not roll to answer a tell — it rolls
-when an *enemy* is about to land something. It walks straight down a burning
-corridor because the shortest line to the thing it is fighting goes through it.
+| `test_the_floor_a_skilled_hero_finishes_the_whole_run` | 6 fixed seeds, health carrying |
+| `test_every_class_can_finish_the_campaign[priest]` | 3 fixed seeds, one class |
 
-That is the same instrument error `data/entities.json` records against the
-flanker demon, and it points the same way both times: **the bot is the worst
-case.** A player who reads a tell takes a fraction of what the bot takes. So the
-sweep has exactly one honest use here —
+Thirteen configurations were swept looking for a setting that keeps them green.
+A representative slice, all against the same six seeds:
 
-> A bracket the bot still clears **with** traps is one a player certainly can.
+| bot | damage curve | knockback | runs won |
+| --- | --- | --- | --- |
+| blind | layer off | — | **6/6** |
+| blind | 1 flat | none | **6/6** |
+| blind | 1 flat | 2.2 | 5/6 |
+| blind | 3 @ 0.03/floor | none | 5/6 |
+| blind | 5 @ 0.06/floor | 2.2 | 3/6 |
+| steps off traps | 5 @ 0.06/floor | 2.2 | 4/6 |
+| steps off, fair placement | 5 @ 0.06/floor | 2.2 | 2/6 |
+| steps off, fair placement | 3 @ 0.03/floor | 2.2 | 2/6 |
+| steps off, fair placement | fewer traps, cap 2 | 2.2 | 4/6 |
 
-— and it cannot answer any of the questions that actually matter about a trap:
-whether the tell is long enough to react to, whether a blade's track is readable
-at 1x, whether the flame cycle is a decision or a wait, or whether being caught
-feels like a mistake you made rather than a tax you paid. Nothing in this
-project can answer those. They need hands on a keyboard.
+**Read the last four rows.** Halving the damage moved the score *down*. Halving
+the number of traps moved it *up* by less than making the placement fairer moved
+it down. The score does not track difficulty in any direction — and the only
+configuration that scores 6/6 is the one where a trap does one point of damage
+and does not move the hero at all, which is a trap layer that is not there.
 
-The honest reading of the current numbers is therefore: *the traps do not break
-the campaign for a hero who ignores them entirely.* That is a floor, deliberately
-set low, and the first person to actually play a late floor should expect to move
-`data/hazards.json` upward rather than down.
+### Why, and what it means
+
+A run is one deterministic trajectory through forty fights. The run-level
+bracket asks whether *that trajectory* survives, on six particular seeds. Any
+perturbation — a point of damage, a shove, a sidestep — sends the hero somewhere
+slightly different, and thirty-odd stages of deterministic combat amplify it
+until a seed that used to win loses, or the reverse.
+
+**This is not a new discovery; it is the fountain finding again, at full size.**
+`data/rooms.json` records it: a heal of 15% flipped a whole run from won to lost,
+and the *losing* run reached the stage it died on with more health than the
+surviving one. The project's answer then was to keep the reference bot from
+touching fixtures at all, which is why `autoplay._in_a_room` walks to a door and
+touches nothing.
+
+That answer is not available here. A trap is on the floor of the arena, and
+there is no version of "walk past it" that leaves the trajectory untouched. So:
+
+> **A fixed-seed, full-run pass/fail is the wrong instrument for anything that
+> changes where the hero stands.** It measures a trajectory, and it reports a
+> moved trajectory in the same units it reports a harder game.
+
+Two seeds dying at floor 20 — the act IV boss, a stage that carries **no traps
+at all** — is the cleanest evidence. Nothing about that fight changed. The hero
+arrived at it standing somewhere else.
+
+### What would actually settle it
+
+Not a tuning pass. Either the bracket becomes a *distribution* (win rate over
+thirty seeds, with a threshold) rather than six coin flips, or it keeps a fixed
+budget and accepts that any new mechanic re-baselines it. Both are real changes
+to the acceptance criterion and neither should be made to get a feature merged.
+
+Until then the honest summary of the hazard layer is:
+
+- every individual arena clears, with traps, at full strength — **measured**;
+- whether a forty-stage run with traps is *tuned* — **not measured, and not
+  measurable by this instrument**.
+
+### What the bot can and cannot see
+
+`autoplay` was taught to step off a trap (`_trap_underfoot`), and that change is
+inert when the layer is off — `world.traps` is empty, the branch returns on its
+first line, and `test_the_policy_is_untouched_when_the_layer_is_off` pins the
+hero's whole path to prove it. So the recorded campaign is measured by exactly
+the policy that recorded it.
+
+It is still a poor trap player: it looks half a second ahead, steps out by the
+shortest open route, and has no idea whether it is stepping into a second trap
+or into a brute. That is deliberate -- it is a floor under the measurement, not
+a ceiling. It cannot tell you whether a tell is long enough to read, whether a
+blade's track is legible at 1x, or whether being caught feels like a mistake you
+made. Those need hands on a keyboard.
+
+One thing it did earn: the bot walked into a blade laid along the row inside the
+top wall on stage 28 and spent 198,000 ticks pinned there instead of the 2,500
+the stage takes. That trap had open floor on one side and stone on the other, so
+being shoved the wrong way held it in place while the blade kept coming back.
+`hazards._can_step_off` now refuses that placement outright, and
+`test_nothing_is_placed_where_a_body_could_not_step_off_it` sweeps all forty
+arenas for it. **The bot is how it was found; it was unfair to a person first.**
 
 ## What is not measured
 
@@ -408,9 +533,9 @@ what keep this page true:
 re-baselined against a levelling hero, so every figure on this page remains a
 figure about `xp_base: 0`. Turning the dial up is the commit that invalidates
 them, and it should be taken with `--allocate spread` output in hand and the
-expectation of retuning — including of the two recorded xfails, which are strict
-and will fail as XPASS the moment a levelled hero clears a cell that is currently
-recorded as unclearable. See [Testing](testing.md#known-bad-cells).
+expectation of retuning. There are no recorded xfails left to be invalidated by
+it — the Magician's two came off — which removes a hazard rather than the work.
+See [Testing](testing.md#known-bad-cells).
 
 ## Known-bad cells are recorded, not deleted
 

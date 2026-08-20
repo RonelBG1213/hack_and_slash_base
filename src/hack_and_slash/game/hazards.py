@@ -401,6 +401,38 @@ def _is_clear(tile: tuple[int, int], clearances) -> bool:
     return True
 
 
+#: Which way a body has to be able to step to get off a trap. A lane is escaped
+#: across, never along, so only the two tiles perpendicular to it count -- and
+#: **both** of them, because one open side means the safe side is decided for
+#: you and the other one is a wall.
+#:
+#: `None` is a spike, which has no axis and is escaped in any direction, so all
+#: four are required.
+_ESCAPE_NEIGHBOURS = {
+    (1, 0): ((0, -1), (0, 1)),
+    (0, 1): ((-1, 0), (1, 0)),
+    None: ((0, -1), (0, 1), (-1, 0), (1, 0)),
+}
+
+
+def _can_step_off(level: Level, tx: int, ty: int, axis) -> bool:
+    """Whether a body standing on this tile has somewhere to go.
+
+    **This is a fairness rule, not a tidiness one.** A flame lane laid along the
+    row immediately inside the top wall has open floor on one side and stone on
+    the other, so a hero caught in it can be shoved into the wall and held there
+    while it fires. That is not a hazard with a hard answer; it is a hazard with
+    no answer, and no amount of reading the tell helps.
+
+    It surfaced through the reference bot, which walked into exactly that corner
+    on stage 28 and spent 198,000 ticks pressed against the wall -- but the bot
+    is only how it was *found*. The trap was unfair before anybody measured it.
+    """
+    return all(
+        level.is_walkable(tx + dx, ty + dy) for dx, dy in _ESCAPE_NEIGHBOURS[axis]
+    )
+
+
 def _open_tiles(level: Level, clearances) -> list[tuple[int, int]]:
     """Every walkable tile a trap could stand on, in reading order.
 
@@ -412,7 +444,9 @@ def _open_tiles(level: Level, clearances) -> list[tuple[int, int]]:
         (x, y)
         for y in range(level.height)
         for x in range(level.width)
-        if level.is_walkable(x, y) and _is_clear((x, y), clearances)
+        if level.is_walkable(x, y)
+        and _is_clear((x, y), clearances)
+        and _can_step_off(level, x, y, None)
     ]
 
 
@@ -435,11 +469,15 @@ def _flame_mounts(level: Level, spec: Kind, clearances) -> list[tuple[Vec2, Vec2
             if not level.is_solid(wall_x, y):
                 continue  # not a wall -- nothing to bolt a nozzle to
 
-            # How far the lane gets before something solid stops it.
+            # How far the lane gets before something solid stops it. Every tile
+            # of it has to be one a body could step off, or the jet is a wall
+            # that burns -- see `_can_step_off`.
             reached = 0
             for step in range(1, spec.reach + 1):
                 x = wall_x + inward * step
                 if level.is_solid(x, y) or not _is_clear((x, y), clearances):
+                    break
+                if not _can_step_off(level, x, y, (1, 0)):
                     break
                 reached = step
 
@@ -473,6 +511,7 @@ def _blade_tracks(level: Level, spec: Kind, clearances) -> list[tuple[Vec2, Vec2
         return all(
             level.is_walkable(x + dx * i, y + dy * i)
             and _is_clear((x + dx * i, y + dy * i), clearances)
+            and _can_step_off(level, x + dx * i, y + dy * i, (dx, dy))
             for i in range(span)
         )
 

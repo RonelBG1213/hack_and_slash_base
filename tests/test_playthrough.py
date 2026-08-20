@@ -393,26 +393,42 @@ OTHER_CLASSES = [c.id for c in BESTIARY.hero_classes if c.id != DEFAULT_HERO]
 #: the suite red until its entry is deleted -- the list cannot rot into a
 #: permanent excuse.
 #:
-#: **The Magician is a trap and the fix is not known.** It is the only class
-#: with any entry here; the other four clear all twenty stages on every seed.
-#: Four things have been measured and ruled out, recorded so nobody spends the
-#: afternoon again:
+#: **Empty, and it was not empty for a long time.** Both entries were the
+#: Magician -- stage 12 at 2/3 seeds and the campaign at 1/3 -- and the history
+#: below is kept because four of the five things tried did not work, and the
+#: fifth is only obviously right once the other four are on the page.
+#:
+#: What was ruled out, each measured rather than argued:
 #:
 #:   * *The stages are not at fault.* Knight, Rogue, Archer and Priest each
-#:     clear all twenty stages 6/6. Stage 12 is not a bad stage -- it is the
-#:     sharpest instance of a class-wide weakness that also shows on 14 and 17.
+#:     clear all twenty stages 6/6. Stage 12 was not a bad stage -- it was the
+#:     sharpest instance of a class-wide weakness that also showed on 14 and 17.
 #:   * *arcane_bolt recovery 16 -> 13 relocates the failure.* It cleans up
 #:     stages 12 and 14, then breaks 9 (6/6 -> 4/6) and craters 17 (5/6 ->
-#:     1/6), and takes the campaign from 1/3 to 0/3 on these seeds.
+#:     1/6), and takes the campaign from 1/3 to 0/3 on these seeds. Re-measured
+#:     at twelve seeds while fixing this: 9/12 and 4/12. The finding held.
 #:   * *It is not fragility.* Health 105 -> 120 moves the stage 12 win rate not
-#:     at all -- 3/8 either way -- it only leaves more health unspent. The class
-#:     dies because it cannot act, not because it cannot take a hit.
+#:     at all -- 3/8 either way -- it only leaves more health unspent.
 #:   * *It is not damage.* 15 -> 17 finishes with half the health left, because
-#:     a longer trade is a worse trade.
+#:     a longer trade is a worse trade. Downwards is worse still and for a
+#:     reason worth keeping: at 13 a bolt can no longer one-shot a 14hp bowman
+#:     or two-shot a 30hp charger, so *fewer* damage is *more* commitment, and
+#:     stage 3 -- the recorded arena -- drops to 7/12.
 #:
-#: So the dial is commitment, and no single dial tried so far moves it without
-#: breaking something else. `tools/balance.py --class magician --full` and a
-#: joint sweep is where a real fix comes from.
+#: **The bolt was missing, and none of the four could see that.** Damage per
+#: hit, health and recovery are all downstream of a shot that connects. At
+#: `projectile_speed: 3.4` a bolt crossing the 120px `RANGED_PREFERRED` holds is
+#: 35 ticks in the air, a grunt covers 37px in that time, and nothing in this
+#: game leads a target. Measured on stage 12: 37-42 shots a fight landing
+#: 6.1-8.1 damage each off a bolt worth 15 -- a hit rate near half, against the
+#: Archer's 5.5-6.9 off an arrow worth 9 -- and 105+ damage taken doing it.
+#:
+#: The fix is `projectile_speed` 3.4 -> 4.0 and `projectile_radius` 3.5 -> 4.5
+#: in `data/weapons.json`, and **nothing else**. Damage and commitment are the
+#: class -- "the hardest single hit in the game, behind the longest commitment"
+#: -- and both are untouched. Base grid 228/240 -> 240/240 at twelve seeds,
+#: runs 1/6 -> 6/6, Sage and Wizard unmoved across all twenty late stages. The
+#: other four classes cannot move: neither number is theirs.
 #:
 #: One thing that looked like a cause and is not: `autoplay._threat_range` had
 #: a dead `min()` that never clamped the charge threat range, so the bot answers
@@ -420,20 +436,10 @@ OTHER_CLASSES = [c.id for c in BESTIARY.hero_classes if c.id != DEFAULT_HERO]
 #: costs the Archer a run and the Magician two more stages -- so the cap was
 #: deleted rather than honoured and the behaviour is unchanged. See that
 #: function for the numbers; nothing here shifted as a result.
-UNTUNED_STAGES = {
-    ("magician", 11): (
-        "the Magician clears stage 12 (The Terraces) on 2/3 seeds. Open balance "
-        "work -- see UNTUNED_STAGES for what has been ruled out"
-    ),
-}
+UNTUNED_STAGES: dict[tuple[str, int], str] = {}
 
 #: Run-level failures that follow from the above. Same rules, same list.
-UNTUNED_CAMPAIGNS = {
-    "magician": (
-        "the Magician completes 1/3 runs, dying on stage 12 both times. Open "
-        "balance work -- see UNTUNED_STAGES for what has been ruled out"
-    ),
-}
+UNTUNED_CAMPAIGNS: dict[str, str] = {}
 
 
 def _marks(reason: str | None):

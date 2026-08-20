@@ -265,11 +265,13 @@ The eight act enders carry no traps. Not because a boss with traps is a bad idea
 positional, so shoving one around should be a decision rather than a side effect
 of switching this layer on. `bosses` is that switch.
 
-Unlike the fixtures above, **every number here is on a measured tick** and the
-campaign was re-swept with the traps in it. Read
-[Balance](balance.md#what-the-bot-cannot-see) before trusting the sweep further
-than it goes: the reference bot does not know traps exist and will walk straight
-down a flame lane.
+Unlike the fixtures above, **every number here is on a measured tick.** The
+campaign was re-swept with the traps in it and every individual arena still
+clears — all 280 class x stage cells, on every seed, at full strength.
+
+What that sweep cannot tell you is whether a whole forty-stage *run* with traps
+is tuned, and the reason is worth reading before trusting any number here:
+[Traps, and the limit of the run-level bracket](balance.md#traps-and-the-limit-of-the-run-level-bracket).
 
 A reward room is **not a fight, and the code knows the difference by being told**
 rather than by noticing there is nothing in it. `Level.kind` says what a room is

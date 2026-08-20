@@ -30,8 +30,12 @@ re-measuring a single cell of the balance grid.
 Three stages are deliberately left un-re-faced, and each for its own reason:
 **1** is the tutorial and teaches one creature, **3** (The Gauntlet) is the one
 arena whose numbers are on record and the only thing the balance harness can be
-checked against, and **12** (The Terraces) is the open xfail -- nothing should
+checked against, and **12** (The Terraces) was the open xfail -- nothing should
 change within sight of a cell that is under investigation.
+
+That xfail is closed now, and 12 is being left alone anyway. It is the arena the
+Magician fix was measured on, so it is a second fixed point of the same kind
+`3` is: re-facing it would cost the only before-and-after the fix has.
 
 > The demon does not appear here, and that is the interesting part. It was
 > drafted one-per-stage across acts VII-VIII, standing where a revenant already
