@@ -22,7 +22,7 @@ import pytest
 
 from hack_and_slash import config
 from hack_and_slash.core import campaign_io
-from hack_and_slash.core.level import RoomKind
+from hack_and_slash.core.level import Direction, RoomKind
 from hack_and_slash.game import jobs, rooms, save
 from hack_and_slash.game.attributes import NEUTRAL, Attributes
 from hack_and_slash.game.run import Run
@@ -88,8 +88,10 @@ def test_a_restored_reward_room_is_the_room_that_was_saved() -> None:
     run = mid_run()
     run.room = RoomKind.SHRINE
     run.next_room = RoomKind.TREASURE
+    run.entered_from = Direction.SOUTH
+    run.next_entrance = Direction.EAST
     run.world = World(
-        rooms.chamber(run.room, rooms.offer(run.seed, run.index)),
+        rooms.chamber(run.room, rooms.offer(run.seed, run.index), run.entered_from),
         BESTIARY,
         seed=Run._room_seed(run.seed, run.index),
         carry_hp=run.world.hero.hp,
@@ -103,8 +105,38 @@ def test_a_restored_reward_room_is_the_room_that_was_saved() -> None:
     assert restored.world.level.kind is run.world.level.kind
     assert bodies(restored) == bodies(run)
     assert [
-        (p.kind, p.pos.x, p.pos.y, p.leads_to) for p in restored.world.props
-    ] == [(p.kind, p.pos.x, p.pos.y, p.leads_to) for p in run.world.props]
+        (p.kind, p.pos.x, p.pos.y, p.leads_to, p.wall) for p in restored.world.props
+    ] == [(p.kind, p.pos.x, p.pos.y, p.leads_to, p.wall) for p in run.world.props]
+
+
+def test_a_restored_room_stands_at_the_wall_it_was_entered_by() -> None:
+    """The doors are derivable from the seed; the wall they stand on is not.
+
+    Which door the player walked through is the one thing in a room that was a
+    *choice*, and it decides where the next three stand. A save that dropped it
+    would rebuild the same three destinations on three different walls -- and
+    would put the hero at the west entrance of a room they had walked into from
+    the north. Plausible, and wrong.
+    """
+    for wall in Direction:
+        run = mid_run()
+        run.room = RoomKind.FOUNTAIN
+        run.entered_from = wall
+        run.next_entrance = rooms.OPPOSITE[wall]
+        run.world = World(
+            rooms.chamber(run.room, rooms.offer(run.seed, run.index), wall),
+            BESTIARY,
+            seed=Run._room_seed(run.seed, run.index),
+            carry_hp=run.world.hero.hp,
+            hero_type_id=run.hero_type_id,
+        )
+
+        restored = save.restore(save.snapshot(run), campaign(), BESTIARY)
+
+        assert restored.entered_from is wall
+        assert restored.next_entrance is rooms.OPPOSITE[wall]
+        assert restored.world.level.hero_spawn == run.world.level.hero_spawn
+        assert {d.wall for d in restored.world.level.doors} == set(Direction) - {wall}
 
 
 def test_a_save_taken_in_an_arena_says_so() -> None:
@@ -125,6 +157,32 @@ def test_a_save_naming_a_room_that_is_an_arena_is_refused() -> None:
 
     with pytest.raises(save.SaveFormatError, match="standing in a boss"):
         save.restore(payload, campaign(), BESTIARY)
+
+
+def test_a_save_naming_a_wall_that_does_not_exist_is_refused() -> None:
+    payload = save.snapshot(mid_run())
+    payload["entered_from"] = "northeast"
+
+    with pytest.raises(save.SaveFormatError, match="wall that does not exist"):
+        save.restore(payload, campaign(), BESTIARY)
+
+
+def test_a_save_with_no_wall_at_all_falls_back_to_the_first_entrance() -> None:
+    """Absent and wrong are different, and only one of them is a corrupt save.
+
+    A run that has not been through a door yet has no wall to record, and the
+    room after arena one is entered from the west by definition -- so an empty
+    value falls back where a misspelt one is refused. That is the opposite of
+    what `_room` does with an empty string, and deliberately so: there, empty
+    means "standing in an arena" and is a fact, not a gap.
+    """
+    payload = save.snapshot(mid_run())
+    payload["entered_from"] = ""
+    payload["next_entrance"] = ""
+
+    restored = save.restore(payload, campaign(), BESTIARY)
+    assert restored.entered_from is rooms.FIRST_ENTRANCE
+    assert restored.next_entrance is rooms.FIRST_ENTRANCE
 
 
 def test_a_restored_run_draws_the_same_dice() -> None:

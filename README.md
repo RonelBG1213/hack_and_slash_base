@@ -109,10 +109,15 @@ Also on the Settings screen, in short form — this table is the long one.
 | Enter / Space / Esc | Dismiss the stall, the shrine or the character sheet |
 
 Between two stages is a **reward room** you walk through: a fountain, a shop
-stall, a shrine or a chest, and three doors on the far wall naming what the room
-after the *next* stage will hold. Walk onto the fixture to use it and through a
-door to leave. There is no key for any of that — a room is somewhere you are,
-not a menu.
+stall, a shrine or a chest, and three doors naming what the room after the
+*next* stage will hold. Walk onto the fixture to use it and through a door to
+leave. There is no key for any of that — a room is somewhere you are, not a menu.
+
+**The doors stand on the three walls you did not come in through**, and the one
+you take is the wall the next room puts you at — so the rooms lie end to end and
+a run is a path rather than a series of identical boxes. **The stall is on every
+fifth floor and on no other**, so you always know how far the next chance to
+spend is.
 
 **The stall and the shrine roll.** A stall shows three pieces of gear drawn from
 a pool of twelve, each at its own rarity, priced against the floor and gone when

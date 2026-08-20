@@ -64,7 +64,13 @@ depth term — not before.
 **Reached by walking up to a stall in a shop room, and by nothing else.** It used
 to open on every one of the thirty-nine transitions; it is now one of the four
 things a reward room can hold, and getting to one means having chosen that door
-two rooms earlier. See [the rooms between](design.md#the-rooms-between).
+two rooms earlier.
+
+**And a stall is only offered on every fifth floor** — 5, 10, 15 and so on, seven
+of them in a forty-stage run. Off those floors it is not rare, it is unreachable.
+So the question is no longer "will a shop come up" but "am I holding enough to be
+worth the door when floor 20 arrives". See
+[the rooms between](design.md#the-rooms-between).
 
 Opening it pauses the game, which nothing else in a run does — the between-stage
 banner deliberately does not. Spending gold is a decision, and a decision taken

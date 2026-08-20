@@ -142,6 +142,11 @@ class Autoplay:
         `rooms.json` note both point at that -- so a bot that never uses one
         measures the same campaign it has always measured.
 
+        That test sweeps all four walls a room can be entered through, because
+        the room turns with the run: a layout clearing the fixture from the west
+        and shaving it from the north would go on being measured for exactly as
+        long as nobody walked out of a south door.
+
         The cost is stated in `docs/limits.md` and is real: **nothing measures
         whether any room is worth walking into.** That is the same hole the shop
         has had since the loot layer landed, and it is the same trade -- an
@@ -157,10 +162,12 @@ class Autoplay:
             # limit, which is the right way to find out about it.
             return NOTHING
 
-        # Door 0, and its position is load-bearing rather than arbitrary: the
-        # chamber puts the fixture on the middle row, so a hero walking to the
-        # *middle* door would pass straight over it and use it by accident. The
-        # top and bottom doors clear it by 32px against a 14.5px reach.
+        # Door 0, and its position is load-bearing rather than arbitrary. Every
+        # opening in a chamber is in line with the fixture, so the door straight
+        # ahead of the hero is the one whose approach runs over it and uses it by
+        # accident -- `rooms.DOOR_ORDER` puts that one second and leaves left and
+        # right at 0 and 2. Door 0 clears the fixture by 45.5px at worst, over
+        # all four walls the room can be entered by, against a reach under 15px.
         return Intent(move=self._toward(world, hero, doors[0].pos))
 
     def _toward(self, world, hero: Entity, point: Vec2) -> Vec2:

@@ -485,7 +485,8 @@ The one that is not tested, and the one that will cost you an afternoon:
 ## Adding a room kind
 
 A **reward room** is what sits between two arenas: one fixture at the centre,
-three doors on the far wall. Four kinds ship, and a fifth is four edits.
+three doors on the three walls the hero did not come in through. Four kinds ship,
+and a fifth is four edits.
 
 1. **`RoomKind` and `PropKind`** in `core/level.py`. A room kind is what a run is
    standing in; a prop kind is the thing in the middle of it, and they have
@@ -513,11 +514,17 @@ names is a sprite nothing can reach, and both fail there rather than in the
 middle of somebody's run.
 
 > [!WARNING]
-> **Three doors are drawn from the reward kinds without replacement.** Adding a
-> fifth kind does not just add a fifth thing — it changes the odds of every
-> existing one and widens the gap a shop can be away for. `data/rooms.json`
-> carries `guarantee_shop_within` for exactly that reason, and the test that
-> pins it sweeps twelve seeds over all thirty-nine transitions.
+> **Three doors are drawn without replacement from the kinds that are not the
+> stall.** Adding a fifth kind does not just add a fifth thing — it changes the
+> odds of every existing one, and it changes the `doors` bound, which is
+> `len(ORDINARY_KINDS)` rather than `len(REWARD_KINDS)` because the stall is on a
+> schedule rather than in the draw.
+>
+> The stall itself is unaffected by any of that: `stall_every` in
+> `data/rooms.json` puts one on every fifth floor and on no other, and
+> `test_a_stall_stands_on_every_fifth_floor_and_on_no_other` sweeps twelve seeds
+> over all thirty-nine transitions asserting both halves — that one is offered on
+> those floors, and that one is *not* on the rest.
 
 > [!WARNING]
 > **A reward room has nothing in it to kill, so the only way out is a door — and

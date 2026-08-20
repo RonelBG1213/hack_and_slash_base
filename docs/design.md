@@ -175,8 +175,9 @@ Gold carries too — see [Loot and gold](loot.md).
 ### The rooms between
 
 Between two arenas is a **reward room**: a small walkable box with one fixture at
-its centre and three doors on the far wall. Four kinds, and they are the whole of
-what a run gives you that is not a fight.
+its centre and three doors, standing on the three walls you did *not* come in
+through. Four kinds, and they are the whole of what a run gives you that is not a
+fight.
 
 | Room | What is in it |
 | --- | --- |
@@ -193,19 +194,32 @@ who did not know how that fight would go. The room after stage one was never
 chosen at all, so it is fixed — a fountain, which is also where the mechanic
 explains itself.
 
-There are four kinds and three doors, so **exactly one kind is missing from every
-offer**. A room is not a menu of everything; it is a menu of everything but one.
+**The door you take is the wall you arrive by.** Walk out of the east side of one
+room and you are standing at the west side of the next, choosing between its
+north, east and south. That is the whole of why a room is somewhere you have been
+rather than a screen that repeats: the three walls in front of you are three
+walls *because of the last decision you made*.
 
 > [!IMPORTANT]
-> **The shop no longer opens on its own.** It used to open on every one of the
-> thirty-nine transitions, whether or not there was anything to decide, and the
-> pause was the same length whether you spent four hundred gold or nothing. What
-> changed is not the shop — the panel, the shelves and the keys are untouched —
-> but that reaching it is now something you gave up a fountain for.
+> **The shop no longer opens on its own, and it is now on a timetable.** It used
+> to open on every one of the thirty-nine transitions, whether or not there was
+> anything to decide, and the pause was the same length whether you spent four
+> hundred gold or nothing. What changed is not the shop — the panel, the shelves
+> and the keys are untouched — but that reaching it is somewhere you go.
 >
-> Gold that can never be spent is not a reward, so the offer carries one
-> guarantee: if no room in the last four transitions put a stall on its wall, the
-> next one does.
+> **The stall stands on every fifth floor and on no other**: floors 5, 10, 15 and
+> so on, seven of them in a run. Off those floors a stall is not rare, it is
+> unreachable — which is what makes one a landmark rather than a fixture.
+>
+> Gold that can never be spent is not a reward, and a schedule promises that
+> better than the guarantee it replaced ("a stall within four transitions if none
+> turned up"). You are not trusting one to appear; you know where it is.
+
+The cost, and it is real: there are three kinds outside the stall and three doors,
+so off a stall floor every room offers all three and only their order moves. The
+old tension — four kinds, three doors, one always missing — now survives only on
+the stall floors. Two doors would bring it back everywhere, and `doors` in
+[`data/rooms.json`](../data/rooms.json) is the one number that would do it.
 
 None of the four fixtures is measured, and that is a decision rather than an
 oversight — the reference bot walks past all of them, which is what keeps every

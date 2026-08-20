@@ -213,6 +213,12 @@ door, not whether the shrine's point beats either. `--allocate` does not change
 this: a policy for spending a point is not a route that walks onto the plinth
 handing them out.
 
+`stall_every: 5` is the newest number in that list and the one with most riding
+on it. Seven stalls across a run that banks ~24,500 g, against 2,060 g to max the
+permanents, presses on the late-run surplus from the opposite side to the Elixir
+— and the bot neither buys nor cares which door it takes, so nothing here can say
+whether seven is generous or mean.
+
 That is deliberate and it was arrived at the hard way. The first draft had the
 bot use the fixture. Three of the four rewards were inert to it regardless — it
 never buys at a stall, never spends a shrine's point, never spends a chest's gold
@@ -224,6 +230,11 @@ reported the amplification in the same units it reports difficulty.
 
 So the bot walks past, and rooms cost the measurement nothing at all — the
 run-level figures are byte-identical to the ones recorded before rooms existed.
+That survived the rooms learning to turn: the doors moved onto three different
+walls and door 0 became the left one rather than the top, and the figures did not
+move, because "walk at door 0 and touch nothing" is a claim about the fixture and
+not about the wall it stands on. The clearance it rests on is now swept over all
+four approaches, worst case 45.5 px against a reach under 15.
 The hole this leaves is the same one the shop has: an instrument that spends is
 an instrument that has stopped being a fixed reference, and this project has
 chosen the fixed reference every time it has been asked.

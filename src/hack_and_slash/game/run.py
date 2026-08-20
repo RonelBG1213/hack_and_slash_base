@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from ..core.campaign import Campaign
-from ..core.level import PropKind, RoomKind
+from ..core.level import Direction, PropKind, RoomKind
 from . import jobs, progression, rooms
 from .attributes import NEUTRAL, Attributes
 from .entities import DEFAULT_HERO, Bestiary, EntityType
@@ -137,6 +137,19 @@ class Run:
     #: through. Empty before the first choice has been made, which is why the
     #: room after arena 1 is fixed -- see `rooms.first_room`.
     next_room: RoomKind | None = None
+
+    #: Which wall the room being stood in was entered through, and which wall
+    #: the next one will be. The same pair as `room` / `next_room` one layer
+    #: down: a room's doors stand on the three walls that are not this one, so
+    #: rebuilding the room the player is standing in needs the wall as much as
+    #: it needs the kind.
+    #:
+    #: Both default to `rooms.FIRST_ENTRANCE`, which is where the entrance has
+    #: always been -- so the room after arena one is entered exactly as it was
+    #: before rooms could turn, and a `Run` built by hand needs to say nothing
+    #: about walls.
+    entered_from: Direction = rooms.FIRST_ENTRANCE
+    next_entrance: Direction = rooms.FIRST_ENTRANCE
 
     #: Fixtures used during the tick just taken. Drained like `just_advanced`:
     #: the run reads it once to pay out and never reads it back, and the scene
@@ -379,6 +392,7 @@ class Run:
         """
         kind = self.next_room or rooms.table().first_room
         doors = rooms.offer(self.seed, self.index)
+        self.entered_from = self.next_entrance
 
         hero = self.world.hero
         carried = hero.hp if hero is not None else 1
@@ -388,7 +402,7 @@ class Run:
 
         self.room = kind
         self.world = World(
-            rooms.chamber(kind, doors),
+            rooms.chamber(kind, doors, self.entered_from),
             self.bestiary,
             seed=self._room_seed(self.seed, self.index),
             carry_hp=carried,
@@ -404,8 +418,17 @@ class Run:
         The door's destination is remembered rather than acted on: it names the
         room *after* the arena about to begin, which is what makes the choice a
         choice rather than a menu -- it is taken two rooms before it is paid.
+
+        Which *wall* it stood on is remembered for the same distance and pays off
+        sooner: the next room is entered through the far side of the door just
+        taken, so the rooms lie end to end and a run reads as a path.
         """
         self.next_room = self.world.exit_to or rooms.table().first_room
+        # `exit_wall` is empty only for a room built by hand -- every one
+        # `rooms.chamber` stamps carries it -- so the fallback is the entrance
+        # every run has always started from.
+        wall = self.world.exit_wall
+        self.next_entrance = rooms.OPPOSITE[wall] if wall else rooms.FIRST_ENTRANCE
         self.room = None
         self._advance()
 

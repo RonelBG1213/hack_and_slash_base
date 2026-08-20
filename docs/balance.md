@@ -51,6 +51,20 @@ Only the floor and the game is unfair; only the ceiling and there is no game.
 > byte-identical to the ones recorded before rooms existed: 24900 / 24664 for the
 > Knight line, cell for cell.
 >
+> **That survived the rooms learning to turn**, which is the strongest evidence
+> the arrangement is structural. The doors moved from a column on the far wall
+> onto the three walls the hero did not enter through, and door 0 went from the
+> top door to the left one. Gold, win counts, median health and worst health are
+> identical on every row and every cell.
+>
+> **One column moved, and it is worth knowing which.** The whole-run *duration*
+> dropped by exactly 73 game-seconds — 1171 → 1098 skilled, and the same −73 on
+> every reaction-ladder row including the one that wins a different number of
+> runs. A constant rather than a spread, which is what tells you it is not a
+> difficulty change: door 0 is now 10.8 tiles from the entrance where it was
+> 20.4, so the bot's walk through each of the thirty-nine rooms roughly halved.
+> A sweep compared against an older one will show it, and it means nothing.
+>
 > **The first draft had the bot use the fixture, and it cost a whole run.** Three
 > of the four rewards were inert to it anyway — it never buys, never allocates a
 > point, never spends gold — so the fountain was the only one that did anything.
@@ -274,7 +288,8 @@ spends a level is nobody.
 
 **Every number in `data/rooms.json`.** The bot walks past all four fixtures, so
 nothing measures whether a fountain is worth 15% or 40%, whether a chest pays
-enough to matter, or whether the shrine's point is the best thing on any wall.
+enough to matter, whether the shrine's point is the best thing on any wall, or
+whether a stall every fifth floor is the right spacing.
 That is the price of the run-level bracket still being a fixed reference, and it
 is the same trade as the shop: an instrument that spends is an instrument that
 has stopped being one. See

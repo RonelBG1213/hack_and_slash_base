@@ -200,6 +200,13 @@ internal state for `game/save.py` to fail to record. A loaded run is offered the
 same three doors it was offered before it was put down, and the save file says
 nothing about doors at all.
 
+The one thing about a room the save *does* write down is **which wall it was
+entered through**, and the exception is the rule restated rather than a hole in
+it: the doors are a function of the seed, but which one the player walked through
+is a choice, and it decides where the next three stand. A pure function cannot
+recover a decision. So `entered_from` and `next_entrance` sit beside `room` and
+`next_room` in the payload, for the same reason and in the same shape.
+
 > [!IMPORTANT]
 > This split is the load-bearing guarantee of the whole loot layer.
 >

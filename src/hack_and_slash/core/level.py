@@ -32,6 +32,24 @@ HERO_MARK = "@"
 WALKABLE = frozenset({FLOOR, HERO_MARK})
 
 
+class Direction(str, Enum):
+    """One of the four walls of a reward room.
+
+    A `str` Enum for the same reason `RoomKind` is one: it goes into the save
+    file as the word it is, so a save can be read by eye and a typo in one is
+    refused by the constructor rather than turning into a plausible default.
+
+    Screen axes, not compass ones -- `NORTH` is the top of the grid, where `y`
+    is smallest. There is no other kind of north in this project and saying so
+    once here is cheaper than a comment at every call site that subtracts.
+    """
+
+    NORTH = "north"
+    SOUTH = "south"
+    EAST = "east"
+    WEST = "west"
+
+
 class RoomKind(str, Enum):
     """What a room is for.
 
@@ -103,11 +121,19 @@ class Prop(NamedTuple):
     doing two jobs is refused elsewhere in this project for good reason, but this
     is not that: a door with no destination and a fountain with one are both
     nonsense, and `Level.problems()` says so rather than letting either stand.
+
+    `wall` is the same shape a second time, and it is what lets the run layer
+    know which way the hero left. It is stamped by `rooms.chamber` and is empty
+    in the template on disk -- the file records four openings and nothing about
+    which wall each is on, because that is derived from where they sit. So it is
+    deliberately *not* round-tripped by `core.level_io`: a field the file does
+    not carry cannot be edited into disagreeing with the geometry.
     """
 
     kind: PropKind
     tile: tuple[int, int]
     leads_to: RoomKind | None = None
+    wall: Direction | None = None
 
     @property
     def is_door(self) -> bool:

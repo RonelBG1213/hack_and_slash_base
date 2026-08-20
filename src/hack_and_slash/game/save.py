@@ -41,7 +41,7 @@ from pathlib import Path
 
 from .. import config
 from ..core.campaign import Campaign
-from ..core.level import RoomKind
+from ..core.level import Direction, RoomKind
 from . import rooms
 from .attributes import NEUTRAL, Attributes
 from .entities import DEFAULT_HERO, Bestiary
@@ -51,7 +51,7 @@ from .world import Purse, World
 #: Bumped when the shape of a snapshot changes in a way an older reader would
 #: get wrong. A save from another version is refused rather than guessed at --
 #: see `restore`, and the note there about what this does and does not catch.
-SAVE_VERSION = 2
+SAVE_VERSION = 3
 
 
 class SaveFormatError(Exception):
@@ -101,6 +101,13 @@ def snapshot(run: Run) -> dict:
         # thing the module docstring above refuses.
         "room": run.room.value if run.room else "",
         "next_room": run.next_room.value if run.next_room else "",
+        # ...and which wall each is entered by. Not derivable from anything else
+        # in this payload: the doors are a pure function of the seed and the
+        # index, but *which* of them was walked through is a choice the player
+        # made, and it decides where the three doors of the room being restored
+        # are standing. Restoring without it rebuilds a different room.
+        "entered_from": run.entered_from.value,
+        "next_entrance": run.next_entrance.value,
     }
 
 
@@ -161,7 +168,12 @@ def restore(payload: dict, campaign: Campaign, bestiary: Bestiary) -> Run:
     gold_find = float(payload.get("gold_find", 0.0))
 
     room = _room(payload.get("room"))
-    level = rooms.chamber(room, rooms.offer(seed, index)) if room else campaign[index]
+    entered_from = _direction(payload.get("entered_from"))
+    level = (
+        rooms.chamber(room, rooms.offer(seed, index), entered_from)
+        if room
+        else campaign[index]
+    )
 
     world = World(
         level,
@@ -202,6 +214,8 @@ def restore(payload: dict, campaign: Campaign, bestiary: Bestiary) -> Run:
         purchases={str(k): int(v) for k, v in (payload.get("purchases") or {}).items()},
         room=room,
         next_room=_room(payload.get("next_room")),
+        entered_from=entered_from,
+        next_entrance=_direction(payload.get("next_entrance")),
         job_id=job_id,
     )
 
@@ -223,6 +237,24 @@ def _room(raw) -> RoomKind | None:
     if kind not in rooms.REWARD_PROP:
         raise SaveFormatError(f"the save says the hero is standing in a {kind.value}")
     return kind
+
+
+def _direction(raw) -> Direction:
+    """One of the four walls, or the entrance every run starts from.
+
+    Empty falls back rather than being refused, which is the opposite of what
+    `_room` does above and is right for the opposite reason: a missing wall is
+    what a run that has not been through a door yet looks like, and the room
+    after arena one is entered from the west by definition. A value that *names*
+    something and names it wrong is still refused -- that is a corrupt save, not
+    an absent choice.
+    """
+    if not raw:
+        return rooms.FIRST_ENTRANCE
+    try:
+        return Direction(str(raw))
+    except ValueError:
+        raise SaveFormatError(f"the save names a wall that does not exist: {raw!r}") from None
 
 
 def _attributes(raw) -> Attributes:

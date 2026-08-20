@@ -2,11 +2,18 @@
 
     python tools/make_rooms.py
 
-One file, `levels/rooms/chamber.json`, and `game/rooms.py` stamps a kind and a
-set of doors onto a copy of it. One template rather than four because the four
-reward rooms differ by exactly one prop -- the fountain, stall, shrine or chest
-at the centre -- and four near-identical files would be four places for a layout
-fix to be applied three times.
+One file, `levels/rooms/chamber.json`, and `game/rooms.py` stamps a kind, an
+entrance and a set of doors onto a copy of it. One template rather than sixteen
+because the reward rooms differ by exactly two things -- the fountain, stall,
+shrine or chest at the centre, and which of the four openings the hero arrived
+through -- and sixteen near-identical files would be sixteen places for a layout
+fix to be applied fifteen times.
+
+**The room turns with the run.** The four openings are the midpoints of the four
+walls. Whichever one the hero came in by is the entrance; the other three carry
+the doors, ordered left, forward and right. So walking out of the east side of
+one room puts you at the west side of the next, and a run reads as a path
+through a place rather than as a corridor of identical boxes.
 
 **The layout is not decorative, and the rule behind it is the same one
 `make_level.py` spends a page on: nothing in this game paths around walls.**
@@ -44,6 +51,7 @@ from hack_and_slash.core import level_io  # noqa: E402
 from hack_and_slash.core.level import (  # noqa: E402
     FLOOR,
     WALL,
+    Direction,
     Level,
     Prop,
     PropKind,
@@ -53,34 +61,55 @@ from hack_and_slash.core.level import (  # noqa: E402
 WIDTH = 26
 HEIGHT = 14
 
-#: West side, on the middle row. Where the arena's exit puts you.
-ENTRANCE = (3, 7)
-
 #: Dead centre, so it is the first thing on the screen and on the line to every
 #: door. A reward you can miss by walking past it is a reward that gets missed.
 REWARD_TILE = (13, 7)
 
-#: East wall, spread over the full height so three doors are three places rather
-#: than one cluster. Inside the wall ring, never on it -- a door tile has to be
-#: walkable or the hero stops a pixel short of the thing that ends the room.
+#: One opening at the middle of each wall. Three of them are doors and the
+#: fourth is where the hero comes in -- **which is which is not this file's
+#: business**. `rooms.chamber` is handed the wall the last door led out through,
+#: stands the hero in that opening and stamps doors on the other three, so one
+#: template serves all four approaches and the room turns with the run rather
+#: than repeating.
 #:
-#: Order is content: top, middle, bottom is the order `rooms.offer` fills and the
-#: order the reference bot reads, and door 0 is the one it always takes.
+#: Inside the wall ring, never on it -- an opening has to be walkable or the hero
+#: stops a pixel short of the thing that ends the room.
 #:
-#: **The middle door is in line with the fixture, and door 0 is not.** That is
-#: load-bearing rather than incidental: the reference bot walks straight at the
-#: door it takes and must not use what is in the middle on the way, or it starts
-#: measuring its own perturbation -- see `Autoplay._in_a_room`. The top and
-#: bottom doors clear the centre by 32px against a 14.5px reach.
-#: `test_the_reference_bot_walks_past_every_fixture` fails if this moves.
-DOOR_TILES = ((23, 3), (23, 7), (23, 11))
+#: The geometry that matters is that **every opening is collinear with the
+#: fixture along one axis**: north and south share its column, east and west
+#: share its row. So whichever wall you arrive through, the door straight ahead
+#: of you is the one that runs over the fixture and the two beside you are not --
+#: which is the property `Autoplay._in_a_room` rests on, arrived at here rather
+#: than assumed there. `rooms.DOOR_ORDER` puts that door second, so door 0 is
+#: never it, and door 0 clears the fixture by 45.5px at worst against a 14.5px
+#: reach. `test_the_reference_bot_walks_past_every_fixture` sweeps all four.
+OPENING_TILES = {
+    Direction.NORTH: (13, 3),
+    Direction.SOUTH: (13, 10),
+    Direction.EAST: (22, 7),
+    Direction.WEST: (3, 7),
+}
+
+#: Where the template alone puts the hero. Not an opening: a scaffold that spawns
+#: the hero on a door is a room that ends on the tick it starts, and the file is
+#: meant to be a level that could be played rather than one that merely loads.
+#: `rooms.chamber` replaces this with the opening the run arrived through.
+TEMPLATE_SPAWN = (7, 7)
 
 #: What the template carries before `rooms.chamber` stamps it. Any valid
 #: combination will do -- the point is that the file on disk is a level that
 #: loads, validates and could be played, rather than a fragment with holes in
 #: it that only means something once code has filled them in.
+#:
+#: Four doors here where a real room has three, because the template carries the
+#: openings and the room chooses. Its own `hero_spawn` is not one of them.
 TEMPLATE_KIND = RoomKind.TREASURE
-TEMPLATE_DOORS = (RoomKind.FOUNTAIN, RoomKind.SHOP, RoomKind.SHRINE)
+TEMPLATE_DOORS = (
+    RoomKind.FOUNTAIN,
+    RoomKind.SHOP,
+    RoomKind.SHRINE,
+    RoomKind.FOUNTAIN,
+)
 
 
 def build() -> Level:
@@ -95,13 +124,13 @@ def build() -> Level:
     props = [Prop(PropKind.CHEST, REWARD_TILE)]
     props += [
         Prop(PropKind.DOOR, tile, leads_to=kind)
-        for tile, kind in zip(DOOR_TILES, TEMPLATE_DOORS)
+        for tile, kind in zip(OPENING_TILES.values(), TEMPLATE_DOORS)
     ]
 
     return Level(
         name="Chamber",
         rows=tuple("".join(row) for row in grid),
-        hero_spawn=ENTRANCE,
+        hero_spawn=TEMPLATE_SPAWN,
         enemy_spawns=(),
         tile=config.TILE,
         kind=TEMPLATE_KIND,

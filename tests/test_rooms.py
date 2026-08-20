@@ -24,6 +24,7 @@ from hack_and_slash.core.campaign import Campaign
 from hack_and_slash.core.level import (
     REWARD_KINDS,
     REWARD_PROP,
+    Direction,
     EnemySpawn,
     Level,
     PropKind,
@@ -80,45 +81,95 @@ def test_every_offer_is_distinct_reward_kinds_only() -> None:
                 assert kind in REWARD_KINDS, f"{kind.value} is not something a door opens on"
 
 
-def test_a_shop_is_never_further_away_than_the_guarantee_promises() -> None:
-    """Gold that can never be spent is not a reward.
+def test_a_stall_stands_on_every_fifth_floor_and_on_no_other() -> None:
+    """The stall is on a schedule, not in the draw.
 
-    Three doors drawn from four kinds can go a long way without a shop, and a
-    run that banks twenty-four thousand gold and is never offered a shelf has
-    quietly lost a whole system rather than had a run of bad luck.
+    Gold that can never be spent is not a reward, and this is the whole of what
+    now promises it can be -- there is no draw-and-guarantee pair behind it, so
+    if the schedule does not hold there is nothing else to catch it.
+
+    Both halves are asserted, and the second is the one that is easy to lose: a
+    gate that lets a stall through on floor 6 is a gate that is not doing
+    anything, and a suite that only checked floor 5 would pass anyway.
     """
-    window = TABLE.guarantee_shop_within
+    every = TABLE.stall_every
+    assert every > 1, "the shipped table has the stall on every floor; this proves nothing"
+
     for seed in SEEDS:
-        gap = 0
         for index in TRANSITIONS:
-            if RoomKind.SHOP in rooms.offer(seed, index):
-                gap = 0
-                continue
-            gap += 1
-            assert gap < window, (
-                f"seed {seed}: no shop offered for {gap} transitions ending at "
-                f"room {index}, and the guarantee is {window}"
+            floor = rooms.floor_of(index)
+            offered = RoomKind.SHOP in rooms.offer(seed, index)
+            assert offered == (floor % every == 0), (
+                f"seed {seed}, floor {floor}: "
+                f"{'a stall was offered' if offered else 'no stall was offered'}, "
+                f"and the schedule is every {every} floors"
             )
 
 
-def test_the_guarantee_does_not_land_on_the_door_the_bot_takes() -> None:
-    """A forced shop goes on the last door, never the first.
+def test_the_stall_stands_on_the_floors_the_schedule_names() -> None:
+    """The schedule spelled out, so a change to it has to be a decision.
 
-    `autoplay` takes door 0 every time. A guarantee that wrote to door 0 would
-    make the reference bot's experience of this feature mostly "shop", which is
-    the one reward it is structurally incapable of using -- so the measurement
-    would drift towards meaninglessness without a single number changing.
+    `floor_of` is `index + 2` and that is the kind of arithmetic that looks
+    wrong when it is right -- the doors in a room name the room after the *next*
+    arena. Pinning the actual floor numbers means an off-by-one in it fails here
+    rather than moving every stall in the game by one floor and passing.
     """
-    forced = 0
+    floors = [rooms.floor_of(i) for i in TRANSITIONS if rooms.is_stall_floor(i)]
+    assert floors == [5, 10, 15, 20, 25, 30, 35, 40]
+
+
+def test_the_stall_does_not_land_on_the_door_the_bot_takes() -> None:
+    """The stall goes on the last door, never the first.
+
+    `autoplay` takes door 0 every time. A stall on door 0 would make the
+    reference bot's experience of this feature "shop" on every stall floor,
+    which is the one reward it is structurally incapable of using -- so the
+    measurement would drift towards meaninglessness without a number changing.
+    """
+    stalls = 0
     for seed in SEEDS:
         for index in TRANSITIONS:
-            raw = rooms._raw_offer(seed, index)
-            live = rooms.offer(seed, index)
-            if raw == live:
+            kinds = rooms.offer(seed, index)
+            if RoomKind.SHOP not in kinds:
                 continue
-            forced += 1
-            assert live[0] == raw[0], f"seed {seed}, room {index}: the guarantee moved door 0"
-    assert forced, "the guarantee never fired, so this proves nothing"
+            stalls += 1
+            assert kinds[-1] is RoomKind.SHOP, f"seed {seed}, room {index}: {kinds}"
+            assert kinds[0] is not RoomKind.SHOP
+    assert stalls, "no stall was ever offered, so this proves nothing"
+
+
+def test_off_a_stall_floor_a_shop_is_not_reachable_at_all() -> None:
+    """The gate is a gate, not a weighting.
+
+    "Rarer" and "impossible" are different promises, and the second is the one
+    that makes a stall floor a landmark worth planning a run around.
+    """
+    for seed in SEEDS:
+        for index in TRANSITIONS:
+            if rooms.is_stall_floor(index):
+                continue
+            assert RoomKind.SHOP not in rooms.offer(seed, index)
+
+
+def test_a_stall_every_of_zero_puts_no_stall_anywhere(tmp_path, monkeypatch) -> None:
+    """The documented rollback, exercised rather than described.
+
+    The one number above `stall.offers: 0`: that one leaves the stall standing
+    with nothing rolled on its shelf, this one means no door anywhere leads to
+    one at all.
+    """
+    payload = json.loads(rooms.config.ROOMS_DATA.read_text(encoding="utf-8"))
+    payload["stall_every"] = 0
+    path = tmp_path / "rooms.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    monkeypatch.setattr(rooms, "_TABLE", rooms.Table.load(path))
+    try:
+        assert not any(rooms.is_stall_floor(index) for index in TRANSITIONS)
+        for index in TRANSITIONS:
+            assert RoomKind.SHOP not in rooms.offer(0, index)
+    finally:
+        rooms.reset_cache()
 
 
 # --- the stream --------------------------------------------------------------
@@ -132,7 +183,7 @@ def _damage_over_a_fight(offers_between_swings: bool) -> list[int]:
             # Every kind of draw this layer makes, interleaved as hard as it can
             # be with the fight -- which is far more than a real run ever does.
             rooms.offer(tick, tick)
-            rooms._raw_offer(tick * 3, tick)
+            rooms.offer(tick * 3, tick)
         taken.append(roll_damage(weapon, world.rng))
     return taken
 
@@ -160,33 +211,118 @@ def test_the_map_stream_does_not_disturb_the_damage_stream() -> None:
 
 
 # --- building one ------------------------------------------------------------
+@pytest.mark.parametrize("wall", list(Direction))
 @pytest.mark.parametrize("kind", REWARD_KINDS)
-def test_a_chamber_of_every_kind_is_playable(kind: RoomKind) -> None:
+def test_a_chamber_of_every_kind_is_playable(kind: RoomKind, wall: Direction) -> None:
     """`problems()` is the only thing between a broken room and a stranded run.
 
     In an arena a blocked lane costs a slow fight. Here there is nothing to
     kill, so a wall between the entrance and a door is a run that cannot
     continue at all -- which is why the straight-line check is in `Level` rather
     than trusted to `tools/make_rooms.py`.
+
+    Every kind against every approach, because there are now sixteen rooms where
+    there was one and a template that only works from three sides is a run that
+    strands the first player to walk out of a north door.
     """
-    level = rooms.chamber(kind, rooms.offer(0, 0))
+    level = rooms.chamber(kind, rooms.offer(0, 0), wall)
     assert level.problems() == []
     assert level.kind is kind
     assert not level.is_fight
 
 
+@pytest.mark.parametrize("wall", list(Direction))
 @pytest.mark.parametrize("kind", REWARD_KINDS)
-def test_a_chamber_holds_the_one_prop_its_kind_names(kind: RoomKind) -> None:
-    level = rooms.chamber(kind, rooms.offer(0, 0))
+def test_a_chamber_holds_the_one_prop_its_kind_names(
+    kind: RoomKind, wall: Direction
+) -> None:
+    level = rooms.chamber(kind, rooms.offer(0, 0), wall)
     assert level.reward is not None
     assert level.reward.kind is REWARD_PROP[kind]
     assert len(level.doors) == TABLE.doors
 
 
-def test_the_doors_lead_where_the_offer_said() -> None:
+@pytest.mark.parametrize("wall", list(Direction))
+def test_the_doors_lead_where_the_offer_said(wall: Direction) -> None:
     offered = rooms.offer(3, 11)
-    level = rooms.chamber(RoomKind.SHRINE, offered)
+    level = rooms.chamber(RoomKind.SHRINE, offered, wall)
     assert tuple(door.leads_to for door in level.doors) == offered
+
+
+# --- which wall each door stands on ------------------------------------------
+@pytest.mark.parametrize("wall", list(Direction))
+def test_a_room_puts_its_doors_on_the_three_walls_it_was_not_entered_through(
+    wall: Direction,
+) -> None:
+    """The shape of the whole feature, asserted from the outside.
+
+    The hero stands in the opening on the wall it arrived through, and that
+    opening carries no door -- walking back out the way you came is not one of
+    the three choices.
+    """
+    level = rooms.chamber(RoomKind.FOUNTAIN, rooms.offer(0, 0), wall)
+    walls = rooms.openings(rooms.template())
+
+    assert level.hero_spawn == walls[wall]
+    assert {door.wall for door in level.doors} == set(Direction) - {wall}
+    assert {door.tile for door in level.doors} == set(walls.values()) - {walls[wall]}
+    assert level.hero_spawn not in {door.tile for door in level.doors}
+
+
+@pytest.mark.parametrize("wall", list(Direction))
+def test_the_middle_door_is_the_one_straight_ahead(wall: Direction) -> None:
+    """Left, forward, right -- and forward is the one in line with the fixture.
+
+    This is `DOOR_ORDER`'s whole job and the reason it is a written-out table
+    rather than arithmetic. Every opening shares an axis with the centre, so the
+    door straight ahead of the hero is the one whose approach runs over the
+    fixture. Putting it at index 1 is what keeps it away from index 0, which is
+    the only door anything mechanical ever takes.
+    """
+    level = rooms.chamber(RoomKind.FOUNTAIN, rooms.offer(0, 0), wall)
+    reward = level.reward
+    assert reward is not None
+
+    def in_line_from_the_door(tile: tuple[int, int]) -> bool:
+        """Whether walking from the spawn to `tile` runs over the fixture.
+
+        Every opening shares an axis with the centre -- that is the layout. What
+        separates forward from the other two is sharing it with the *spawn* as
+        well, which is what puts the fixture on the walk rather than merely
+        somewhere on the same row.
+        """
+        spawn = level.hero_spawn
+        return (spawn[0] == reward.tile[0] == tile[0]) or (
+            spawn[1] == reward.tile[1] == tile[1]
+        )
+
+    left, forward, right = level.doors
+    assert forward.wall is rooms.OPPOSITE[wall]
+    assert forward.wall is rooms.DOOR_ORDER[rooms.OPPOSITE[wall]][1]
+
+    assert in_line_from_the_door(forward.tile), "the middle door is not the one ahead"
+    for door in (left, right):
+        assert not in_line_from_the_door(door.tile), f"the {door.wall} door is in line"
+
+
+def test_every_opening_is_on_a_wall_of_its_own() -> None:
+    """The template has to serve all four approaches or it serves none.
+
+    Refused at load rather than left to raise a `KeyError` out of the middle of
+    somebody's twentieth stage.
+    """
+    walls = rooms.openings(rooms.template())
+    assert set(walls) == set(Direction)
+    assert len(set(walls.values())) == len(Direction)
+
+
+def test_a_template_missing_an_opening_is_refused() -> None:
+    from dataclasses import replace as _replace
+
+    base = rooms.template()
+    crippled = _replace(base, props=base.props[:-1])
+    with pytest.raises(ValueError, match="openings"):
+        rooms._check_template(crippled)
 
 
 def test_every_reward_kind_can_be_built_and_has_somewhere_to_stand() -> None:
@@ -203,8 +339,12 @@ def test_every_reward_kind_can_be_built_and_has_somewhere_to_stand() -> None:
 
 
 # --- what the sim does with one ----------------------------------------------
-def a_chamber(kind: RoomKind = RoomKind.FOUNTAIN, seed: int = 1) -> World:
-    return World(rooms.chamber(kind, rooms.offer(0, 0)), BESTIARY, seed=seed)
+def a_chamber(
+    kind: RoomKind = RoomKind.FOUNTAIN,
+    seed: int = 1,
+    wall: Direction = rooms.FIRST_ENTRANCE,
+) -> World:
+    return World(rooms.chamber(kind, rooms.offer(0, 0), wall), BESTIARY, seed=seed)
 
 
 def test_a_reward_room_is_not_cleared_by_having_nothing_in_it() -> None:
@@ -346,6 +486,48 @@ def test_a_door_chooses_the_room_two_rooms_away() -> None:
     assert run.room is chosen
 
 
+def test_the_first_room_is_entered_from_the_wall_it_always_was() -> None:
+    """A run that has been through no door has no wall to be turned by.
+
+    West, which is where the entrance stood before rooms could turn -- so the
+    room after arena one is the room it has always been, and every recorded
+    number that walked through it walked through the same geometry.
+    """
+    run = a_run()
+    clear_arena(run)
+
+    assert run.entered_from is rooms.FIRST_ENTRANCE
+    assert rooms.FIRST_ENTRANCE is Direction.WEST
+    walls = rooms.openings(rooms.template())
+    assert run.world.level.hero_spawn == walls[Direction.WEST]
+
+
+@pytest.mark.parametrize("door", range(3))
+def test_the_door_you_take_becomes_the_wall_you_arrive_through(door: int) -> None:
+    """The rooms lie end to end: you come in at the far side of the door taken.
+
+    This is the whole of what makes a sequence of rooms a path rather than a
+    series of identical boxes, and it is the one piece of the feature that
+    spans three modules -- `chamber` stamps the wall, `sim` reports it, the run
+    turns it around. A break anywhere in that chain shows up here.
+    """
+    run = a_run()
+    clear_arena(run)
+
+    took = run.world.props[1 + door].wall
+    assert took is not None, "a door stamped by chamber() has to know its wall"
+
+    touch(run, 1 + door)
+    assert run.next_entrance is rooms.OPPOSITE[took]
+
+    clear_arena(run)
+    assert run.entered_from is rooms.OPPOSITE[took]
+
+    walls = rooms.openings(rooms.template())
+    assert run.world.level.hero_spawn == walls[rooms.OPPOSITE[took]]
+    assert {d.wall for d in run.world.level.doors} == set(Direction) - {run.entered_from}
+
+
 def test_a_fountain_heals_by_what_the_table_says() -> None:
     run = a_run()
     run.world.hero.hp = 10
@@ -472,21 +654,62 @@ def test_the_reference_bot_walks_past_every_fixture() -> None:
     difficulty.
 
     The geometry is load-bearing and that is why this is a test rather than a
-    comment: the chamber puts its fixture on the middle row, so a bot walking to
-    the *middle* door would pass straight over it. Move a door and this fails.
+    comment: every opening is in line with the fixture, so a bot walking to the
+    door *straight ahead* would pass right over it. `DOOR_ORDER` puts that door
+    second and the bot takes door 0. Move a door and this fails.
+
+    Swept over all four approaches, because the room turns with the run now --
+    a layout that clears the fixture from the west and shaves it from the north
+    would be measured for as long as nobody walked out of a south door.
     """
     from hack_and_slash.game.autoplay import autoplay
-    from hack_and_slash.game.intent import NOTHING
 
-    world = a_chamber(RoomKind.FOUNTAIN)
-    for _ in range(600):
-        if world.outcome is not Outcome.RUNNING:
-            break
-        step(world, autoplay(world))
+    for wall in Direction:
+        world = a_chamber(RoomKind.FOUNTAIN, wall=wall)
+        for _ in range(600):
+            if world.outcome is not Outcome.RUNNING:
+                break
+            step(world, autoplay(world))
 
-    assert world.outcome is Outcome.WON, "the bot never found its way out of a room"
-    assert world.taken == [], "the bot used a fixture on its way through"
-    assert not any(prop.taken for prop in world.props if not prop.is_door)
+        assert world.outcome is Outcome.WON, f"entered from {wall.value}: never got out"
+        assert world.taken == [], f"entered from {wall.value}: used a fixture on the way"
+        assert not any(prop.taken for prop in world.props if not prop.is_door)
+
+
+def test_the_door_the_bot_takes_clears_the_fixture_by_a_margin() -> None:
+    """The clearance itself, in pixels, rather than only its consequence.
+
+    The test above walks the bot and asserts nothing was touched, which is the
+    thing that matters -- but it passes just as well at one pixel of margin as
+    at fifty, and a layout tweak that quietly cut it to two would keep passing
+    until a hero radius changed somewhere else entirely.
+
+    So: the perpendicular distance from the fixture to the straight line the bot
+    walks, against the reach it would use one at. Worst case is the east
+    approach and it is over 45px against a reach under 15.
+    """
+    from hack_and_slash.game.sim import TOUCH_RADIUS
+
+    margins = {}
+    for wall in Direction:
+        world = a_chamber(RoomKind.FOUNTAIN, wall=wall)
+        hero = world.hero
+        fixture = next(prop for prop in world.props if not prop.is_door)
+        door = next(prop for prop in world.props if prop.is_door)
+
+        along = (door.pos - hero.pos).normalized()
+        to_fixture = fixture.pos - hero.pos
+        # The component of `to_fixture` perpendicular to the walk -- how far the
+        # bot passes the fixture by at its closest.
+        margins[wall] = abs(to_fixture.x * along.y - to_fixture.y * along.x)
+
+        reach = hero.radius + TOUCH_RADIUS
+        assert margins[wall] > reach * 3, (
+            f"entered from {wall.value}: the bot passes the fixture by only "
+            f"{margins[wall]:.1f}px against a {reach:.1f}px reach"
+        )
+
+    assert min(margins.values()) > 45.0, margins
 
 
 def test_a_fountain_that_heals_nothing_is_rooms_switched_off() -> None:
@@ -529,6 +752,7 @@ def test_the_shipped_table_matches_the_file_on_disk() -> None:
     payload = json.loads(rooms.config.ROOMS_DATA.read_text(encoding="utf-8"))
     assert payload["enabled"] is True, "the shipped game has rooms in it"
     assert payload["doors"] == len(rooms.offer(0, 0))
+    assert payload["stall_every"] == TABLE.stall_every
     assert RoomKind(payload["first_room"]) in REWARD_KINDS
 
 
@@ -539,11 +763,42 @@ def test_more_doors_than_kinds_is_refused_at_load(tmp_path) -> None:
     twentieth stage.
     """
     payload = json.loads(rooms.config.ROOMS_DATA.read_text(encoding="utf-8"))
-    payload["doors"] = len(REWARD_KINDS) + 1
+    payload["doors"] = len(rooms.ORDINARY_KINDS) + 1
     broken = tmp_path / "rooms.json"
     broken.write_text(json.dumps(payload), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="reward kinds"):
+    with pytest.raises(ValueError, match="outside the stall"):
+        rooms.Table.load(broken)
+
+
+def test_the_bound_on_doors_is_the_kinds_outside_the_stall(tmp_path) -> None:
+    """One fewer than there are reward kinds, and the reason is the schedule.
+
+    The stall is not in the draw, so off a stall floor there are only the
+    ordinary kinds to fill a wall from. A bound of `len(REWARD_KINDS)` would
+    accept a table that builds a room on floor 5 and raises on floor 6, which is
+    the worst shape this check could take -- valid until the player is four
+    stages in.
+    """
+    assert len(rooms.ORDINARY_KINDS) == len(REWARD_KINDS) - 1
+    assert RoomKind.SHOP not in rooms.ORDINARY_KINDS
+
+    payload = json.loads(rooms.config.ROOMS_DATA.read_text(encoding="utf-8"))
+    payload["doors"] = len(rooms.ORDINARY_KINDS)
+    payload["stall_every"] = 0
+    fine = tmp_path / "rooms.json"
+    fine.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert rooms.Table.load(fine).doors == len(rooms.ORDINARY_KINDS)
+
+
+def test_a_negative_stall_every_is_refused_at_load(tmp_path) -> None:
+    payload = json.loads(rooms.config.ROOMS_DATA.read_text(encoding="utf-8"))
+    payload["stall_every"] = -1
+    broken = tmp_path / "rooms.json"
+    broken.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="not a count of floors"):
         rooms.Table.load(broken)
 
 

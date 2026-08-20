@@ -469,6 +469,7 @@ def _touch_props(world: World, hero: Entity | None) -> None:
 
         if prop.is_door:
             world.exit_to = prop.leads_to
+            world.exit_wall = prop.wall
             world.outcome = Outcome.WON
             # Returned rather than broken out of, and the difference is real:
             # two doors within one reach would otherwise both be marked taken

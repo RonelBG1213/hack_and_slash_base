@@ -29,7 +29,7 @@ import random
 from dataclasses import dataclass
 from enum import Enum
 
-from ..core.level import Level, PropKind, RoomKind
+from ..core.level import Direction, Level, PropKind, RoomKind
 from ..core.spatial import SpatialHash
 from ..core.vec2 import Vec2
 from .attributes import NEUTRAL, Attributes
@@ -90,6 +90,13 @@ class RoomProp:
     kind: PropKind
     pos: Vec2
     leads_to: RoomKind | None = None
+
+    #: Which wall this door stands against, or None for a fixture. Carried down
+    #: from `Prop` untouched: the sim reports it upward on the tick the door is
+    #: walked into, and the run turns it into the wall the *next* room is
+    #: entered by. `sim` never asks what it means.
+    wall: Direction | None = None
+
     taken: bool = False
 
     @property
@@ -189,7 +196,7 @@ class World:
         #: on every tick the balance grid has ever measured, `_touch_props`
         #: returns on a falsy test before it reads anything.
         self.props: list[RoomProp] = [
-            RoomProp(prop.kind, level.tile_center(*prop.tile), prop.leads_to)
+            RoomProp(prop.kind, level.tile_center(*prop.tile), prop.leads_to, prop.wall)
             for prop in level.props
         ]
 
@@ -205,6 +212,13 @@ class World:
         #: makes "an arena was cleared" and "a door was taken" two answers the
         #: run layer can tell apart.
         self.exit_to: RoomKind | None = None
+
+        #: Which wall that door stood against, set on the same tick and for the
+        #: same reason. `exit_to` says what the next room *holds*; this says
+        #: which way the hero left it, and `Run._leave_room` turns that into the
+        #: wall the next room is entered through -- so the rooms lie end to end
+        #: and a run is a path rather than a series of identical boxes.
+        self.exit_wall: Direction | None = None
 
         #: Experience this stage's kills have paid out, banked by `Run._bank`
         #: on the way out. On the world rather than on the run for the same

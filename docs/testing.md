@@ -135,6 +135,24 @@ claim: `sim._touch_props` opens on `if not world.props: return`, so the phase is
 free on every tick the grid has ever measured — and that is only true while no
 stage file grows a prop, which is asserted rather than assumed.
 
+### `test_rooms.py::test_the_door_the_bot_takes_clears_the_fixture_by_a_margin`
+
+`test_the_reference_bot_walks_past_every_fixture` walks the bot through a room and
+asserts it touched nothing, which is the thing that actually matters — the fountain
+that a first draft let it use flipped a whole run from won to lost, and the losing
+run reached the stage it died on with *more* health than the surviving one.
+
+But that test passes identically at one pixel of margin and at fifty. So its
+companion measures the margin: the perpendicular distance from the fixture to the
+straight line the bot walks, in pixels, against the reach it would use one at. Over
+all four walls a room can be entered through, because the room turns with the run
+now — a layout that clears the fixture from the west and shaves it from the north
+would go on being measured for as long as nobody walked out of a south door.
+
+Worst case is the east approach at 45.5px against a reach under 15. **When a
+behavioural test and a numeric one disagree about how close something came, the
+numeric one is the one that catches the change before it breaks anything.**
+
 ### `test_save.py::test_a_restored_stage_is_the_stage_that_was_saved`
 
 A save records a campaign index, a seed and a health; the arena is **rebuilt**
