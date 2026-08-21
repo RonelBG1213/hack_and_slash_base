@@ -2,14 +2,14 @@
 
 A top-down twin-stick arena brawler. Move with WASD, aim with the mouse, click to
 swing, roll to survive. Four attacks per class — light, neutral, heavy, ultimate —
-on ascending cooldowns. Pick one of five classes, then forty stages in eight acts,
+on ascending cooldowns. Pick one of five classes, then fifty stages in ten acts,
 each ending on a boss. Your wounds come with you from one stage to the next, so
 how well you clear stage one is still with you at the end of the act — and so does
 your gold. Between two stages is a room — a fountain, a shop, a shrine or a
 chest — and three doors deciding what the next one will be.
 
 Clear stage twenty and your class forks in two. There is no declining it, and
-there are twenty more stages on the other side.
+there are thirty more stages on the other side.
 
 Python 3.14 + pygame-ce. No engine, no build step.
 

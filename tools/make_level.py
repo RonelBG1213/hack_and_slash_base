@@ -1,4 +1,4 @@
-"""Writes the forty stages and the campaign manifest that orders them.
+"""Writes the fifty stages and the campaign manifest that orders them.
 
 There is no level editor -- that was a deliberate scope cut. This script is the
 compromise: a stage is described here as a size, a list of pillar rectangles and
@@ -8,7 +8,7 @@ the file directly without coming back here.
 
     python tools/make_level.py
 
-**The shape.** Eight acts of five. Each act opens by introducing one enemy,
+**The shape.** Ten acts of five. Each act opens by introducing one enemy,
 spends three stages combining it with what came before, and ends on a boss:
 
     act I    1-4   grunt, bowman, charger, rat        5   The Warden
@@ -20,6 +20,8 @@ spends three stages combining it with what came before, and ends on a boss:
     act VI   26-29 the stalker                       30   The Gaoler
     act VII  31-34 both of them, together            35   The Choir
     act VIII 36-39 everything at once                40   The Hollow King
+    act IX   41-44 the same roster, half the floor   45   The Regent
+    act X    46-49 everything at once, again         50   The Unmade
 
 **Faces and creatures are different things.** Much of what a stage lists is a
 `variant_of` -- a goblin is a grunt, an orc is a brute, a beastman is a revenant,
@@ -65,10 +67,21 @@ sentiment: stage 3 ("The Gauntlet") is the arena the whole game was first tuned
 around and the only stage whose numbers are on record, which makes it the one
 thing the balance harness can be checked against. Moving it would throw that
 reference away. Stages 1-20 are likewise untouched by the extension, so every
-number recorded against them still means what it meant.
+number recorded against them still means what it meant -- and stages 1-40 are
+untouched by the extension to fifty, for the same reason a second time.
 
-Health carries between stages, so these are not forty independent fights -- they
-are one run, and stage 40 is fought at whatever you have left.
+**Acts IX and X introduce no creature, and that is a decision rather than an
+omission.** The campaign forks the class exactly once, at `jobs.PROMOTION_STAGE`,
+and every stage from 21 on is fought by an advanced class. Acts V and VI could
+each afford a new enemy because the hero meeting it had just doubled its kit;
+nothing of the sort happens at stage 41, so a ninth creature there would be a
+step up with nothing handed over to answer it. The two acts are built out of the
+four things that cost the hero nothing to read and everything to handle -- count,
+placement, cadence and reach -- and act IX takes the arena itself away, running
+act VIII's rosters in the tightest rooms since act II.
+
+Health carries between stages, so these are not fifty independent fights -- they
+are one run, and stage 50 is fought at whatever you have left.
 """
 
 from __future__ import annotations
@@ -1533,6 +1546,449 @@ STAGES = [
             ("grunt", 21, 6),
             ("grunt", 21, 21),
             ("revenant", 25, 14),
+        ),
+    ),
+    # =========================================================================
+    # ACT IX -- no new creature, and the floor taken away instead.
+    #
+    # The fork is the reason. A stage is hard for the hero that fights it, and
+    # which hero that is changes exactly once, at `jobs.PROMOTION_STAGE`. Acts V
+    # and VI could each afford a new creature because the class meeting it had
+    # just doubled its kit; nothing of the sort happens at stage 41. A ninth
+    # creature here is a step up with nothing handed over to answer it.
+    #
+    # So this act asks its question with the arena. These are the tightest rooms
+    # since act II, carrying act VIII's rosters: a revenant in a 52x32 hall is
+    # somewhere in the room, and the same revenant in a 40x24 one is between you
+    # and where you were going. Nothing on the roster changed and every fight on
+    # it is a different fight.
+    #
+    # Counts restart at 13 against act VIII's 20, for the reason every act
+    # restart has: an act opens on an idea and the idea deserves room. It is
+    # also the honest number -- thirteen bodies in this much floor is denser
+    # than twenty were in act VIII's, and the two stages of this act that had to
+    # be walked back after measurement were both walked back on floor rather
+    # than on count.
+    # =========================================================================
+    # --- 41 ------------------------------------------------------------------
+    # The introduction, and the only stage of the act with a straight lane down
+    # the middle of it. The act closes that lane over the next three.
+    Stage(
+        name="The Narrow Court",
+        filename="stage41.json",
+        width=40,
+        height=24,
+        hero=(3, 12),
+        pillars=[
+            (9, 4, 3, 4),
+            (9, 16, 3, 4),
+            (18, 10, 4, 4),
+            (26, 4, 3, 4),
+            (26, 16, 3, 4),
+            (33, 10, 3, 4),
+        ],
+        enemies=spawns(
+            ("revenant", 15, 9),
+            ("beastman", 15, 15),
+            ("revenant", 24, 12),
+            ("stalker", 30, 12),
+            ("beastman_stalker", 16, 6),
+            ("grunt", 20, 6),
+            ("grunt", 20, 17),
+            ("grunt", 31, 8),
+            ("grunt", 31, 16),
+            ("rat", 14, 12),
+            ("rat", 23, 7),
+            ("rat", 23, 17),
+            ("bowman", 36, 17),
+        ),
+    ),
+    # --- 42 ------------------------------------------------------------------
+    # Eight pillars in a room the size of act II's, which is the act stated
+    # plainly: the same fourteen enemies in act VIII's hall would be a walk.
+    #
+    # The mage is at the far end in the one row that is open end to end. A
+    # ranged enemy with no line of sight never shoots, so it never becomes the
+    # nearest thing, so nothing ever goes to it -- and in a room this cluttered
+    # that is the default outcome rather than the unlucky one.
+    Stage(
+        name="The Reliquary",
+        filename="stage42.json",
+        width=40,
+        height=24,
+        hero=(3, 12),
+        pillars=[
+            (8, 4, 3, 4),
+            (8, 16, 3, 4),
+            (15, 10, 4, 4),
+            (22, 4, 3, 4),
+            (22, 16, 3, 4),
+            (29, 10, 4, 4),
+            (34, 4, 3, 3),
+            (34, 17, 3, 3),
+        ],
+        enemies=spawns(
+            ("revenant", 13, 8),
+            ("beastman", 13, 16),
+            ("revenant", 20, 12),
+            ("beastman", 27, 12),
+            ("stalker", 19, 6),
+            ("beastman_stalker", 19, 18),
+            ("grunt", 25, 7),
+            ("grunt", 25, 17),
+            ("grunt", 33, 9),
+            ("grunt", 33, 15),
+            ("rat", 12, 12),
+            ("rat", 21, 9),
+            ("rat", 21, 15),
+            ("mage", 36, 12),
+        ),
+    ),
+    # --- 43 ------------------------------------------------------------------
+    # Long and shallow -- 48 by 24, the flattest arena in the game -- and six
+    # pillars rather than the act's eight. Backing off here is sideways, into
+    # whatever is beside you, which is the tight-room lesson on the other axis.
+    #
+    # **It was 48 by 20 with eight pillars and it was a wall.** Every ranged
+    # advanced class -- Hunter, Magic Archer, Sage, Wizard -- cleared it 0/2
+    # while every melee one cleared it 2/2, and the two are not a difficulty
+    # reading, they are a shape reading: a shallow room with a pillar row down
+    # the middle of it has no lane long enough to shoot along. Four tiles of
+    # height and two fewer pillars fixed all four without touching a number
+    # that belongs to a class.
+    #
+    # One charger rather than the two it was drafted with, for the same reason:
+    # a charge across a shallow room crosses all of it, and at two the answer
+    # was to be somewhere that did not exist.
+    Stage(
+        name="The Long Gallery",
+        filename="stage43.json",
+        width=48,
+        height=24,
+        hero=(3, 12),
+        pillars=[
+            (10, 5, 3, 4),
+            (10, 15, 3, 4),
+            (20, 10, 4, 4),
+            (30, 5, 3, 4),
+            (30, 15, 3, 4),
+            (40, 10, 3, 4),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 8),
+            ("beastman", 16, 16),
+            ("revenant", 25, 12),
+            ("beastman", 33, 12),
+            ("stalker", 24, 7),
+            ("beastman_stalker", 24, 17),
+            ("grunt", 15, 12),
+            ("grunt", 29, 8),
+            ("grunt", 29, 16),
+            ("grunt", 38, 8),
+            ("grunt", 38, 16),
+            ("rat", 18, 12),
+            ("rat", 27, 9),
+            ("rat", 27, 15),
+            ("charger", 35, 12),
+        ),
+    ),
+    # --- 44 ------------------------------------------------------------------
+    # Sixteen bodies in 44x26, which is the most crowded floor in the game by a
+    # distance -- act VIII's largest stage has twenty in nearly twice the room.
+    #
+    # Nothing ranged, and this is the stage that rule was written for. A ranged
+    # enemy is a tax proportional to how late it dies and the archer brain
+    # retreats, so on a crowded stage it dies last by construction. In a room
+    # this tight it would also have line of sight to all of it.
+    #
+    # Seventeen in 42x24 was the draft, and it cost both Priest branches half
+    # their seeds while everything else cleared it. One stalker out and two
+    # tiles on each axis is the whole correction: the act's idea is that the
+    # room is the enemy, and the room stops being an idea and starts being a
+    # wall somewhere in that gap.
+    Stage(
+        name="The Press",
+        filename="stage44.json",
+        width=44,
+        height=26,
+        hero=(3, 13),
+        pillars=[
+            (9, 4, 3, 5),
+            (9, 17, 3, 5),
+            (18, 10, 4, 5),
+            (27, 4, 3, 5),
+            (27, 17, 3, 5),
+            (35, 10, 4, 5),
+        ],
+        enemies=spawns(
+            ("revenant", 14, 9),
+            ("beastman", 14, 17),
+            ("revenant", 23, 13),
+            ("beastman", 31, 13),
+            ("beastman", 23, 7),
+            ("stalker", 22, 19),
+            ("beastman_stalker", 30, 8),
+            ("grunt", 16, 13),
+            ("grunt", 25, 10),
+            ("grunt", 25, 16),
+            ("grunt", 33, 17),
+            ("grunt", 39, 9),
+            ("grunt", 39, 17),
+            ("rat", 13, 13),
+            ("rat", 22, 10),
+            ("rat", 22, 16),
+        ),
+    ),
+    # --- 45 -- ACT IX BOSS ---------------------------------------------------
+    # The Regent: the fastest body past the fork, the longest commit range in
+    # the game, and the shortest recovery on any boss sweep.
+    #
+    # Four pillars, all of them pushed to the corners, and the middle left
+    # empty. Every other late boss arena is built around cover, because every
+    # other late boss pays you for reaching it -- the Choir's fan, the Gaoler's
+    # chain, the Hollow King's dirge. This one commits from 250 and only backs
+    # off inside 45, so a pillar is not a rest, and an arena that promised one
+    # would be lying about the fight.
+    #
+    # Escorts are melee. See stage 15.
+    Stage(
+        name="The Regent's Hall",
+        filename="stage45.json",
+        kind=RoomKind.BOSS,
+        width=42,
+        height=28,
+        hero=(3, 14),
+        pillars=[(12, 4, 4, 5), (12, 19, 4, 5), (28, 4, 4, 5), (28, 19, 4, 5)],
+        enemies=spawns(
+            ("regent", 34, 14),
+            ("grunt", 21, 7),
+            ("grunt", 21, 21),
+            ("revenant", 26, 14),
+        ),
+    ),
+    # =========================================================================
+    # ACT X -- the floor given back, and filled. The same argument acts IV and
+    # VIII make, one campaign third later: the largest arenas in the game, the
+    # whole roster in them, at whatever health forty-five stages left you.
+    #
+    # It reads as relief for about ten seconds, which is the intent. Act IX
+    # spent four stages teaching that a small room is the enemy, and the answer
+    # act X gives is that the room was never what you were fighting.
+    # =========================================================================
+    # --- 46 ------------------------------------------------------------------
+    # One imp, in the one row it can see down. The last ranged enemy in the
+    # campaign -- everything from here is melee, because the three stages after
+    # this one are the largest and most crowded in the game and a retreating
+    # archer in any of them shoots for the whole fight.
+    Stage(
+        name="The Broken Court",
+        filename="stage46.json",
+        width=50,
+        height=30,
+        hero=(3, 15),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 21, 4, 5),
+            (19, 12, 4, 5),
+            (28, 4, 4, 5),
+            (28, 21, 4, 5),
+            (37, 12, 4, 5),
+            (44, 5, 3, 4),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 10),
+            ("beastman", 16, 20),
+            ("revenant", 25, 15),
+            ("beastman", 33, 15),
+            ("stalker", 23, 7),
+            ("beastman_stalker", 23, 23),
+            ("grunt", 21, 6),
+            ("grunt", 21, 24),
+            ("grunt", 31, 9),
+            ("grunt", 33, 21),
+            ("grunt", 26, 20),
+            ("rat", 15, 15),
+            ("rat", 30, 12),
+            ("rat", 30, 18),
+            ("brute", 41, 15),
+            ("imp", 41, 9),
+        ),
+    ),
+    # --- 47 ------------------------------------------------------------------
+    # Seventeen, all melee, and a charger back in the middle of it. From here
+    # the campaign is only bodies and floor.
+    #
+    # It was drafted with a third revenant and a second stalker, and those two
+    # bodies were worth five failed cells between them -- both Knight branches
+    # and both Priest ones on the revenant, and the Dark Knight alone on the
+    # stalker, at 4/6 with two of the wins finishing under ten health.
+    #
+    # Both corrections are the same correction, and it is the one the tuning
+    # ladder puts first: durability before count. The revenant came out and the
+    # second stalker became a grunt, so the roster is one body shorter than the
+    # draft and four durable bodies lighter -- and a room is expensive in
+    # proportion to how long the things in it take to kill, not to how many of
+    # them there are.
+    Stage(
+        name="The Long Vigil",
+        filename="stage47.json",
+        width=50,
+        height=30,
+        hero=(3, 15),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 21, 4, 5),
+            (19, 12, 4, 5),
+            (28, 4, 4, 5),
+            (28, 21, 4, 5),
+            (37, 12, 4, 5),
+            (44, 12, 3, 4),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 10),
+            ("beastman", 16, 20),
+            ("revenant", 25, 15),
+            ("beastman", 33, 15),
+            ("stalker", 23, 7),
+            ("beastman_stalker", 23, 23),
+            ("grunt", 34, 7),
+            ("grunt", 21, 6),
+            ("grunt", 21, 24),
+            ("grunt", 31, 9),
+            ("grunt", 26, 20),
+            ("grunt", 17, 15),
+            ("rat", 15, 17),
+            ("rat", 30, 12),
+            ("rat", 30, 18),
+            ("brute", 42, 8),
+            ("charger", 27, 12),
+        ),
+    ),
+    # --- 48 ------------------------------------------------------------------
+    # Back to 52x32, the largest arena the game has, with nineteen in it. The
+    # same room act VIII closed on -- deliberately, so the difference between
+    # the two is only what is standing in it.
+    Stage(
+        name="The Last Gate",
+        filename="stage48.json",
+        width=52,
+        height=32,
+        hero=(3, 16),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 23, 4, 5),
+            (18, 13, 4, 5),
+            (26, 4, 4, 5),
+            (26, 23, 4, 5),
+            (34, 13, 4, 5),
+            (42, 4, 4, 5),
+            (42, 23, 4, 5),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 11),
+            ("beastman", 16, 21),
+            ("revenant", 24, 16),
+            ("beastman", 32, 16),
+            ("revenant", 32, 22),
+            ("stalker", 22, 8),
+            ("beastman_stalker", 30, 26),
+            ("stalker", 30, 6),
+            ("grunt", 20, 6),
+            ("grunt", 20, 26),
+            ("grunt", 31, 10),
+            ("grunt", 31, 22),
+            ("grunt", 16, 16),
+            ("grunt", 25, 13),
+            ("rat", 15, 16),
+            ("rat", 23, 13),
+            ("rat", 23, 19),
+            ("rat", 39, 10),
+            ("brute", 47, 16),
+        ),
+    ),
+    # --- 49 ------------------------------------------------------------------
+    # Twenty enemies, which ties stage 39 for the most the campaign ever asks
+    # for, and the last stage before the throne. Everything in the game is in
+    # this room except a boss and anything that shoots.
+    #
+    # Twenty-two was the draft and it read as a wall for four classes rather
+    # than as a summit. What came out was a beastman and the hellhound -- one
+    # durable body and one charger -- rather than two grunts, because what makes
+    # a room this size expensive is how long the things in it take to kill, not
+    # how many of them there are.
+    Stage(
+        name="The Threshold",
+        filename="stage49.json",
+        width=52,
+        height=32,
+        hero=(3, 16),
+        pillars=[
+            (10, 4, 4, 5),
+            (10, 23, 4, 5),
+            (18, 13, 4, 5),
+            (26, 4, 4, 5),
+            (26, 23, 4, 5),
+            (34, 13, 4, 5),
+            (42, 4, 4, 5),
+            (42, 23, 4, 5),
+        ],
+        enemies=spawns(
+            ("revenant", 16, 11),
+            ("beastman", 16, 21),
+            ("revenant", 24, 16),
+            ("beastman", 32, 16),
+            ("revenant", 32, 22),
+            ("stalker", 22, 26),
+            ("beastman_stalker", 30, 6),
+            ("stalker", 30, 26),
+            ("grunt", 20, 6),
+            ("grunt", 20, 26),
+            ("grunt", 31, 10),
+            ("grunt", 31, 22),
+            ("grunt", 16, 16),
+            ("grunt", 25, 13),
+            ("grunt", 38, 16),
+            ("rat", 15, 16),
+            ("rat", 23, 13),
+            ("rat", 23, 19),
+            ("rat", 39, 10),
+            ("brute", 47, 16),
+        ),
+    ),
+    # --- 50 -- FINAL BOSS ----------------------------------------------------
+    # The Unmade: the most health in the game, the longest sweep in it, and the
+    # widest fan in it, on the slowest body past the Gaoler.
+    #
+    # Eight pillars in two staggered rows, which is the Choir's arena and for
+    # the Choir's reason -- twelve shots across 140 degrees has no answer at
+    # range except a wall, and there has to be a next piece of cover rather than
+    # one sprint through the fan. What the Choir's arena did not have to account
+    # for is a 48-reach sweep once you arrive, so the rows are set further apart
+    # than that one's: cover you cannot stand beside is not cover.
+    #
+    # Escorts are melee. See stage 15.
+    Stage(
+        name="The Unmaking",
+        filename="stage50.json",
+        kind=RoomKind.BOSS,
+        width=46,
+        height=30,
+        hero=(3, 15),
+        pillars=[
+            (12, 4, 3, 5),
+            (12, 21, 3, 5),
+            (18, 12, 3, 5),
+            (24, 4, 3, 5),
+            (24, 21, 3, 5),
+            (30, 12, 3, 5),
+            (36, 4, 3, 5),
+            (36, 21, 3, 5),
+        ],
+        enemies=spawns(
+            ("unmade", 38, 15),
+            ("grunt", 23, 8),
+            ("grunt", 23, 22),
+            ("revenant", 28, 15),
         ),
     ),
 ]

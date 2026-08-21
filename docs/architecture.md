@@ -49,8 +49,9 @@ be rerun after editing a stage. See [Content](content.md#tools).
 > [!NOTE]
 > This is an inconsistency rather than a decision anybody wrote down, and the
 > forty-stage extension made it visible: twenty new `levels/stage*.json` files
-> show up untracked in `git status` beside twenty tracked ones. Either they all
-> belong in the repo or none of them do. Committing them means a clone can be
+> show up untracked in `git status` beside twenty tracked ones. The extension to
+> fifty added ten more of them and settled nothing. Either they all belong in
+> the repo or none of them do. Committing them means a clone can be
 > played without running a tool and diffs show what a stage edit did to the
 > arena; ignoring them means one less generated artifact to keep in step. It has
 > not been settled.

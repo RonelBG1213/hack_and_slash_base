@@ -25,7 +25,7 @@ from hack_and_slash.scenes.achievements import AchievementsScene
 from hack_and_slash.scenes.menu import ITEMS, MenuScene
 from hack_and_slash.scenes.options import ROWS, OptionsScene
 from hack_and_slash.scenes.play import PlayScene
-from hack_and_slash.scenes.select import CharacterSelectScene
+from hack_and_slash.scenes.select import DIFFICULTY_Y, CharacterSelectScene
 from hack_and_slash.scenes.unlockables import UnlockablesScene
 from hack_and_slash.settings import SCALES, Settings
 
@@ -171,6 +171,84 @@ def test_restarting_keeps_the_tier_that_was_chosen(atlas) -> None:
     play = press(scene, pygame.K_RETURN)
 
     assert play.restarted().run.difficulty.id == "relentless"
+
+
+def click_internal(scene, x: int, y: int):
+    """Click at a point in the 384x216 internal space.
+
+    The scene hit-tests in window coordinates, so the point has to go out
+    through the same integer scale and letterbox the picture came in through --
+    which is the whole reason this helper exists rather than passing `(x, y)`
+    straight in and quietly testing the top-left corner of the window.
+    """
+    window = pygame.display.get_surface()
+    win_w, win_h = window.get_size()
+    scale = config.integer_scale(win_w, win_h)
+    off_x, off_y = config.letterbox_offset(win_w, win_h)
+    return scene.handle_event(
+        pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN,
+            button=1,
+            pos=(off_x + x * scale, off_y + y * scale),
+        )
+    )
+
+
+def test_every_tier_can_be_reached_with_the_mouse(atlas, display) -> None:
+    """The regression. A mouse could reach exactly one of the three tiers.
+
+    The first draft hit-tested the whole row as one band and advanced by one per
+    click. `_move_difficulty` clamps rather than wrapping -- deliberately, since
+    wrapping puts the hardest tier one keypress below the easiest -- so clicking
+    walked up to Relentless and stopped there permanently. From the default,
+    a single click jumped straight past Normal and there was no route back to
+    either of the other two.
+
+    So this walks every tier forwards *and* backwards: forwards alone would
+    still pass against the broken version for the last tier.
+    """
+    scene = select(atlas)
+    tiers = [tier.id for tier in scene.difficulties.tiers]
+
+    for expected, (left, width) in zip(tiers, scene._tier_spans()):
+        click_internal(scene, left + width // 2, DIFFICULTY_Y + 3)
+        assert scene.difficulty.id == expected
+
+    for expected, (left, width) in reversed(list(zip(tiers, scene._tier_spans()))):
+        click_internal(scene, left + width // 2, DIFFICULTY_Y + 3)
+        assert scene.difficulty.id == expected, (
+            f"could not get back to {expected} with the mouse -- the row is a "
+            f"one-way trip again"
+        )
+
+
+def test_the_drawn_tier_row_is_the_row_that_can_be_clicked(atlas, display) -> None:
+    """`_tier_spans` is the single source of the layout, and this is why.
+
+    Two copies of a coordinate is how a clickable row drifts off the thing it
+    claims to click -- the label moves, the hit-box does not, and the symptom is
+    a player clicking a word and nothing happening.
+    """
+    scene = select(atlas)
+    for i, (left, width) in enumerate(scene._tier_spans()):
+        assert scene._tier_at(_to_window(left + width // 2, DIFFICULTY_Y + 3)) == i
+
+
+def test_a_click_beside_the_tier_names_changes_nothing(atlas, display) -> None:
+    """The row is the names, not the width of the screen. A click in the empty
+    margin either side is not a vote for the nearest one."""
+    scene = select(atlas)
+    before = scene.difficulty.id
+    click_internal(scene, 4, DIFFICULTY_Y + 3)
+    assert scene.difficulty.id == before
+
+
+def _to_window(x: int, y: int) -> tuple[int, int]:
+    window = pygame.display.get_surface()
+    win_w, win_h = window.get_size()
+    scale = config.integer_scale(win_w, win_h)
+    off_x, off_y = config.letterbox_offset(win_w, win_h)
+    return (off_x + x * scale, off_y + y * scale)
 
 
 def test_quit_asks_the_app_to_close(atlas) -> None:

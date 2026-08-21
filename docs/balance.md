@@ -318,6 +318,106 @@ Halving a boss's HP does not halve the damage it deals you: it spends the same
 *proportion* of a shorter fight enraged. Both later bosses were tuned by damage in
 the end, after health changes moved the win rate by nothing at all.
 
+### A charge speed is a class-specific dial, and health is not
+
+The acts IX–X pass produced the sharpest instance of the finding above it. **The
+Unmade** — stage 50 — cleared 6/6 for nine of the ten advanced classes and **1/6
+for the Dark Knight**, which died every time with the boss around fifty health
+from dead. Close enough to read as a health problem, and it was not one:
+
+| change | Dark Knight | the other nine |
+| --- | --- | --- |
+| as drafted — hp 220, charge 18 at speed 4.0 | 1/6 | 6/6 each |
+| hp 220 → 205 | 1/4 | unmoved |
+| hp 220 → 195 | 2/4 | unmoved |
+| hp 220 → 195 *and* the fan 12 → 10 | 2/4 | unmoved |
+| charge damage 18 → 14 | 6/6 | unmoved |
+| **charge_speed 4.0 → 3.5**, health and damage untouched | **6/6** | unmoved |
+
+Two of the six rows fix it and both of them are the charge, which is what makes
+this a finding rather than a lucky number: the fight was never the health bar.
+
+The reason is the class rather than the boss. The Dark Knight is the fastest body
+in the game on the least health of the two Knight branches, so it fights this one
+from *inside* the sweep — and a charge that crosses that distance faster than it
+can leave is not a telegraph, it is a tax. Every slower class was already
+answering the same charge comfortably.
+
+What generalises: **a dial that interacts with hero speed will show up as one
+class failing and nine passing, and health never will.** A statline that is wrong
+for one class looks exactly like a stage that is slightly too hard for everyone,
+and the grid is the only thing that tells them apart. The damage stayed at 18 —
+a charge that hits for less is a smaller mistake, a charge that arrives slower is
+a mistake you are allowed to see coming, and only one of those is the fight.
+
+### Acts IX and X: what the extension to fifty cost
+
+Ten new stages measured on the ten advanced classes. The first pass was **17
+failed cells**, all of them in four stages and one boss, and every fix was
+placement or durability. None was a hero number:
+
+| stage | what failed | what it was | what fixed it |
+| --- | --- | --- | --- |
+| 43 The Long Gallery | Hunter, Magic Archer, Sage, Wizard at 0/2 — every ranged class, no melee one | 48×20 with a pillar row down the middle | 48×24, six pillars instead of eight |
+| 44 The Press | both Priest branches at 1/2 | 17 bodies in 42×24 | 16 in 44×26 |
+| 47 The Long Vigil | both Knight branches, both Priest branches | a third revenant and a second stalker | revenant out, stalker → grunt |
+| 49 The Threshold | Dark Knight, Sage, Wizard, both Priests | 22 bodies | 20, taking out a beastman and the hellhound rather than two grunts |
+| 50 The Unmaking | Dark Knight at 1/6 | charge speed, above | 4.0 → 3.5 |
+
+Stage 43 is the one worth keeping. Four classes failed it and they were **exactly
+the four ranged ones**, which is not a difficulty reading at all — a shallow room
+with pillars down its centre has no lane long enough to shoot along. A win rate
+split that cleanly along a class *property* is a shape problem, and no amount of
+thinning the roster would have found it.
+
+After the pass: **400/400** across ten classes × ten stages × four seeds.
+
+### The run bracket got longer, not harder, and that is worth telling apart
+
+Every one of the fifty stages clears from full health. The **run** bracket does
+not, and the numbers say why. Six reference runs per class, promoting on the
+first branch, recording the stage each loss happened on:
+
+| class | branch | where the losses fell |
+| --- | --- | --- |
+| Knight | Dark Knight | 20, 20, 37, 38, **50** |
+| Rogue | Assassin | 14, 22 |
+| Archer | Hunter | **42** |
+| Magician | Sage | none — 6/6 |
+| Priest | Battle Priest | 20, 20, 34 |
+
+**Six of the eight losses are on stages the extension did not touch**, and three
+of them are stage 20 — the Sovereign, fought by a base class on the last stage
+before the fork. That is the shape of a run bracket that was already thin, not
+of ten stages that are too hard: a longer campaign is more chances to lose a run
+you were always at some risk of losing, which is the same mechanism the twitchy
+policy demonstrated when the artifact faded at twenty stages and came back at
+forty. The suite reflects that — the run-level tests were failing before this
+work as well, and the extension added two more.
+
+Two things this does *not* license concluding. It is not evidence that acts IX
+and X are correctly tuned in a run — nothing here measures that. And it is not
+evidence that they are gentle: the two losses that are in the new range are at
+42 and 50, which is where a run is at its thinnest.
+
+### Traps at depth are the unmeasured half of the last two acts
+
+The per-stage grid builds a `World` without a floor number, so **it measures
+every stage with floor-one hazards** — the limitation already on record below,
+now with ten deeper floors under it:
+
+| floor | trap damage | count |
+| --- | --- | --- |
+| 20 | 11 | 3 |
+| 40 | 17 | 4 |
+| 50 | 20 | 4 |
+
+Count is capped at 4 and stays there, so what actually changed between the old
+last floor and the new one is a trap hit costing 20 instead of 17 — a quarter of
+the Rogue's health rather than a fifth. Nothing in the curve was touched: moving
+`damage.floor_step` would move all forty floors that are already on record, and
+that is the one thing the extension was not allowed to do.
+
 ### Ranged escorts do not work on a boss stage
 
 A bowman never becomes the nearest thing in the room, so it is never what you are

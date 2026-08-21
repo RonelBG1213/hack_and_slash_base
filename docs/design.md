@@ -80,7 +80,9 @@ them learns a new move, so nothing you worked out stops being true.
 | **The Herald** | V | The Houndmaster's hurry at the Sovereign's reach. Deliberately a pattern you already know — the unfamiliar thing in this fight is meant to be your own new class. |
 | **The Gaoler** | VI | Slowest body in the game, longest reach in it. A chain across 240 degrees denies more floor than anything else; you have to already be elsewhere when it opens. |
 | **The Choir** | VII | Eleven shots from further out than anything shoots. The weakest of the eight up close, and the arena is the most heavily pillared in the game, because closing the distance is the fight. |
-| **The Hollow King** | VIII | The Sovereign again with every dial a shade further on. Nothing new on the last stage of a forty-stage run, on purpose. |
+| **The Hollow King** | VIII | The Sovereign again with every dial a shade further on. Nothing new on the fortieth stage of a run, on purpose. |
+| **The Regent** | IX | The only one with no standoff phase. Fastest body past the fork, the longest commit range in the game, and the shortest recovery on any boss sweep — a pillar is not a rest, and its arena has none in the middle. |
+| **The Unmade** | X | The last fight, made of what the campaign taught: the Gaoler's reach, the Choir's fan and the Sovereign's charge on one body. Most health in the game; slow enough that the room is winnable and standing in the wrong part of it is what kills you. |
 
 > The boss brain reads its weapons **positionally** — index 0 is the close sweep,
 > 1 the charge, 2 the projectile. Adding a boss means declaring them in that
@@ -175,29 +177,40 @@ places, and a test fails if a class declares its attacks in another order.
 
 ## The run
 
-Forty stages in eight acts. An act introduces one enemy, spends three stages
+Fifty stages in ten acts. An act introduces one enemy, spends three stages
 combining it with everything that came before, and ends on a boss. Enemy counts
 rise inside an act and reset at the start of the next one, because a new idea
 deserves room.
 
-It is two halves of four acts, and the seam is [promotion](#promotion). Stages
-1–20 are fought as the class you chose, ending on the Sovereign; stages 21–40
-are fought as the class you become. Acts VII and VIII introduce no new enemy,
-the same way act IV does not — two acts of new creatures is enough per half, and
-an act that taught something new at the end would be teaching it at the moment
-the player can least afford to learn.
+The seam is [promotion](#promotion), and there is exactly one. Stages 1–20 are
+fought as the class you chose, ending on the Sovereign; stages 21–50 are fought
+as the class you become. Acts VII and VIII introduce no new enemy, the same way
+act IV does not — two acts of new creatures is enough per half, and an act that
+taught something new at the end would be teaching it at the moment the player
+can least afford to learn.
+
+**Acts IX and X introduce none either, and the fork is why.** A stage is hard
+for the hero that fights it, and which hero that is changes exactly once. Acts V
+and VI could each afford a new creature because the class meeting it had just
+doubled its kit; nothing of the sort happens at stage 41, so a ninth creature
+there would be a step up with nothing handed over to answer it. Those ten stages
+are built out of the four things that ask more of a player without asking
+anything new of their class — count, placement, cadence and reach. Act IX takes
+the arena itself away: act VIII's rosters in the tightest rooms since act II,
+where a revenant is between you and where you were going rather than somewhere
+in a large hall. Act X gives the floor back and fills it.
 
 **A new face is not a new enemy**, and the distinction is deliberate. Most stages
 field *variants* — a goblin, an orc, a beastman — that are byte-identical to the
 grunt, brute and revenant they stand in for. They exist so eight creatures can
-carry forty stages without the campaign looking like eight creatures, and because
+carry fifty stages without the campaign looking like eight creatures, and because
 they carry no numbers of their own they teach the player nothing false: a body
 the size of a brute hits like a brute, whatever colour it is. What an act
 introduces is still one *idea*, and the count of ideas has not moved.
 
 Health carries between stages and you recover a fixed amount on clearing one. How
 much is the class's own number, and for the Priest it is most of the class. So a
-run is a single arc rather than forty separate fights, and a bad stage costs you
+run is a single arc rather than fifty separate fights, and a bad stage costs you
 rather than ending you.
 
 `R` starts a new run as the same class, never a new stage: replaying a boss at

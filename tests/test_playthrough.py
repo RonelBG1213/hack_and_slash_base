@@ -43,12 +43,14 @@ from .helpers import BESTIARY, HERO, open_room
 #: hanging the suite.
 TICK_LIMIT = 9000
 
-#: A whole run is forty stages, so it needs headroom the single-stage limit does
+#: A whole run is fifty stages, so it needs headroom the single-stage limit does
 #: not. Still a guard, not a target -- a healthy run finishes in well under half
 #: of it, and the value exists so a run that has stopped being winnable fails
-#: the suite instead of hanging it. Doubled with the campaign; it was 120000 at
-#: twenty stages and the same fraction of a real run either way.
-RUN_TICK_LIMIT = 240000
+#: the suite instead of hanging it. Held at 6000 ticks per stage every time the
+#: campaign has grown -- 120000 at twenty, 240000 at forty -- so what it allows
+#: a run is the same fraction of one throughout, and a run that got slower
+#: rather than longer still shows up here.
+RUN_TICK_LIMIT = 300000
 
 #: Enough seeds that a bracket assertion is about the balance rather than about
 #: one lucky fight. The sim is deterministic, so each is a fixed outcome.
@@ -69,21 +71,22 @@ CLASS_SEEDS = range(3)
 RECORDED_STAGE = 2
 
 #: The shape of the campaign, derived from one number rather than written out
-#: three times. Eight acts of five: four stages that build and a boss on the
+#: three times. Ten acts of five: four stages that build and a boss on the
 #: fifth. Written this way because the four separate literals it replaced --
 #: boss indices, act starts, a stage count and a boss count -- could disagree
 #: with each other, and three of them were bare tuples that had to be found by
-#: hand when the campaign doubled.
+#: hand when the campaign doubled. It has since paid for itself twice: the
+#: extension to forty and the extension to fifty are each one number here.
 STAGES_PER_ACT = 5
-ACT_COUNT = 8
+ACT_COUNT = 10
 STAGE_COUNT = STAGES_PER_ACT * ACT_COUNT
 
-#: Where each act begins. Zero-based, so act I starts at 0 and act VIII at 35.
+#: Where each act begins. Zero-based, so act I starts at 0 and act X at 45.
 ACT_STARTS = tuple(act * STAGES_PER_ACT for act in range(ACT_COUNT))
 
-#: Bosses close acts. Zero-based indices, so stages 5, 10, 15, 20, 25, 30, 35
-#: and 40 -- and note stage 20 is the one the fork follows, so the four after it
-#: are fought by an advanced class and the four before it are not.
+#: Bosses close acts. Zero-based indices, so stages 5, 10, 15, 20, 25, 30, 35,
+#: 40, 45 and 50 -- and note stage 20 is the one the fork follows, so the six
+#: acts after it are fought by an advanced class and the four before it are not.
 BOSS_STAGES = tuple(start + STAGES_PER_ACT - 1 for start in ACT_STARTS)
 
 #: The two halves of the campaign, split at the fork, as zero-based indices.
@@ -111,7 +114,7 @@ ADVANCED_STAGES = range(jobs.PROMOTION_STAGE - 1, STAGE_COUNT)
 ADVANCED_SEEDS = range(2)
 
 
-#: Read once. Forty stages off the disk, on every one of several hundred calls,
+#: Read once. Fifty stages off the disk, on every one of several hundred calls,
 #: was the slowest thing in the suite by a wide margin -- and the campaign is
 #: immutable, so there is nothing to be gained by rereading it.
 _CAMPAIGN = campaign_io.load(config.LEVELS_DIR / "campaign.json")
@@ -504,7 +507,7 @@ def _advanced_stage_grid():
 
     The other half of the grid, and the half that did not exist while promotion
     bought one fight. Ten classes rather than five, because a fork doubles the
-    roster, and twenty stages rather than forty, because none of these ten is
+    roster, and thirty stages rather than fifty, because none of these ten is
     ever the hero before stage 21.
 
     No promotion machinery is involved and none is needed: `World` takes a
@@ -703,7 +706,7 @@ def test_the_difficulty_curve_rises_within_each_act() -> None:
 
 
 def test_every_act_ends_on_a_boss_and_nothing_else_does() -> None:
-    """Eight acts of five, and the shape has to be real rather than intended.
+    """Ten acts of five, and the shape has to be real rather than intended.
 
     A boss turning up mid-act is the loud failure; the quiet one is an act
     ending on an ordinary stage because a `Stage` entry was inserted rather than
@@ -727,8 +730,8 @@ def test_every_act_ends_on_a_boss_and_nothing_else_does() -> None:
 def test_the_stage_files_agree_with_the_arithmetic_about_which_are_boss_stages() -> None:
     """Two independent statements of one fact, which is the entire point.
 
-    `BOSS_STAGES` works the eight indices out from `STAGES_PER_ACT`. The stage
-    files say so themselves -- the eight act enders carry `kind: "boss"`, written
+    `BOSS_STAGES` works the ten indices out from `STAGES_PER_ACT`. The stage
+    files say so themselves -- the ten act enders carry `kind: "boss"`, written
     by hand into `tools/make_level.py`. Two derivations from the *same* formula
     agree even when the formula is wrong; a declaration and a derivation do not.
 
@@ -748,7 +751,7 @@ def test_the_stage_files_agree_with_the_arithmetic_about_which_are_boss_stages()
 
 
 def test_no_boss_is_used_twice() -> None:
-    """Eight acts, eight bosses. Reusing one would make an act's ending a repeat
+    """Ten acts, ten bosses. Reusing one would make an act's ending a repeat
     of an earlier one, which is the single thing a boss stage cannot be."""
     bosses = {t.id for t in BESTIARY.types.values() if t.brain == "boss"}
     used = [
@@ -768,8 +771,8 @@ def test_no_boss_stage_is_escorted_by_anything_ranged() -> None:
     length of the fight with no answer available. The act III boss stage was
     drafted with two bowmen and was unwinnable on every seed.
 
-    It has been a comment in three files and a rule in nobody's way since. Eight
-    boss stages is four more chances to get it wrong than the rule survived the
+    It has been a comment in three files and a rule in nobody's way since. Ten
+    boss stages is six more chances to get it wrong than the rule survived the
     first time, and the failure is a stage that is simply impossible rather than
     one that is merely hard.
     """

@@ -42,6 +42,7 @@ def test_every_shipped_type_loads() -> None:
         # one at the end of each act
         "boss", "houndmaster", "effigy", "sovereign",
         "herald", "gaoler", "choir", "hollow_king",
+        "regent", "unmade",
         # promoted halfway, two per starting class
         "dark_knight", "holy_knight",
         "assassin", "shadow_rogue",

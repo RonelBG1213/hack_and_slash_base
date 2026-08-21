@@ -1626,5 +1626,166 @@
       "the run learning to read, at the top of every dial at once, rather than a",
       "final exam on a moveset introduced on the final stage."
     ]
+  },
+
+  "regent_edict": {
+    "name": "Edict",
+    "damage": 14,
+    "variance": 3,
+    "arc_degrees": 205,
+    "reach": 42,
+    "windup": 26,
+    "active": 6,
+    "recovery": 22,
+    "knockback": 6.5,
+    "hitstop": 7,
+    "_comment": [
+      "The shortest recovery any boss sweep has, and the only dial on this",
+      "fight that is a record. Everything else about the Regent is ordinary --",
+      "less reach than the Hollow Arc, less damage than the Sovereign's -- and",
+      "that is the point: what it costs you is that the gap after a swing is",
+      "twenty-two ticks instead of twenty-six, so the room it gives back is",
+      "not enough to leave in.",
+      "",
+      "The windup is left at twenty-six, matching the Herald and the Choir. A",
+      "shorter tell would make the fight about reaction, and reaction is",
+      "measured elsewhere and found not to be what decides a run."
+    ]
+  },
+
+  "regent_seal": {
+    "name": "Seal",
+    "damage": 16,
+    "variance": 3,
+    "arc_degrees": 120,
+    "reach": 33,
+    "windup": 30,
+    "active": 30,
+    "recovery": 28,
+    "knockback": 8.0,
+    "hitstop": 8,
+    "charge_speed": 4.5,
+    "_comment": [
+      "The fastest charge in the game and the longest-lived, thrown from a",
+      "charge_range of 250 rather than the Hollow King's 235. Together those",
+      "three numbers are the whole fight: there is no distance at which this",
+      "one is not already coming."
+    ]
+  },
+
+  "regent_writ": {
+    "name": "Writ",
+    "damage": 6,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 26,
+    "active": 1,
+    "recovery": 22,
+    "knockback": 2.0,
+    "hitstop": 3,
+    "projectile": true,
+    "projectile_speed": 3.1,
+    "projectile_radius": 3.0,
+    "projectile_lifetime": 190,
+    "projectile_count": 6,
+    "spread_degrees": 70,
+    "_comment": [
+      "Six shots in a 70-degree cone -- the smallest volley of any boss past",
+      "the fork, deliberately. A wide fan is a reason to hold a pillar, and",
+      "holding a pillar is exactly the rest this fight is built to refuse. It",
+      "is here so that standing still at range is not free, and for nothing",
+      "else."
+    ]
+  },
+
+  "unmade_sunder": {
+    "name": "Sunder",
+    "damage": 15,
+    "variance": 4,
+    "arc_degrees": 235,
+    "reach": 48,
+    "windup": 30,
+    "active": 8,
+    "recovery": 30,
+    "knockback": 8.0,
+    "hitstop": 9,
+    "_comment": [
+      "The longest reach on any sweep, two past the Gaoler's chain, across a",
+      "235-degree arc. Being beside it is not being out of it.",
+      "",
+      "Windup thirty and recovery thirty: slower than the Regent's cadence by",
+      "a third. The last two bosses are the same fight asked from opposite",
+      "ends -- one that never lets you stop, and one that gives you the room",
+      "and makes every piece of it dangerous."
+    ]
+  },
+
+  "unmade_collapse": {
+    "name": "Collapse",
+    "damage": 18,
+    "variance": 4,
+    "arc_degrees": 130,
+    "reach": 36,
+    "windup": 36,
+    "active": 30,
+    "recovery": 32,
+    "knockback": 9.0,
+    "hitstop": 9,
+    "charge_speed": 3.5,
+    "_comment": [
+      "The hardest single hit in the game, behind the longest tell of any boss",
+      "charge, at the slowest crossing speed of any of them. Thirty-six ticks",
+      "is a third of a second and is meant to be readable from anywhere in the",
+      "room -- the damage is the punishment for not answering it, not for",
+      "failing to see it.",
+      "",
+      "**3.5 rather than the 4.0 it was drafted at, and this one dial was the",
+      "whole fight for one class.** The Dark Knight cleared stage 50 on 1 seed",
+      "in 6 while the other nine advanced classes cleared it 6/6, and it died",
+      "every time with the boss around fifty health from dead -- close, which",
+      "is what made it look like a health problem. It was not: 220 down to 200",
+      "bought one seed and 4.0 down to 3.5 bought all six, with the health",
+      "left where it was.",
+      "",
+      "The reason is the class rather than the number. The Dark Knight is the",
+      "fastest body in the game on the least health of the knight branches, so",
+      "it fights this one from inside the sweep, and a charge that crosses that",
+      "distance faster than it can leave is not a telegraph, it is a tax. Every",
+      "slower class was already answering it.",
+      "",
+      "Damage stayed at 18. A charge that hits for less is a smaller mistake;",
+      "a charge that arrives slower is a mistake you are allowed to see coming,",
+      "and only one of those is what the fight is supposed to be about."
+    ]
+  },
+
+  "unmade_silence": {
+    "name": "Silence",
+    "damage": 7,
+    "variance": 2,
+    "arc_degrees": 0,
+    "reach": 0,
+    "windup": 32,
+    "active": 1,
+    "recovery": 26,
+    "knockback": 2.0,
+    "hitstop": 3,
+    "projectile": true,
+    "projectile_speed": 2.8,
+    "projectile_radius": 3.0,
+    "projectile_lifetime": 220,
+    "projectile_count": 12,
+    "spread_degrees": 140,
+    "_comment": [
+      "Twelve shots across 140 degrees, the widest fan in the game -- the",
+      "Choir's idea on a body that cannot be waited out. The Choir is the",
+      "least healthy boss because closing it is the fight; this one has the",
+      "most health of anything, so closing it is only the first half.",
+      "",
+      "Slow shots on purpose, at 2.8. A wide fan of fast projectiles has one",
+      "answer and it is a wall; a wide fan of slow ones can be walked out of,",
+      "which is the difference between a fight and a tax."
+    ]
   }
 }

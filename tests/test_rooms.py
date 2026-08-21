@@ -43,12 +43,14 @@ from .helpers import BESTIARY, HERO, open_room
 TABLE = rooms.table()
 
 #: Enough transitions that a claim about the roll is about the roll rather than
-#: about one lucky index. A run has thirty-nine of them.
-TRANSITIONS = range(39)
+#: about one lucky index. A run has one fewer than it has arenas -- forty-nine
+#: of them -- and it is read off the campaign rather than typed, so extending
+#: the campaign cannot leave this quietly covering only part of a run.
+TRANSITIONS = range(campaign_io.load(config.LEVELS_DIR / "campaign.json").length - 1)
 
 SEEDS = range(12)
 
-#: The shipped forty, loaded once. The schedule reads the campaign now -- half
+#: The shipped fifty, loaded once. The schedule reads the campaign now -- half
 #: of it is "the floor after a boss", and where a boss stands is content rather
 #: than a number -- so a test about the schedule needs a real one to read.
 #:
@@ -137,14 +139,18 @@ def test_the_stall_stands_on_the_floors_the_schedule_names() -> None:
     arena. Pinning the actual floor numbers means an off-by-one in it fails here
     rather than moving every stall in the game by one floor and passing.
 
-    Nineteen floors, of which **eighteen are reachable**: the fortieth arena is
-    the last thing in a run and is not followed by a room, so floor 40 is on the
-    list and is never walked into. It was seven before the interval moved from
-    five to three and the boss rule was written down.
+    Twenty-three floors, of which **twenty-two are reachable**: the fiftieth
+    arena is the last thing in a run and is not followed by a room, so floor 50
+    is on the list and is never walked into. It was seven before the interval
+    moved from five to three and the boss rule was written down, and nineteen
+    before the campaign ran to fifty.
     """
     floors = [rooms.floor_of(i) for i in TRANSITIONS if rooms.is_stall_floor(i, CAMPAIGN)]
-    assert floors == [3, 5, 6, 9, 10, 12, 15, 18, 20, 21, 24, 25, 27, 30, 33, 35, 36, 39, 40]
-    assert len([f for f in floors if f < CAMPAIGN.length]) == 18
+    assert floors == [
+        3, 5, 6, 9, 10, 12, 15, 18, 20, 21, 24, 25, 27, 30, 33, 35, 36, 39, 40,
+        42, 45, 48, 50,
+    ]
+    assert len([f for f in floors if f < CAMPAIGN.length]) == 22
 
 
 def test_every_boss_floor_carries_a_stall() -> None:
@@ -246,7 +252,7 @@ def test_the_boss_rule_switches_off_on_its_own(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(rooms, "_TABLE", rooms.Table.load(path))
     try:
         floors = [rooms.floor_of(i) for i in TRANSITIONS if rooms.is_stall_floor(i, CAMPAIGN)]
-        assert floors == [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39]
+        assert floors == [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45, 48]
         assert 5 in BOSS_FLOORS and 5 not in floors, "a boss floor kept its stall"
     finally:
         rooms.reset_cache()

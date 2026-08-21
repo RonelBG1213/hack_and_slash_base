@@ -8,9 +8,10 @@ python main.py --smoke        # pixel fidelity: every sprite upscales with hard 
 
 > [!NOTE]
 > **The suite is slow now, and it is `test_playthrough.py` that is slow.** Two
-> class×stage grids over a forty-stage campaign is a few hundred simulated
-> fights, and the whole-run brackets play forty stages end to end several times
-> over. Everything else in the suite finishes in seconds.
+> class×stage grids over a fifty-stage campaign is a few hundred simulated
+> fights — the advanced grid alone is ten classes over thirty stages — and the
+> whole-run brackets play fifty stages end to end several times over. It runs in
+> the tens of minutes. Everything else in the suite finishes in seconds.
 >
 > ```sh
 > python -m pytest --ignore=tests/test_playthrough.py   # the fast gate

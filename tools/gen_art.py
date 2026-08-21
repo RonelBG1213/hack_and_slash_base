@@ -611,6 +611,50 @@ def paint_hollow_king(surface: pygame.Surface) -> None:
     pygame.draw.rect(surface, (250, 78, 70), (rect.centerx + 2, rect.centery, 3, 3))
 
 
+def paint_regent(surface: pygame.Surface) -> None:
+    # Stage forty-five, and the one that will not let go. Cold steel with a
+    # single hot mark: the Hollow King is the dark boss and the Sovereign the
+    # bright one, so this one is neither and is told apart by being the only
+    # boss with an edge that reads as sharp.
+    rect = _body(surface, (128, 138, 158), (48, 54, 70), (188, 200, 220), 14, 15)
+
+    # A half crown, worn to one side -- it holds the throne rather than owns
+    # it, and the silhouette has to say that before the health bar does.
+    pygame.draw.rect(surface, (216, 168, 74), (rect.centerx - 1, rect.y - 2, rect.width // 2, 2))
+    pygame.draw.rect(surface, (216, 168, 74), (rect.right - 4, rect.y - 4, 2, 3))
+
+    # Chevrons down the body, pointing forward. The Gaoler's bars are vertical
+    # and the Effigy's grain horizontal; this one is the only diagonal in the
+    # atlas, which is what makes it read as moving while it stands still.
+    for offset in range(0, 8, 3):
+        pygame.draw.rect(surface, (188, 200, 220), (rect.x + 2, rect.y + 4 + offset, 3, 1))
+        pygame.draw.rect(surface, (188, 200, 220), (rect.x + 5, rect.y + 5 + offset, 3, 1))
+
+    pygame.draw.rect(surface, (250, 120, 60), (rect.centerx - 5, rect.centery, 3, 3))
+    pygame.draw.rect(surface, (250, 120, 60), (rect.centerx + 2, rect.centery, 3, 3))
+
+
+def paint_unmade(surface: pygame.Surface) -> None:
+    # The last thing in the game. The Hollow King is dark and keeps its edges;
+    # this one is darker and is missing them -- the body is eaten into from the
+    # outside, which is the one silhouette trick no other boss uses.
+    rect = _body(surface, (36, 32, 46), (14, 12, 20), (86, 74, 104), 15, 15)
+
+    # Bites taken out of the outline. Kept to the corners so the mass still
+    # reads as one body at 1x; a shape holed through the middle reads as dead,
+    # which is the revenant's trick and belongs to the revenant.
+    for x, y in ((rect.x, rect.y), (rect.right - 2, rect.y), (rect.x, rect.bottom - 2)):
+        pygame.draw.rect(surface, TRANSPARENT, (x, y, 2, 2))
+
+    # No crown. Every boss since the Sovereign has worn one and the last one
+    # does not: there is nothing left here that a crown would sit on.
+    for y in range(rect.y + 3, rect.bottom - 2, 4):
+        pygame.draw.rect(surface, (86, 74, 104), (rect.x + 2, y, rect.width - 4, 1))
+
+    pygame.draw.rect(surface, (236, 240, 250), (rect.centerx - 5, rect.centery, 3, 3))
+    pygame.draw.rect(surface, (236, 240, 250), (rect.centerx + 2, rect.centery, 3, 3))
+
+
 def paint_arrow(surface: pygame.Surface) -> None:
     # Drawn pointing right; the renderer rotates it to match its heading.
     mid = CELL // 2
@@ -832,6 +876,8 @@ PAINTERS = {
     "spike": paint_spike,
     "flame": paint_flame,
     "blade": paint_blade,
+    "regent": paint_regent,
+    "unmade": paint_unmade,
 }
 
 

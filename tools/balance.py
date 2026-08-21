@@ -95,9 +95,10 @@ LATENCIES = [
     ("asleep", 40),
 ]
 
-#: Forty stages, eight of them bosses. Six times the old four-stage guard,
-#: which a healthy run still finishes in well under half of.
-RUN_TICK_LIMIT = 240000
+#: Fifty stages, ten of them bosses. Six thousand ticks a stage, which is what
+#: this has been at every campaign length, and which a healthy run still
+#: finishes in well under half of.
+RUN_TICK_LIMIT = 300000
 
 HEADER = f"{'':>16}  {'won':>7}  {'median':>7}  {'median hp':>9}  {'worst hp':>8}"
 RULE = "  " + "-" * 56

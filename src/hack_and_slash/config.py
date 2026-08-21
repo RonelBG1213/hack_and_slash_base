@@ -199,6 +199,11 @@ SPRITE_ORDER = (
     "spike",
     "flame",
     "blade",
+    # the two acts IX and X added, appended for the fourth statement of the
+    # reason above: filing the Regent beside the Hollow King it follows would
+    # renumber every cell after it, and the atlas is read by index.
+    "regent",
+    "unmade",
 )
 ATLAS_COLUMNS = 8
 

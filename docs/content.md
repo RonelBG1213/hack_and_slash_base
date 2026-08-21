@@ -323,6 +323,11 @@ Two further constraints, both learned the expensive way and both in
 it by damage rather than health. The escort rule is now a test —
 `test_no_boss_stage_is_escorted_by_anything_ranged` — rather than only advice.
 
+A third, from the last boss added: **if one class fails a boss and the rest clear
+it, the dial is not health.** The Unmade failed for the Dark Knight alone at 1/6,
+and what fixed it was the charge crossing slower — a speed the fastest, squishiest
+class could not leave in time — with its health and damage untouched.
+
 ---
 
 ## Adding a piece of gear
@@ -617,7 +622,7 @@ and `harms`.
 
 ```sh
 python tools/gen_art.py                          # rebuild assets/sprites.png
-python tools/make_level.py                       # rebuild the forty stages
+python tools/make_level.py                       # rebuild the fifty stages
 python tools/make_rooms.py                       # rebuild the reward-room template
 python tools/balance.py                          # where the fight sits, reference class
 python tools/balance.py --class all --seeds 8    # ...every starting class
@@ -631,7 +636,7 @@ python tools/screenshot.py play out.png --stage 40 --class holy_priest --ticks 2
 
 `--class` takes an advanced class anywhere a starting one is accepted, and
 `--stage` narrows a sweep to a single arena. Both exist because the campaign is
-forty stages: a full sweep of ten advanced classes is minutes, and a tuning pass
+fifty stages: a full sweep of ten advanced classes is minutes, and a tuning pass
 that has to wait minutes per number is a tuning pass nobody finishes.
 
 A sweep only covers the half of the campaign its class can reach — a base class

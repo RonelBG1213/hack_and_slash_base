@@ -60,10 +60,14 @@ PORTRAIT_SCALE = 3
 COLUMN_WIDTH = 62
 
 #: Baseline of the difficulty row, under the class's stat line and above the
-#: prompt. Named because both the drawing and the mouse band read it, and two
-#: copies of a y coordinate is how a clickable row drifts off the thing it
-#: claims to click.
+#: prompt. Named because both the drawing and the hit-test read it, and two
+#: copies of a coordinate is how a clickable row drifts off the thing it claims
+#: to click. `_tier_spans` exists for the x axis for the same reason.
 DIFFICULTY_Y = 174
+
+#: What sits between two tier names. Measured rather than assumed by both the
+#: drawing and the hit-test, so the gap is never counted twice or not at all.
+DIFFICULTY_GAP = "   "
 
 
 class CharacterSelectScene(Scene):
@@ -122,11 +126,14 @@ class CharacterSelectScene(Scene):
             elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
                 return self._begin()
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self._on_difficulty_row(event.pos):
-                # Cycles rather than selecting a tier by its x position. The
-                # row is one line of text three items long; hit-testing each
-                # name would be three moving targets where one band does.
-                self._move_difficulty(1)
+            tier = self._tier_at(event.pos)
+            if tier is not None:
+                # The tier that was clicked, not the next one along. An earlier
+                # draft advanced by one per click on a band spanning the whole
+                # row, which -- because `_move_difficulty` clamps rather than
+                # wrapping -- walked to the hardest tier and stuck there with no
+                # way back. A mouse could reach exactly one of the three.
+                self.difficulty_index = tier
                 return None
 
             hit = self._column_at(event.pos)
@@ -151,13 +158,47 @@ class CharacterSelectScene(Scene):
         count = len(self.difficulties.tiers)
         self.difficulty_index = max(0, min(self.difficulty_index + step, count - 1))
 
-    def _on_difficulty_row(self, window_pos: tuple[int, int]) -> bool:
+    def _tier_spans(self) -> list[tuple[int, int]]:
+        """Where each tier name sits on the row, as `(x, width)`.
+
+        The single source of that layout: `_draw_difficulty` blits from it and
+        `_tier_at` hit-tests against it, so a name can never be drawn somewhere
+        the click does not reach. Summing the parts rather than measuring the
+        joined string, because the two do not always agree to the pixel and the
+        difference is exactly the drift this method exists to remove.
+        """
+        names = [tier.name for tier in self.difficulties.tiers]
+        widths = [self.small.size(name)[0] for name in names]
+        gap = self.small.size(DIFFICULTY_GAP)[0]
+
+        total = sum(widths) + gap * (len(names) - 1)
+        x = (config.INTERNAL_W - total) // 2
+
+        spans = []
+        for width in widths:
+            spans.append((x, width))
+            x += width + gap
+        return spans
+
+    def _tier_at(self, window_pos: tuple[int, int]) -> Optional[int]:
+        """Which tier a window-space click landed on, if any.
+
+        Padded by the same three pixels the selection box is drawn with, so the
+        border of the thing that looks clickable is clickable.
+        """
         window = pygame.display.get_surface()
         if window is None:
-            return False
+            return None
+
         win_w, win_h = window.get_size()
-        _, y = config.window_to_internal(*window_pos, win_w, win_h)
-        return DIFFICULTY_Y - 6 <= y <= DIFFICULTY_Y + 12
+        x, y = config.window_to_internal(*window_pos, win_w, win_h)
+        if not DIFFICULTY_Y - 3 <= y <= DIFFICULTY_Y + 10:
+            return None
+
+        for i, (left, width) in enumerate(self._tier_spans()):
+            if left - 3 <= x <= left + width + 3:
+                return i
+        return None
 
     def _column_at(self, window_pos: tuple[int, int]) -> Optional[int]:
         """Which portrait a window-space click landed on, if any.
@@ -296,25 +337,20 @@ class CharacterSelectScene(Scene):
         chosen = self.difficulty
         centre = config.INTERNAL_W // 2
 
-        names = [tier.name for tier in self.difficulties.tiers]
-        row = "   ".join(names)
-        width = self.small.size(row)[0]
-        x = centre - width // 2
-
-        for i, name in enumerate(names):
+        for i, (left, width) in enumerate(self._tier_spans()):
+            tier = self.difficulties.tiers[i]
             selected = i == self.difficulty_index
             label = self.small.render(
-                name, False, config.WHITE if selected else config.GREY
+                tier.name, False, config.WHITE if selected else config.GREY
             )
             if selected:
                 # A box rather than a brighter colour alone: this row sits
                 # between two other centred lines of small grey text, and
                 # brightness on its own does not read as "this one is armed".
-                box = pygame.Rect(x - 3, DIFFICULTY_Y - 3, label.get_width() + 6, 13)
+                box = pygame.Rect(left - 3, DIFFICULTY_Y - 3, width + 6, 13)
                 pygame.draw.rect(surface, config.PANEL, box)
                 pygame.draw.rect(surface, config.ACCENT, box, 1)
-            surface.blit(label, (x, DIFFICULTY_Y))
-            x += label.get_width() + self.small.size("   ")[0]
+            surface.blit(label, (left, DIFFICULTY_Y))
 
         blurb = chosen.blurb
         if not chosen.measured:

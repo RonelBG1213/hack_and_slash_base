@@ -414,13 +414,17 @@ sweeping a circle rather than a segment.
 
 `tools/make_level.py` describes each stage as a border plus a list of pillar
 rectangles and writes the JSON. An editor is roughly half a project on its own; a
-short script is still the trade being made at forty stages, and it is well past
-the line it was near at twenty. Forty hand-written `Stage` literals is where the
+short script is still the trade being made at fifty stages, and it is well past
+the line it was near at twenty. Fifty hand-written `Stage` literals is where the
 absence of an editor is felt: placing a pillar means picturing a rectangle, and
 placing an enemy means checking by eye that it is not inside one. The generator
 refuses to write an unplayable campaign, which catches the second mistake but
 not the interesting one — an enemy stranded in a pocket it never leaves is a
 perfectly playable stage that nobody can finish.
+
+> Two of the ten stages added for acts IX and X were written with an enemy
+> inside a pillar, and the generator caught both before anything was written to
+> disk. That is the cheap mistake; the expensive one is still unguarded.
 
 ### No CI
 
