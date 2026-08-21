@@ -213,11 +213,18 @@ door, not whether the shrine's point beats either. `--allocate` does not change
 this: a policy for spending a point is not a route that walks onto the plinth
 handing them out.
 
-`stall_every: 5` is the newest number in that list and the one with most riding
-on it. Seven stalls across a run that banks ~24,500 g, against 2,060 g to max the
-permanents, presses on the late-run surplus from the opposite side to the Elixir
-— and the bot neither buys nor cares which door it takes, so nothing here can say
-whether seven is generous or mean.
+`stall_every: 3` is the newest number in that list and the one with most riding
+on it. **Eighteen** stalls across a run that banks ~24,500 g, against 2,060 g to
+max the permanents, presses on the late-run surplus from the opposite side to the
+Elixir — and the bot neither buys nor cares which door it takes, so nothing here
+can say whether eighteen is generous or mean. It was seven, at `stall_every: 5`,
+and that figure was no better measured than this one.
+
+`stall_on_boss_floors` sits beside it and is a different kind of unmeasured: what
+it buys — a shop on the floor after every act boss — is a thing the interval used
+to supply by accident, and the reason it is now a rule is that moving the
+interval would otherwise have removed it without a word. Whether a boss is the
+right moment to be offered a shelf is still a question for hands on a keyboard.
 
 That is deliberate and it was arrived at the hard way. The first draft had the
 bot use the fixture. Three of the four rewards were inert to it regardless — it

@@ -8,9 +8,15 @@ so a choice made here is paid off two rooms away; which door is taken also
 decides which wall the next room is entered by, so the rooms lie end to end.
 
 Four kinds, and the stall is not one of the three a door draws from: it stands on
-every fifth floor and on no other. A schedule rather than a roll, because "gold
-you can always spend somewhere soon" and "gold you know exactly when you can
-spend" are different promises and the second is the one worth planning around.
+every third floor and on every floor that follows a boss, and on no other. A
+schedule rather than a roll, because "gold you can always spend somewhere soon"
+and "gold you know exactly when you can spend" are different promises and the
+second is the one worth planning around.
+
+The boss half is *derived* from the campaign rather than written down beside the
+interval. Where a boss stands is content, in `levels/*.json`, and a list of boss
+floors kept here would be a second copy of one fact -- free to disagree with the
+first the day somebody moves one. That is why `offer` needs a `Campaign`.
 
 What each kind does is a line of behaviour rather than a number, so it
 is code; the numbers are in `data/rooms.json`, and the two are checked against
@@ -43,6 +49,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .. import config
+from ..core.campaign import Campaign
 from ..core.level import (
     REWARD_KINDS,
     REWARD_PROP,
@@ -129,10 +136,20 @@ class Table:
     enabled: bool
     doors: int
 
-    #: How many floors apart the stalls stand. Five means floors 5, 10, 15 and so
-    #: on carry one and no other floor can; `0` switches the stall off entirely
-    #: and `1` puts one on every floor, which are the two ends of the rollback.
+    #: How many floors apart the stalls stand. Three means floors 3, 6, 9 and so
+    #: on carry one; `0` switches the stall off entirely and `1` puts one on
+    #: every floor, which are the two ends of the rollback.
     stall_every: int
+
+    #: Whether a floor that follows a boss carries a stall whatever the interval
+    #: says. The floors themselves are not listed here and cannot be: where a
+    #: boss stands is content, so this is a switch over a fact read off the
+    #: campaign rather than a second copy of it. See `is_boss_floor`.
+    #:
+    #: `false` leaves the interval alone and is half of the rollback. The other
+    #: half is `stall_every`, which at 0 refuses a stall anywhere -- boss floors
+    #: included, or it would not be the switch it is documented as.
+    stall_on_boss: bool
 
     first_room: RoomKind
     heal_percent: int
@@ -216,6 +233,12 @@ class Table:
                 f"of floors; 0 is the stall switched off"
             )
 
+        # A bool, so there is nothing to range-check. Read with `[...]` rather
+        # than `.get(..., True)` for the reason every other key here is: a
+        # rooms.json missing it should say so at startup rather than pick a
+        # schedule on somebody's behalf.
+        stall_on_boss = bool(payload["stall_on_boss_floors"])
+
         stall_offers = int(payload["stall"]["offers"])
         shrine_offers = int(payload["shrine"]["offers"])
         for name, count in (("stall.offers", stall_offers), ("shrine.offers", shrine_offers)):
@@ -231,6 +254,7 @@ class Table:
             enabled=bool(payload["enabled"]),
             doors=doors,
             stall_every=stall_every,
+            stall_on_boss=stall_on_boss,
             first_room=first,
             heal_percent=int(payload["fountain"]["heal_percent"]),
             shrine_points=int(payload["shrine"]["points"]),
@@ -281,17 +305,50 @@ def floor_of(index: int) -> int:
     return index + 2
 
 
-def is_stall_floor(index: int) -> bool:
+def is_boss_floor(index: int, campaign: Campaign) -> bool:
+    """Whether the room the doors at `index` open onto stands after a boss.
+
+    Derived rather than listed, which is the argument `promotes_from`,
+    `variant_of` and `_wall_of` each make in turn: where the bosses stand is
+    content, and a table of boss floors kept beside them is a second copy of one
+    fact that is free to disagree with the first. Move a boss in
+    `tools/make_level.py` and the stall moves with it, with nothing to remember.
+
+    A room takes the floor number of the arena it follows, so floor F is the
+    room after stage F and that arena's index is F - 1. Written as
+    `floor_of(index) - 1` rather than as `index + 1`, so the off-by-one stays
+    inside the one function whose docstring is about explaining it.
+    """
+    arena = floor_of(index) - 1
+    if not 0 <= arena < len(campaign):
+        return False
+    return campaign[arena].kind is RoomKind.BOSS
+
+
+def is_stall_floor(index: int, campaign: Campaign) -> bool:
     """Whether the doors at `index` may offer a stall.
 
-    Every fifth floor and no other. `stall_every: 0` switches the stall off
-    entirely, which is the rollback beside `stall.offers: 0`.
+    Two rules, and a floor needs only one of them: every `stall_every` floors,
+    and every floor that follows a boss. The interval is the planning promise --
+    you always know how far the next chance to spend is -- and the boss rule is
+    the half that cannot be an interval, because it is a fact about where the
+    bosses are rather than a number about how often anything happens. The two
+    coincided exactly while the interval was five, which is what made a shop
+    after every act boss look like arithmetic rather than a decision.
+
+    `stall_every: 0` is checked *first* and refuses everywhere, boss floors
+    included. It is documented as the switch that takes the stall out of the
+    game, and a switch that left eight of them standing would not be one.
     """
     every = table().stall_every
-    return every > 0 and floor_of(index) % every == 0
+    if every <= 0:
+        return False
+    if floor_of(index) % every == 0:
+        return True
+    return table().stall_on_boss and is_boss_floor(index, campaign)
 
 
-def offer(seed: int, index: int) -> tuple[RoomKind, ...]:
+def offer(seed: int, index: int, campaign: Campaign) -> tuple[RoomKind, ...]:
     """What the room after the arena at `index` puts on its three walls.
 
     Distinct kinds, in the order the doors are drawn -- so which door carries
@@ -302,7 +359,7 @@ def offer(seed: int, index: int) -> tuple[RoomKind, ...]:
     one the stall is certain and the other doors are drawn from `ORDINARY_KINDS`
     around it. That replaces the old draw-and-guarantee pair, which cannot mean
     anything beside a schedule: "never more than four transitions from a shop"
-    and "a shop on every fifth floor" are two answers to the same question.
+    and "a shop on every Nth floor" are two answers to the same question.
 
     The schedule *is* the guarantee, and it is a better one -- gold that can
     never be spent is not a reward, and now the player knows exactly how far the
@@ -314,10 +371,18 @@ def offer(seed: int, index: int) -> tuple[RoomKind, ...]:
 
     Stateless, like everything on the map stream: a run loaded from disk is
     offered the doors it was offered before it was put down, and the save file
-    says nothing about a door at all.
+    says nothing about a door at all. `campaign` does not change that -- it is
+    read for the shape of the run rather than for anything that varies within
+    one, so this is still a pure function of its arguments.
+
+    It is required rather than defaulted, and deliberately: a `None` meaning
+    "the interval alone" would build a game that quietly stopped putting a shop
+    after its bosses the day a third caller forgot to pass one. That is the
+    shape the `doors` bound above is written to refuse -- valid until the player
+    is several stages in.
     """
     doors = table().doors
-    if not is_stall_floor(index):
+    if not is_stall_floor(index, campaign):
         return tuple(_stream(seed, index).sample(ORDINARY_KINDS, doors))
 
     kinds = _stream(seed, index).sample(ORDINARY_KINDS, doors - 1)

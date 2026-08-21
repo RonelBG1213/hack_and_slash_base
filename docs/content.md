@@ -522,10 +522,17 @@ middle of somebody's run.
 > schedule rather than in the draw.
 >
 > The stall itself is unaffected by any of that: `stall_every` in
-> `data/rooms.json` puts one on every fifth floor and on no other, and
-> `test_a_stall_stands_on_every_fifth_floor_and_on_no_other` sweeps twelve seeds
-> over all thirty-nine transitions asserting both halves — that one is offered on
-> those floors, and that one is *not* on the rest.
+> `data/rooms.json` puts one on every third floor, `stall_on_boss_floors` adds
+> the floors that follow a boss, and
+> `test_a_stall_stands_where_the_schedule_says_and_nowhere_else` sweeps twelve
+> seeds over all thirty-nine transitions asserting both halves — that one is
+> offered on those floors, and that one is *not* on the rest.
+>
+> **The boss floors are read off the campaign, never listed.**
+> `rooms.is_boss_floor` looks for `RoomKind.BOSS` in `levels/*.json`, so moving a
+> boss in `tools/make_level.py` moves its stall with it. That is the same
+> one-fact-derived shape as `promotes_from`, `variant_of` and `_wall_of`, and
+> `test_every_boss_floor_carries_a_stall` is what holds it.
 
 > [!WARNING]
 > **A reward room has nothing in it to kill, so the only way out is a door — and

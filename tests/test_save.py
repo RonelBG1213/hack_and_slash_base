@@ -91,7 +91,7 @@ def test_a_restored_reward_room_is_the_room_that_was_saved() -> None:
     run.entered_from = Direction.SOUTH
     run.next_entrance = Direction.EAST
     run.world = World(
-        rooms.chamber(run.room, rooms.offer(run.seed, run.index), run.entered_from),
+        rooms.chamber(run.room, rooms.offer(run.seed, run.index, run.campaign), run.entered_from),
         BESTIARY,
         seed=Run._room_seed(run.seed, run.index),
         carry_hp=run.world.hero.hp,
@@ -124,7 +124,7 @@ def test_a_restored_room_stands_at_the_wall_it_was_entered_by() -> None:
         run.entered_from = wall
         run.next_entrance = rooms.OPPOSITE[wall]
         run.world = World(
-            rooms.chamber(run.room, rooms.offer(run.seed, run.index), wall),
+            rooms.chamber(run.room, rooms.offer(run.seed, run.index, run.campaign), wall),
             BESTIARY,
             seed=Run._room_seed(run.seed, run.index),
             carry_hp=run.world.hero.hp,

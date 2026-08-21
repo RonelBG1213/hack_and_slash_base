@@ -112,8 +112,8 @@
     "knockback": 3.6,
     "hitstop": 5,
     "projectile": true,
-    "projectile_speed": 3.4,
-    "projectile_radius": 3.5,
+    "projectile_speed": 4.0,
+    "projectile_radius": 4.5,
     "projectile_lifetime": 170,
     "_comment": [
       "The Magician. The hardest single hit of any light attack, on the longest",

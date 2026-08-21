@@ -449,7 +449,8 @@ spends a level is nobody.
 **Every number in `data/rooms.json`.** The bot walks past all four fixtures, so
 nothing measures whether a fountain is worth 15% or 40%, whether a chest pays
 enough to matter, whether the shrine's point is the best thing on any wall, or
-whether a stall every fifth floor is the right spacing.
+whether a stall every third floor — plus one after every boss — is the right
+spacing.
 That is the price of the run-level bracket still being a fixed reference, and it
 is the same trade as the shop: an instrument that spends is an instrument that
 has stopped being one. See

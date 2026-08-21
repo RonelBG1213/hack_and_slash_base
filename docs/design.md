@@ -207,9 +207,18 @@ walls *because of the last decision you made*.
 > hundred gold or nothing. What changed is not the shop — the panel, the shelves
 > and the keys are untouched — but that reaching it is somewhere you go.
 >
-> **The stall stands on every fifth floor and on no other**: floors 5, 10, 15 and
-> so on, seven of them in a run. Off those floors a stall is not rare, it is
-> unreachable — which is what makes one a landmark rather than a fixture.
+> **The stall stands on every third floor, and on every floor that follows a
+> boss**: floors 3, 5, 6, 9, 10, 12, 15, 18, 20 and so on, eighteen of them in a
+> run. Off those floors a stall is not rare, it is unreachable — which is what
+> makes one a landmark rather than a fixture.
+>
+> The boss half is a rule rather than a coincidence, and it used to be the other
+> way round. At `stall_every: 5` the interval landed on 5, 10, 15 … 40 — exactly
+> the eight act bosses — so a shop after every boss fell out of the arithmetic
+> and nothing recorded that anyone wanted it. Moving the interval to three would
+> have thrown it away silently, so it is written down now: `stall_on_boss_floors`
+> in [`data/rooms.json`](../data/rooms.json), reading where the bosses actually
+> stand rather than carrying a list that could disagree with them.
 >
 > Gold that can never be spent is not a reward, and a schedule promises that
 > better than the guarantee it replaced ("a stall within four transitions if none

@@ -66,10 +66,11 @@ to open on every one of the thirty-nine transitions; it is now one of the four
 things a reward room can hold, and getting to one means having chosen that door
 two rooms earlier.
 
-**And a stall is only offered on every fifth floor** — 5, 10, 15 and so on, seven
-of them in a forty-stage run. Off those floors it is not rare, it is unreachable.
-So the question is no longer "will a shop come up" but "am I holding enough to be
-worth the door when floor 20 arrives". See
+**And a stall is only offered on every third floor, plus every floor that
+follows a boss** — 3, 5, 6, 9, 10, 12, 15, 18, 20 and so on, eighteen of them in a
+forty-stage run. Off those floors it is not rare, it is unreachable. So the
+question is no longer "will a shop come up" but "am I holding enough to be worth
+the door when floor 20 arrives". See
 [the rooms between](design.md#the-rooms-between).
 
 Opening it pauses the game, which nothing else in a run does — the between-stage
@@ -265,10 +266,16 @@ work](balance.md) uses.
 | Rogue | 24,409 (won) | 23,709 (won) | 4,709 |
 | Archer | 25,561 (won) | 23,144 (won) | 4,726 |
 | Priest | 24,922 (won) | 24,451 (won) | 4,753 |
-| Magician | 1,740 (died, stage 12) | 1,662 (died, stage 12) | — |
+| Magician | 24,849 (won) | 22,983 (won) | 4,746 |
 
-The last column is worth more than it looks. Those four figures are identical to
-the ones recorded against the twenty-stage campaign, to the gold — the same
+The Magician's row read `1,740 (died, stage 12)` until the bolt was fixed —
+see [Balance](balance.md#the-magician-was-missing). It is now an ordinary row,
+which is the economic half of that fix: a class that dies a third of the way in
+banks a fourteenth of what the shop is priced against, and no amount of pricing
+work reaches it.
+
+The last column is worth more than it looks. The first four figures are identical
+to the ones recorded against the twenty-stage campaign, to the gold — the same
 seeds paying out the same amounts through the same twenty stages. It is the
 economy's half of the proof that acts I–IV were not touched.
 

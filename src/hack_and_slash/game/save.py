@@ -170,7 +170,7 @@ def restore(payload: dict, campaign: Campaign, bestiary: Bestiary) -> Run:
     room = _room(payload.get("room"))
     entered_from = _direction(payload.get("entered_from"))
     level = (
-        rooms.chamber(room, rooms.offer(seed, index), entered_from)
+        rooms.chamber(room, rooms.offer(seed, index, campaign), entered_from)
         if room
         else campaign[index]
     )

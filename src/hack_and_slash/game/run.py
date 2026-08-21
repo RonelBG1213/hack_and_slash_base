@@ -391,7 +391,7 @@ class Run:
         free of every recorded number in this project.
         """
         kind = self.next_room or rooms.table().first_room
-        doors = rooms.offer(self.seed, self.index)
+        doors = rooms.offer(self.seed, self.index, self.campaign)
         self.entered_from = self.next_entrance
 
         hero = self.world.hero

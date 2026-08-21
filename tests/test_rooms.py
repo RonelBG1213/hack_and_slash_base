@@ -20,6 +20,8 @@ import json
 
 import pytest
 
+from hack_and_slash import config
+from hack_and_slash.core import campaign_io
 from hack_and_slash.core.campaign import Campaign
 from hack_and_slash.core.level import (
     REWARD_KINDS,
@@ -46,6 +48,24 @@ TRANSITIONS = range(39)
 
 SEEDS = range(12)
 
+#: The shipped forty, loaded once. The schedule reads the campaign now -- half
+#: of it is "the floor after a boss", and where a boss stands is content rather
+#: than a number -- so a test about the schedule needs a real one to read.
+#:
+#: That is also what makes the pinned floor list below guard
+#: `tools/make_level.py` as well as `data/rooms.json`: move a boss and either
+#: the stall moves with it or this file fails, which is the entire point of the
+#: fact being derived instead of listed.
+CAMPAIGN = campaign_io.load(config.LEVELS_DIR / "campaign.json")
+
+#: Where the bosses stand, read off the campaign rather than typed out -- the
+#: same argument the code makes, and a list here could go stale the same way.
+BOSS_FLOORS = tuple(
+    CAMPAIGN.stage_number(i)
+    for i in range(len(CAMPAIGN))
+    if CAMPAIGN[i].kind is RoomKind.BOSS
+)
+
 
 # --- the offer ---------------------------------------------------------------
 def test_the_same_transition_offers_the_same_three_doors() -> None:
@@ -56,12 +76,12 @@ def test_the_same_transition_offers_the_same_three_doors() -> None:
     through -- there is no state for a save to fail to record.
     """
     for index in TRANSITIONS:
-        assert rooms.offer(7, index) == rooms.offer(7, index)
+        assert rooms.offer(7, index, CAMPAIGN) == rooms.offer(7, index, CAMPAIGN)
 
 
 def test_a_different_seed_is_a_different_run_of_rooms() -> None:
-    a = [rooms.offer(1, index) for index in TRANSITIONS]
-    b = [rooms.offer(2, index) for index in TRANSITIONS]
+    a = [rooms.offer(1, index, CAMPAIGN) for index in TRANSITIONS]
+    b = [rooms.offer(2, index, CAMPAIGN) for index in TRANSITIONS]
     assert a != b, "two seeds laid out the same rooms in the same order"
 
 
@@ -74,23 +94,25 @@ def test_every_offer_is_distinct_reward_kinds_only() -> None:
     """
     for seed in SEEDS:
         for index in TRANSITIONS:
-            kinds = rooms.offer(seed, index)
+            kinds = rooms.offer(seed, index, CAMPAIGN)
             assert len(kinds) == TABLE.doors
             assert len(set(kinds)) == len(kinds), f"seed {seed}, room {index}: {kinds}"
             for kind in kinds:
                 assert kind in REWARD_KINDS, f"{kind.value} is not something a door opens on"
 
 
-def test_a_stall_stands_on_every_fifth_floor_and_on_no_other() -> None:
+def test_a_stall_stands_where_the_schedule_says_and_nowhere_else() -> None:
     """The stall is on a schedule, not in the draw.
 
     Gold that can never be spent is not a reward, and this is the whole of what
     now promises it can be -- there is no draw-and-guarantee pair behind it, so
     if the schedule does not hold there is nothing else to catch it.
 
-    Both halves are asserted, and the second is the one that is easy to lose: a
-    gate that lets a stall through on floor 6 is a gate that is not doing
-    anything, and a suite that only checked floor 5 would pass anyway.
+    Two rules, and a floor needs only one of them: the interval, and a floor
+    that follows a boss. Both halves are asserted, and so is the negative, which
+    is the one that is easy to lose: a gate that lets a stall through on a floor
+    that is neither is a gate that is not doing anything, and a suite that only
+    checked the floors that should have one would pass anyway.
     """
     every = TABLE.stall_every
     assert every > 1, "the shipped table has the stall on every floor; this proves nothing"
@@ -98,11 +120,12 @@ def test_a_stall_stands_on_every_fifth_floor_and_on_no_other() -> None:
     for seed in SEEDS:
         for index in TRANSITIONS:
             floor = rooms.floor_of(index)
-            offered = RoomKind.SHOP in rooms.offer(seed, index)
-            assert offered == (floor % every == 0), (
+            scheduled = floor % every == 0 or (TABLE.stall_on_boss and floor in BOSS_FLOORS)
+            offered = RoomKind.SHOP in rooms.offer(seed, index, CAMPAIGN)
+            assert offered == scheduled, (
                 f"seed {seed}, floor {floor}: "
                 f"{'a stall was offered' if offered else 'no stall was offered'}, "
-                f"and the schedule is every {every} floors"
+                f"and the schedule is every {every} floors plus {BOSS_FLOORS}"
             )
 
 
@@ -113,9 +136,38 @@ def test_the_stall_stands_on_the_floors_the_schedule_names() -> None:
     wrong when it is right -- the doors in a room name the room after the *next*
     arena. Pinning the actual floor numbers means an off-by-one in it fails here
     rather than moving every stall in the game by one floor and passing.
+
+    Nineteen floors, of which **eighteen are reachable**: the fortieth arena is
+    the last thing in a run and is not followed by a room, so floor 40 is on the
+    list and is never walked into. It was seven before the interval moved from
+    five to three and the boss rule was written down.
     """
-    floors = [rooms.floor_of(i) for i in TRANSITIONS if rooms.is_stall_floor(i)]
-    assert floors == [5, 10, 15, 20, 25, 30, 35, 40]
+    floors = [rooms.floor_of(i) for i in TRANSITIONS if rooms.is_stall_floor(i, CAMPAIGN)]
+    assert floors == [3, 5, 6, 9, 10, 12, 15, 18, 20, 21, 24, 25, 27, 30, 33, 35, 36, 39, 40]
+    assert len([f for f in floors if f < CAMPAIGN.length]) == 18
+
+
+def test_every_boss_floor_carries_a_stall() -> None:
+    """The half of the schedule that is a fact rather than a number.
+
+    Where a boss stands is content -- `tools/make_level.py` stamps
+    `RoomKind.BOSS` on eight of the forty -- so the rule reads the campaign
+    rather than carrying a list of floors that is free to disagree with it.
+    This is what makes that claim true: move a boss and either the stall moves
+    with it or this fails.
+
+    It also pins something that used to be an accident. At `stall_every: 5` the
+    interval landed on 5, 10 ... 40 by itself, so a shop after every act boss
+    fell out of the arithmetic and nothing anywhere recorded that it was wanted.
+    Moving the interval to three would have thrown it away silently.
+    """
+    assert TABLE.stall_on_boss, "the shipped table has the boss rule off"
+    assert BOSS_FLOORS, "no boss anywhere in the campaign; this proves nothing"
+
+    for floor in BOSS_FLOORS:
+        index = floor - 2  # `floor_of` run backwards
+        assert rooms.is_stall_floor(index, CAMPAIGN), f"floor {floor} follows a boss"
+        assert RoomKind.SHOP in rooms.offer(0, index, CAMPAIGN)
 
 
 def test_the_stall_does_not_land_on_the_door_the_bot_takes() -> None:
@@ -129,7 +181,7 @@ def test_the_stall_does_not_land_on_the_door_the_bot_takes() -> None:
     stalls = 0
     for seed in SEEDS:
         for index in TRANSITIONS:
-            kinds = rooms.offer(seed, index)
+            kinds = rooms.offer(seed, index, CAMPAIGN)
             if RoomKind.SHOP not in kinds:
                 continue
             stalls += 1
@@ -146,9 +198,9 @@ def test_off_a_stall_floor_a_shop_is_not_reachable_at_all() -> None:
     """
     for seed in SEEDS:
         for index in TRANSITIONS:
-            if rooms.is_stall_floor(index):
+            if rooms.is_stall_floor(index, CAMPAIGN):
                 continue
-            assert RoomKind.SHOP not in rooms.offer(seed, index)
+            assert RoomKind.SHOP not in rooms.offer(seed, index, CAMPAIGN)
 
 
 def test_a_stall_every_of_zero_puts_no_stall_anywhere(tmp_path, monkeypatch) -> None:
@@ -157,6 +209,11 @@ def test_a_stall_every_of_zero_puts_no_stall_anywhere(tmp_path, monkeypatch) -> 
     The one number above `stall.offers: 0`: that one leaves the stall standing
     with nothing rolled on its shelf, this one means no door anywhere leads to
     one at all.
+
+    **Boss floors included**, which is why `stall_every` is checked before the
+    boss rule rather than beside it. A switch that took the stall out of the
+    game and left eight of them standing after the bosses would not be the
+    switch this is documented as, and it would be a plausible thing to break.
     """
     payload = json.loads(rooms.config.ROOMS_DATA.read_text(encoding="utf-8"))
     payload["stall_every"] = 0
@@ -165,9 +222,32 @@ def test_a_stall_every_of_zero_puts_no_stall_anywhere(tmp_path, monkeypatch) -> 
 
     monkeypatch.setattr(rooms, "_TABLE", rooms.Table.load(path))
     try:
-        assert not any(rooms.is_stall_floor(index) for index in TRANSITIONS)
+        assert payload["stall_on_boss_floors"] is True, "the boss rule is not even on"
+        assert not any(rooms.is_stall_floor(index, CAMPAIGN) for index in TRANSITIONS)
         for index in TRANSITIONS:
-            assert RoomKind.SHOP not in rooms.offer(0, index)
+            assert RoomKind.SHOP not in rooms.offer(0, index, CAMPAIGN)
+    finally:
+        rooms.reset_cache()
+
+
+def test_the_boss_rule_switches_off_on_its_own(tmp_path, monkeypatch) -> None:
+    """The other half of the rollback: the interval alone.
+
+    `stall_every: 5` with this off is the schedule exactly as it shipped before
+    a boss floor meant anything, and that is what makes it a rollback rather
+    than a paragraph. Checked at the interval it actually ships with, so the two
+    rules are shown to be separable rather than shown to agree.
+    """
+    payload = json.loads(rooms.config.ROOMS_DATA.read_text(encoding="utf-8"))
+    payload["stall_on_boss_floors"] = False
+    path = tmp_path / "rooms.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    monkeypatch.setattr(rooms, "_TABLE", rooms.Table.load(path))
+    try:
+        floors = [rooms.floor_of(i) for i in TRANSITIONS if rooms.is_stall_floor(i, CAMPAIGN)]
+        assert floors == [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39]
+        assert 5 in BOSS_FLOORS and 5 not in floors, "a boss floor kept its stall"
     finally:
         rooms.reset_cache()
 
@@ -182,8 +262,8 @@ def _damage_over_a_fight(offers_between_swings: bool) -> list[int]:
         if offers_between_swings:
             # Every kind of draw this layer makes, interleaved as hard as it can
             # be with the fight -- which is far more than a real run ever does.
-            rooms.offer(tick, tick)
-            rooms.offer(tick * 3, tick)
+            rooms.offer(tick, tick, CAMPAIGN)
+            rooms.offer(tick * 3, tick, CAMPAIGN)
         taken.append(roll_damage(weapon, world.rng))
     return taken
 
@@ -225,7 +305,7 @@ def test_a_chamber_of_every_kind_is_playable(kind: RoomKind, wall: Direction) ->
     there was one and a template that only works from three sides is a run that
     strands the first player to walk out of a north door.
     """
-    level = rooms.chamber(kind, rooms.offer(0, 0), wall)
+    level = rooms.chamber(kind, rooms.offer(0, 0, CAMPAIGN), wall)
     assert level.problems() == []
     assert level.kind is kind
     assert not level.is_fight
@@ -236,7 +316,7 @@ def test_a_chamber_of_every_kind_is_playable(kind: RoomKind, wall: Direction) ->
 def test_a_chamber_holds_the_one_prop_its_kind_names(
     kind: RoomKind, wall: Direction
 ) -> None:
-    level = rooms.chamber(kind, rooms.offer(0, 0), wall)
+    level = rooms.chamber(kind, rooms.offer(0, 0, CAMPAIGN), wall)
     assert level.reward is not None
     assert level.reward.kind is REWARD_PROP[kind]
     assert len(level.doors) == TABLE.doors
@@ -244,7 +324,7 @@ def test_a_chamber_holds_the_one_prop_its_kind_names(
 
 @pytest.mark.parametrize("wall", list(Direction))
 def test_the_doors_lead_where_the_offer_said(wall: Direction) -> None:
-    offered = rooms.offer(3, 11)
+    offered = rooms.offer(3, 11, CAMPAIGN)
     level = rooms.chamber(RoomKind.SHRINE, offered, wall)
     assert tuple(door.leads_to for door in level.doors) == offered
 
@@ -260,7 +340,7 @@ def test_a_room_puts_its_doors_on_the_three_walls_it_was_not_entered_through(
     opening carries no door -- walking back out the way you came is not one of
     the three choices.
     """
-    level = rooms.chamber(RoomKind.FOUNTAIN, rooms.offer(0, 0), wall)
+    level = rooms.chamber(RoomKind.FOUNTAIN, rooms.offer(0, 0, CAMPAIGN), wall)
     walls = rooms.openings(rooms.template())
 
     assert level.hero_spawn == walls[wall]
@@ -279,7 +359,7 @@ def test_the_middle_door_is_the_one_straight_ahead(wall: Direction) -> None:
     fixture. Putting it at index 1 is what keeps it away from index 0, which is
     the only door anything mechanical ever takes.
     """
-    level = rooms.chamber(RoomKind.FOUNTAIN, rooms.offer(0, 0), wall)
+    level = rooms.chamber(RoomKind.FOUNTAIN, rooms.offer(0, 0, CAMPAIGN), wall)
     reward = level.reward
     assert reward is not None
 
@@ -344,7 +424,7 @@ def a_chamber(
     seed: int = 1,
     wall: Direction = rooms.FIRST_ENTRANCE,
 ) -> World:
-    return World(rooms.chamber(kind, rooms.offer(0, 0), wall), BESTIARY, seed=seed)
+    return World(rooms.chamber(kind, rooms.offer(0, 0, CAMPAIGN), wall), BESTIARY, seed=seed)
 
 
 def test_a_reward_room_is_not_cleared_by_having_nothing_in_it() -> None:
@@ -751,8 +831,9 @@ def test_a_fountain_that_heals_nothing_is_rooms_switched_off() -> None:
 def test_the_shipped_table_matches_the_file_on_disk() -> None:
     payload = json.loads(rooms.config.ROOMS_DATA.read_text(encoding="utf-8"))
     assert payload["enabled"] is True, "the shipped game has rooms in it"
-    assert payload["doors"] == len(rooms.offer(0, 0))
+    assert payload["doors"] == len(rooms.offer(0, 0, CAMPAIGN))
     assert payload["stall_every"] == TABLE.stall_every
+    assert payload["stall_on_boss_floors"] == TABLE.stall_on_boss
     assert RoomKind(payload["first_room"]) in REWARD_KINDS
 
 
