@@ -88,6 +88,41 @@ them learns a new move, so nothing you worked out stops being true.
 
 ---
 
+## Difficulty
+
+Three tiers, chosen on the character select beside the class and never revisited
+— a run is one arc, and a dial turned halfway through makes the health carried
+out of stage 12 mean something different from the health carried into it. `R`
+restarts on the tier the run was begun on, for the same reason it restarts as the
+base class.
+
+| Tier | What it changes |
+| --- | --- |
+| **Forgiving** | A mistake costs 70% of what it costs on Normal |
+| **Normal** | The game as it is tuned. Every recorded number describes this tier |
+| **Relentless** | A mistake costs 130% |
+
+**One dial, and it is damage the hero takes.** Not enemy health, not cadence,
+not counts — so an enemy's time-to-kill is identical on every tier and a fight
+learned on one reads the same on another. That choice is not a simplification:
+enemy health has already been measured here as close to inert, because the
+enrage threshold is a fraction and hero output never grows. See
+[Balance](balance.md).
+
+**Normal is not a tier so much as the absence of one.** At the default the
+multiply is skipped by an early return, so the arithmetic is the arithmetic the
+280-cell grid was measured against — and `data/difficulty.json` refuses to load
+if its default is anything else. The other two ship marked untuned, flagged on
+the select screen as well as in the data file, until the sweep says otherwise.
+
+> The one bracket a difficulty setting can quietly break is the ceiling: *only
+> the floor and the game is unfair; only the ceiling and there is no game.* A
+> hero that walks in swinging has to lose every run on the gentlest tier too,
+> and the suite pins that against whichever tier is gentlest rather than against
+> a name.
+
+---
+
 ## The classes
 
 You pick one before the run. It is almost the whole of character building — the

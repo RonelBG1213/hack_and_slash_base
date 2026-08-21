@@ -42,6 +42,7 @@ from ..core.campaign import Campaign
 from ..core.level import Direction, PropKind, RoomKind
 from . import jobs, progression, rooms
 from .attributes import NEUTRAL, Attributes
+from .difficulty import NORMAL as NORMAL_DIFFICULTY, Difficulty
 from .entities import DEFAULT_HERO, Bestiary, EntityType
 from .world import Outcome, Purse, World
 
@@ -167,6 +168,17 @@ class Run:
     #: offer and the balance grid has never seen.
     job_id: str = ""
 
+    #: The tier this run is being played on, chosen once at the character
+    #: select and never revisited -- there is no mid-run difficulty change, for
+    #: the same reason `R` restarts as the base class: a run is one arc, and a
+    #: dial turned halfway through makes the health carried out of stage 12 mean
+    #: something different from the health carried into it.
+    #:
+    #: Defaults to the identity tier rather than to a table lookup, so a `Run`
+    #: built by hand -- by a test, by `tools/balance.py`, by anything predating
+    #: this feature -- is the run it has always been, with no file read.
+    difficulty: Difficulty = NORMAL_DIFFICULTY
+
     # --- lifecycle -----------------------------------------------------------
     @classmethod
     def start(
@@ -176,12 +188,20 @@ class Run:
         seed: int = 0,
         at_stage: int = 0,
         hero_type_id: str = DEFAULT_HERO,
+        difficulty: Difficulty = NORMAL_DIFFICULTY,
     ) -> "Run":
         """Begin a run.
 
         `at_stage` starts partway in, for tuning and screenshots. It is not a
-        difficulty option: the hero arrives at full health, so a stage reached
-        this way is a different fight from the same stage reached through a run.
+        difficulty option -- and now that the game has real ones the distinction
+        is worth keeping sharp: the hero arrives at full health, so a stage
+        reached this way is a different fight from the same stage reached
+        through a run, whatever tier either was played on.
+
+        `difficulty` defaults to the identity tier, so every existing caller --
+        the tests, `tools/balance.py`, `tools/screenshot.py` -- goes on
+        measuring exactly the game it was measuring before this argument
+        existed.
         """
         index = max(0, min(at_stage, len(campaign) - 1))
         return cls(
@@ -195,18 +215,22 @@ class Run:
                 # A run started partway in is on the floor it says it is, so a
                 # tool jumping to stage 18 sees stage 18's payouts.
                 purse=Purse(floor=index + 1),
+                difficulty=difficulty,
             ),
             index=index,
             seed=seed,
             start_index=index,
             hero_type_id=hero_type_id,
+            difficulty=difficulty,
         )
 
     def restart(self) -> "Run":
         """A fresh hero, back where this run began. Nothing carries over.
 
         The class does carry over -- restarting is a second attempt at the same
-        run, not a return to the character select.
+        run, not a return to the character select. **So does the tier**, and for
+        exactly the same reason: `R` is a second attempt at this run, and a
+        second attempt that quietly changed how hard it was would not be one.
         """
         return Run.start(
             self.campaign,
@@ -214,6 +238,7 @@ class Run:
             seed=self.seed,
             at_stage=self.start_index,
             hero_type_id=self.hero_type_id,
+            difficulty=self.difficulty,
         )
 
     @property
@@ -409,6 +434,7 @@ class Run:
             hero_type_id=self.hero_type.id,
             purse=Purse(floor=self.index + 1, gold_find=self.gold_find),
             hero_bonus=self.earned,
+            difficulty=self.difficulty,
         )
         self.just_advanced = True
 
@@ -492,6 +518,7 @@ class Run:
             # the body -- so a hero carrying 154 with +24 earned would have it
             # clipped back to the bare class's 130 by the line meant to keep it.
             hero_bonus=self.earned,
+            difficulty=self.difficulty,
         )
         self.just_advanced = True
         self.healed = carried - before

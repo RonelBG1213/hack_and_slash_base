@@ -21,6 +21,7 @@ PROGRESSION_DATA = DATA_DIR / "progression.json"
 ROOMS_DATA = DATA_DIR / "rooms.json"
 HAZARDS_DATA = DATA_DIR / "hazards.json"
 EQUIPMENT_DATA = DATA_DIR / "equipment.json"
+DIFFICULTY_DATA = DATA_DIR / "difficulty.json"
 SPRITE_ATLAS = ASSETS_DIR / "sprites.png"
 
 # Written while the game runs, never committed and never read by the logic

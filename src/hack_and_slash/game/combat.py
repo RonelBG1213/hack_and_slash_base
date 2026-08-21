@@ -34,6 +34,33 @@ MIN_DAMAGE = 1
 HAZARD_KNOCKBACK = 2.2
 
 
+def incoming(world, target: Entity, damage: int) -> int:
+    """This hit, after the run's difficulty has had its say.
+
+    **Applied to the hero and to nothing else.** A tier scales what the player
+    takes, not what the player deals -- so an enemy's health, its cadence and
+    the number of swings needed to kill it are identical on every tier, and a
+    fight learned on one reads the same on another. Making it symmetric would
+    have made Forgiving a shorter fight as well as a safer one, which is two
+    changes wearing one name.
+
+    Called from all three places damage reaches a body -- a swing, a shot and a
+    trap. A trap is included on purpose: the hero cannot tell, mid-corridor,
+    which of the two hurt it, and a tier that quietly excluded the floor would
+    read as a bug on the stages built around spikes.
+
+    `MIN_DAMAGE` is re-applied here rather than inside `Difficulty.scaled`,
+    because the floor is combat's to own -- see that module's note on why it
+    does not import this one. At the identity tier `scaled` returns its
+    argument untouched and this is `max(MIN_DAMAGE, damage)` on a number that
+    already cleared that floor, so the arithmetic is provably the arithmetic
+    that was measured.
+    """
+    if not target.is_hero:
+        return damage
+    return max(MIN_DAMAGE, world.difficulty.scaled(damage))
+
+
 def roll_damage(weapon: Weapon, rng) -> int:
     """The weapon's own number, rolled. **Draws from `world.rng` and nothing
     else in the game does.**
@@ -121,6 +148,7 @@ def apply_hit(world, attacker: Entity, target: Entity, weapon: Weapon, rng) -> b
     damage, crit = resolve_damage(
         roll_damage(weapon, rng), attacker.attrs, target.attrs, world.attr_rng
     )
+    damage = incoming(world, target, damage)
     target.hp = max(0, target.hp - damage)
     target.last_hit_by = attacker.id
     target.flash = actions.FLASH_TICKS
@@ -190,6 +218,7 @@ def apply_hazard(world, target: Entity, damage: int, push: Vec2) -> bool:
         world.emit(Event(EventKind.BLOCKED, target.pos, target.id, is_hero=target.is_hero))
         return False
 
+    damage = incoming(world, target, damage)
     target.hp = max(0, target.hp - damage)
     target.flash = actions.FLASH_TICKS
 
@@ -270,7 +299,9 @@ def resolve_projectile_hits(world) -> None:
 
             # Attacker's side already in `shot.damage`; only the target's
             # defense is left to apply, and the floor still holds under it.
-            damage = max(MIN_DAMAGE, shot.damage - target.attrs.defense)
+            damage = incoming(
+                world, target, max(MIN_DAMAGE, shot.damage - target.attrs.defense)
+            )
             target.hp = max(0, target.hp - damage)
             target.last_hit_by = shot.owner_id
             target.flash = actions.FLASH_TICKS

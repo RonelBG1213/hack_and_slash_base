@@ -19,7 +19,8 @@ from hack_and_slash import config
 from hack_and_slash.core import campaign_io
 from hack_and_slash.core.level import RoomKind
 from hack_and_slash.core.vec2 import Vec2
-from hack_and_slash.game import jobs
+from hack_and_slash.game import difficulty, jobs
+from hack_and_slash.game.difficulty import NORMAL
 from hack_and_slash.game.autoplay import (
     REACTION_SLOPPY,
     Autoplay,
@@ -143,14 +144,18 @@ def wins_across_seeds(
     return won
 
 
-def play_run(policy, seed: int, hero: str = DEFAULT_HERO, job: str = "") -> Run:
+def play_run(
+    policy, seed: int, hero: str = DEFAULT_HERO, job: str = "", tier=NORMAL
+) -> Run:
     """A whole run, stage one to the end, with health carrying between.
 
     `job` is the branch taken at the fork. Left empty the run never promotes,
     which is what every bracket recorded before acts V-VIII existed assumes --
     so those brackets keep measuring what they measured.
     """
-    run = Run.start(campaign(), BESTIARY, seed=seed, hero_type_id=hero)
+    run = Run.start(
+        campaign(), BESTIARY, seed=seed, hero_type_id=hero, difficulty=tier
+    )
     play_run_out(run, policy, RUN_TICK_LIMIT, job)
     return run
 
@@ -219,10 +224,13 @@ def first_branch(hero: str) -> str:
     return offers[0].id if offers else ""
 
 
-def runs_won(policy, hero: str = DEFAULT_HERO, seeds=SEEDS, job: str | None = None) -> int:
+def runs_won(
+    policy, hero: str = DEFAULT_HERO, seeds=SEEDS, job: str | None = None, tier=NORMAL
+) -> int:
     branch = first_branch(hero) if job is None else job
     return sum(
-        play_run(policy, seed, hero, branch).outcome is RunOutcome.WON for seed in seeds
+        play_run(policy, seed, hero, branch, tier).outcome is RunOutcome.WON
+        for seed in seeds
     )
 
 
@@ -352,6 +360,28 @@ def test_the_floor_a_skilled_hero_finishes_the_whole_run() -> None:
 
 def test_the_ceiling_a_reckless_hero_finishes_no_runs() -> None:
     assert runs_won(reckless) == 0
+
+
+def test_the_ceiling_holds_on_the_easiest_tier_too() -> None:
+    """The one bracket a difficulty setting can quietly break.
+
+    *Only the floor and the game is unfair; only the ceiling and there is no
+    game.* A tier is allowed to make mistakes cost less -- that is what it is
+    for -- but a tier on which walking in swinging finishes the campaign is not
+    an easier game, it is the absence of one, and nothing else in the suite
+    would say a word about it.
+
+    Run against whichever shipped tier is gentlest rather than against a name,
+    so re-tuning `data/difficulty.json` cannot slide out from under this by
+    adding a softer one below the tier this test happened to be written for.
+    """
+    gentlest = min(difficulty.table().tiers, key=lambda tier: tier.incoming)
+    won = runs_won(reckless, tier=gentlest)
+    assert won == 0, (
+        f"a hero that never disengages finishes {won}/{len(SEEDS)} runs on "
+        f"'{gentlest.id}' (incoming {gentlest.incoming}) -- that tier has no "
+        f"game in it, and the dial has gone too far"
+    )
 
 
 def test_every_stage_is_clearable_on_its_own() -> None:

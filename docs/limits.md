@@ -246,6 +246,25 @@ The hole this leaves is the same one the shop has: an instrument that spends is
 an instrument that has stopped being a fixed reference, and this project has
 chosen the fixed reference every time it has been asked.
 
+### Two of the three difficulty tiers are unmeasured
+
+`Normal` is measured by every recorded number in the project, and structurally
+so: at the identity multiplier the arithmetic is the arithmetic the grid was
+measured against, `data/difficulty.json` refuses to load if the default is
+anything else, and `test_difficulty.py` runs a default-tier fight beside one
+built by a world that has never heard of difficulty and demands the same health
+tick for tick.
+
+**`Forgiving` at 700 and `Relentless` at 1300 are opening bids.** They are round
+numbers picked to be legible, not swept values, and both are flagged as untuned
+in the data file *and on the select screen* — a player choosing one is told. What
+is pinned rather than guessed is the thing a tier could quietly destroy: a hero
+that walks in swinging still loses every run on the gentlest tier, checked
+against whichever tier is gentlest rather than against a name, so adding a softer
+one below cannot slide out from under it.
+
+`tools/balance.py --difficulty <tier>` is how this stops being true.
+
 ### Nothing measures the shop
 
 `autoplay` never buys anything and never detours for a pickup, which is exactly
@@ -332,6 +351,26 @@ has been made to close that.
 ---
 
 ## Engineering
+
+### `autoplay` can sidestep now, but the reference still does not
+
+The recorded blocker on the `flanker` demon was that the reference bot's entire
+defensive repertoire is backing away in a straight line -- which is exactly what
+that brain exists to defeat, so the grid reported *"the instrument has no
+answer"* in the same units as *"the fight is too hard"*.
+
+`autoplay.Evasive` is that gap closed as a **second instrument**, not as a change
+to the reference: it overrides one method, `_retreat_direction`, and
+`test_the_evasive_policy_leaves_the_reference_untouched` fails if it ever
+overrides a second. So every recorded number still means what it meant, and
+`tools/balance.py --policy evasive` is how the comparison gets made.
+
+What is still true: **the reference bot cannot sidestep**, and until a sidestep
+is promoted into it -- a decision that moves the grid on the day it lands, and
+the same kind of decision as teaching the bot to spend gold -- placing the demon
+is still measuring the instrument. `EVASIVE_DEGREES` is itself unswept; the
+`flanker`'s measured 35-to-55 cliff is the *enemy's* approach and says nothing
+about the hero's disengage.
 
 ### Nothing paths around walls
 

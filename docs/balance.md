@@ -113,6 +113,139 @@ would give you one, and would stop the grid being a fixed reference the same day
 
 Four things the measurement overturned. That is what it is for.
 
+### The difficulty tiers, and what the first sweep of them found
+
+Knight, forty stages, four seeds, `tools/balance.py --class knight --seeds 4
+--difficulty <tier>`. One dial: a per-mille multiplier on damage the hero takes.
+
+| tier | `incoming` | every stage alone | whole run | face-tank | worst hp |
+| --- | --- | --- | --- | --- | --- |
+| Forgiving | 700 | 40/40 at 4/4 | **4/4** | 0/4 | 77 |
+| Normal | 1000 | 40/40 at 4/4 | **2/4** | 0/4 | 61 |
+| Relentless | 1300 | 40/40 at 4/4 | **0/4** | 0/4 | — |
+
+Three things, and the middle one is the important one.
+
+**The ceiling holds on every tier, the gentlest included.** A hero that walks in
+swinging finishes no runs at 700 either. *Only the floor and the game is unfair;
+only the ceiling and there is no game* — a tier that made walking in swinging
+work would be the absence of a game rather than an easier one, and it is the one
+bracket a difficulty setting can quietly destroy. Pinned by
+`test_the_ceiling_holds_on_the_easiest_tier_too`, against whichever shipped tier
+is gentlest rather than against a name, so adding a softer one below cannot
+slide out from under it.
+
+> [!warning] The run-level floor was **already red before any of this landed**
+> Two tests, both failing on `main` with all of this work stashed, both verified
+> that way round deliberately — a new feature is the obvious suspect and was the
+> wrong one:
+>
+> | test | reads |
+> | --- | --- |
+> | `test_the_floor_a_skilled_hero_finishes_the_whole_run` | 2/6 |
+> | `test_every_class_can_finish_the_campaign[priest]` | 2/3 |
+>
+> The Knight sweep agrees: 2/4 whole runs at Normal, worst run ending on stage
+> 20. **These are the only two reds in the suite**, and neither is an xfail —
+> `UNTUNED_STAGES` and `UNTUNED_CAMPAIGNS` are both still empty, so the
+> acceptance criterion is unchanged at zero.
+>
+> Every one of the forty stages clears 4/4 entered at full health, on all three
+> tiers. So this is not a wall in the campaign; it is attrition — the heal
+> between stages no longer sustaining a run — which is precisely what the tool's
+> own verdict line says and what the two brackets were separated to
+> distinguish. It is open, and it is not a difficulty problem.
+
+**Which is also why Relentless cannot be read yet.** 0/4 at the run level is a
+tier stacked on top of a bracket that was already failing, so the number says
+nothing about whether 1300 is the right dial — it says the run-level floor is
+broken and 1300 does not repair it. Forgiving at 700 *does* repair it, which is
+a fact about the size of the attrition gap rather than a recommendation.
+
+Both outer tiers stay marked unmeasured in `data/difficulty.json` and on the
+select screen. What this sweep settles is the per-stage bracket and the ceiling;
+what it cannot settle is anything run-level, until the floor is green again.
+
+### A lateral disengage moves the run bracket and not one per-stage cell
+
+Knight, four seeds, `--policy reference` against `--policy evasive`. The only
+difference between the two instruments is which way the hero walks when it gives
+ground: straight back, or leaned forty degrees off the line.
+
+| | per-stage, stages 1-20 | whole run | worst run ended | median hp | worst hp |
+| --- | --- | --- | --- | --- | --- |
+| reference | 20/20 cells at 4/4 | 2/4 | **stage 20** | 62 | 61 |
+| evasive | 20/20 cells at 4/4 | 3/4 | **stage 38** | 59 | 56 |
+
+**Not one of the twenty per-stage cells moved** -- same win rate and the same
+worst-hp figure in every one. And the run-level bracket moved a long way: the
+worst run of the set now ends eighteen stages later than it did.
+
+The two readings are not in tension, they are the two brackets doing the job they
+were separated to do. A stage entered at full health rarely takes the hero below
+`CAUTIOUS_BELOW`, so the retreat branch is hardly reached and the two policies
+decide the fight identically -- which
+`test_a_healthy_fight_is_decided_identically_by_both_policies` pins directly. A
+*run* is where health carries, where the hero spends whole stages under that
+threshold, and where the shape of the retreat compounds.
+
+Note the direction of the health columns: the sidestepping bot finishes with
+slightly *less* health, not more. It is not taking fewer hits per fight. It is
+ending up somewhere survivable at the end of a run, which is a different thing
+and is the thing the run bracket measures.
+
+> [!important] What this costs to promote is now known, and it is less than feared
+> The recorded worry was that teaching the bot a lateral disengage "moves the
+> grid on the day it lands". Measured: it moves **no** cell of the per-stage
+> grid and it moves the run-level bracket. So promoting it into the reference is
+> a re-baseline of the run rows and nothing else -- much cheaper than a 280-cell
+> re-tune, and a decision that can now be taken on evidence.
+>
+> It is still not taken. `Evasive` ships as a second instrument, the reference is
+> untouched, and both those facts are structural rather than careful --
+> `test_the_evasive_policy_leaves_the_reference_untouched` fails if the override
+> ever spreads to a second method.
+
+### The demon was not an instrument artifact after all
+
+The recorded position was that the `flanker` demon's failures measured *"the
+reference bot has no answer"* rather than *"the fight is too hard"* -- the brain
+closes on an arc precisely to defeat a straight-line retreat, and the reference
+bot has no other kind. The stated unblocker was to teach the bot to sidestep.
+
+That is now built (`autoplay.Evasive`, `--policy evasive`), so the excuse is
+testable. Assassin, stage 39, eight seeds, one demon standing where a revenant
+stood -- the sharpest cell of the original attempt:
+
+| | no demon | one demon |
+| --- | --- | --- |
+| reference | 8/8, worst 23 | 5/8, worst **4** |
+| evasive | 8/8, worst 23 | 4/8, worst **13** |
+
+**The sidestep does not recover the cell.** It buys real survivability -- the
+worst case more than triples and the median goes 23 to 34 -- so the instrument
+genuinely *was* partly blind. The blindness was simply never the size of the
+failure. The creature is too strong there on its own merits.
+
+Stage 36 says the harness is driving the same thing the original sweep drove: at
+`flank_degrees` 35 it reads 8/8 worst 28, reproducing the recorded row exactly,
+against 8/8 worst 44 with no demon. Evasive reads 8/8 worst 26 -- no rescue
+there either.
+
+So the demon still spawns nowhere, and the dead-end entry that said *"re-propose
+it after `autoplay` can sidestep, and not before"* has been satisfied and
+answered: the bot can sidestep, and the answer is still no.
+
+> [!warning] Two things this does **not** settle
+> `EVASIVE_DEGREES` is 40 and unswept. The flanker's measured 35-to-55 cliff is
+> the *enemy's* approach and says nothing about the hero's disengage, so a
+> different lean could read differently -- sweeping it is the first thing the
+> next attempt should do.
+>
+> And the run-level floor was red on `main` when this was measured, so nothing
+> run-level in this section is readable. Every figure above is per-stage,
+> entered at full health, which is the bracket that was green.
+
 ### Reaction time is not what decides these fights
 
 Across slow and moderate reactions the outcome barely moves — rolling costs uptime

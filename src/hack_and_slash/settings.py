@@ -5,6 +5,12 @@ here: `config.py` is what the game *is* and this is how one person likes looking
 at it, so anything that would move a damage roll belongs in `data/`, behind a
 tuning decision and a sweep, rather than behind a menu row.
 
+The difficulty tiers are that rule being followed, not broken: they are content
+in `data/difficulty.json`, they are chosen once per run on the character select,
+and they are nowhere in this dataclass. A `difficulty` field here would be a
+preference that decides a fight -- which is exactly what the paragraph above
+refuses.
+
 The two effect toggles are safe by construction rather than by care --
 `render/effects.py` is fed by events the sim emits and never reads back, and
 `test_effects.py` runs the same seeded fight with the toggles both ways and

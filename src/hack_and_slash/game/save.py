@@ -42,7 +42,7 @@ from pathlib import Path
 from .. import config
 from ..core.campaign import Campaign
 from ..core.level import Direction, RoomKind
-from . import rooms
+from . import difficulty, rooms
 from .attributes import NEUTRAL, Attributes
 from .entities import DEFAULT_HERO, Bestiary
 from .run import Run
@@ -51,7 +51,7 @@ from .world import Purse, World
 #: Bumped when the shape of a snapshot changes in a way an older reader would
 #: get wrong. A save from another version is refused rather than guessed at --
 #: see `restore`, and the note there about what this does and does not catch.
-SAVE_VERSION = 3
+SAVE_VERSION = 4
 
 
 class SaveFormatError(Exception):
@@ -108,6 +108,12 @@ def snapshot(run: Run) -> dict:
         # are standing. Restoring without it rebuilds a different room.
         "entered_from": run.entered_from.value,
         "next_entrance": run.next_entrance.value,
+        # The tier, by id rather than by its numbers. Storing the multiplier
+        # would weld the save to a value that `data/difficulty.json` is
+        # explicitly allowed to move -- two of the three tiers ship marked
+        # unmeasured -- so a run saved today would reload on the old tuning
+        # after the sweep that fixed it.
+        "difficulty": run.difficulty.id,
     }
 
 
@@ -167,6 +173,12 @@ def restore(payload: dict, campaign: Campaign, bestiary: Bestiary) -> Run:
     earned = _attributes(payload.get("earned"))
     gold_find = float(payload.get("gold_find", 0.0))
 
+    # `get`, not `[]`: a save naming a tier that has since been renamed or
+    # removed is a reason to carry on at the default, not a reason to refuse
+    # somebody their run back. That is the one piece of forgiveness in this
+    # loader, and it is bounded -- every other field still raises.
+    tier = difficulty.table().get(str(payload.get("difficulty", "")))
+
     room = _room(payload.get("room"))
     entered_from = _direction(payload.get("entered_from"))
     level = (
@@ -194,12 +206,14 @@ def restore(payload: dict, campaign: Campaign, bestiary: Bestiary) -> Run:
         hero_type_id=job_id or hero_type_id,
         purse=Purse(floor=index + 1, gold_find=gold_find),
         hero_bonus=earned,
+        difficulty=tier,
     )
 
     return Run(
         campaign=campaign,
         bestiary=bestiary,
         world=world,
+        difficulty=tier,
         index=index,
         seed=seed,
         hero_type_id=hero_type_id,

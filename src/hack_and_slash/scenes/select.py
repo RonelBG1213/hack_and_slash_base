@@ -11,6 +11,20 @@ The roster comes from `bestiary.hero_classes`, which is every entity whose
 faction is `hero`, in the order `data/entities.json` lists them. Adding a class
 is an entry in that file and a painter in `tools/gen_art.py`; nothing here needs
 touching, and there is no second list that can fall out of step with the data.
+
+**The difficulty row is here rather than on the Settings screen, and that is a
+deliberate placement rather than a convenient one.** `scenes/options.py` is
+drawn on the line that nothing on it may change how a fight resolves -- a
+difficulty row there would be a balance decision worn as a preference. Here it
+is what it actually is: a decision taken once, beside the other decision taken
+once, on the screen whose whole job is to be a decision rather than a
+reference. The tiers themselves live in `data/difficulty.json` where they can
+be swept, which is the other half of the same argument.
+
+Up and down move it, left and right move the roster. Two axes rather than a
+focus cursor: with exactly two things to choose there is nothing a cursor would
+disambiguate, and it would put a mode between the player and a screen that has
+never had one.
 """
 
 from __future__ import annotations
@@ -21,6 +35,7 @@ import pygame
 
 from .. import config
 from ..core.campaign import Campaign
+from ..game import difficulty as difficulty_module
 from ..game.entities import Bestiary, EntityType
 from ..render.atlas import Atlas
 from ..settings import Settings
@@ -43,6 +58,12 @@ ROLES = {
 #: smear exactly the pixels this screen exists to show off.
 PORTRAIT_SCALE = 3
 COLUMN_WIDTH = 62
+
+#: Baseline of the difficulty row, under the class's stat line and above the
+#: prompt. Named because both the drawing and the mouse band read it, and two
+#: copies of a y coordinate is how a clickable row drifts off the thing it
+#: claims to click.
+DIFFICULTY_Y = 174
 
 
 class CharacterSelectScene(Scene):
@@ -73,6 +94,13 @@ class CharacterSelectScene(Scene):
         self.classes: tuple[EntityType, ...] = bestiary.hero_classes
         self.index = max(0, min(index, len(self.classes) - 1))
 
+        #: The tiers, and where the cursor starts. `index_of_default` rather
+        #: than zero: the default tier is the one every recorded number in the
+        #: project was measured against, and a screen that opened on anything
+        #: else would quietly make the unmeasured tier the normal way to play.
+        self.difficulties = difficulty_module.table()
+        self.difficulty_index = self.difficulties.index_of_default
+
         self.title = pygame.font.Font(None, 30)
         self.body = pygame.font.Font(None, 17)
         self.small = pygame.font.Font(None, 14)
@@ -87,9 +115,20 @@ class CharacterSelectScene(Scene):
                 self._move(-1)
             elif event.key in (pygame.K_RIGHT, pygame.K_d):
                 self._move(1)
+            elif event.key in (pygame.K_UP, pygame.K_w):
+                self._move_difficulty(-1)
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                self._move_difficulty(1)
             elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
                 return self._begin()
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self._on_difficulty_row(event.pos):
+                # Cycles rather than selecting a tier by its x position. The
+                # row is one line of text three items long; hit-testing each
+                # name would be three moving targets where one band does.
+                self._move_difficulty(1)
+                return None
+
             hit = self._column_at(event.pos)
             if hit is None:
                 return None
@@ -104,6 +143,21 @@ class CharacterSelectScene(Scene):
         # Wraps, because five items in a row have two ends and stopping dead at
         # them is worse than the one moment of surprise wrapping costs.
         self.index = (self.index + step) % len(self.classes)
+
+    def _move_difficulty(self, step: int) -> None:
+        # Clamped, where the roster wraps. Difficulty is an ordered scale and
+        # wrapping one puts Relentless one keypress below Forgiving, which is
+        # the single worst misread available on this screen.
+        count = len(self.difficulties.tiers)
+        self.difficulty_index = max(0, min(self.difficulty_index + step, count - 1))
+
+    def _on_difficulty_row(self, window_pos: tuple[int, int]) -> bool:
+        window = pygame.display.get_surface()
+        if window is None:
+            return False
+        win_w, win_h = window.get_size()
+        _, y = config.window_to_internal(*window_pos, win_w, win_h)
+        return DIFFICULTY_Y - 6 <= y <= DIFFICULTY_Y + 12
 
     def _column_at(self, window_pos: tuple[int, int]) -> Optional[int]:
         """Which portrait a window-space click landed on, if any.
@@ -141,11 +195,16 @@ class CharacterSelectScene(Scene):
             hero_type_id=self.chosen.id,
             settings=self.settings,
             on_exit=self.on_exit,
+            difficulty=self.difficulty,
         )
 
     @property
     def chosen(self) -> EntityType:
         return self.classes[self.index]
+
+    @property
+    def difficulty(self) -> difficulty_module.Difficulty:
+        return self.difficulties.tiers[self.difficulty_index]
 
     def update(self, elapsed_seconds: float) -> Optional[Scene]:
         self.tick += 1
@@ -160,10 +219,13 @@ class CharacterSelectScene(Scene):
 
         self._draw_roster(surface)
         self._draw_details(surface)
+        self._draw_difficulty(surface)
 
         if (self.tick // 30) % 2 == 0:
             prompt = self.small.render(
-                "left / right  choose        enter  begin", False, config.GOOD
+                "left / right  hero     up / down  difficulty     enter  begin",
+                False,
+                config.GOOD,
             )
             surface.blit(
                 prompt,
@@ -221,3 +283,46 @@ class CharacterSelectScene(Scene):
         )
         line = self.small.render(stats, False, config.GREY)
         surface.blit(line, (centre - line.get_width() // 2, 156))
+
+    def _draw_difficulty(self, surface: pygame.Surface) -> None:
+        """The tier, with the ones either side of it shown greyed.
+
+        Drawn as a scale rather than as the selected name alone, because what
+        this row is asking is *how hard*, and a single word answers that only
+        for somebody who already knows what the other words are. The arrows are
+        omitted at the ends, which is the whole of how the row says it is
+        clamped rather than wrapping.
+        """
+        chosen = self.difficulty
+        centre = config.INTERNAL_W // 2
+
+        names = [tier.name for tier in self.difficulties.tiers]
+        row = "   ".join(names)
+        width = self.small.size(row)[0]
+        x = centre - width // 2
+
+        for i, name in enumerate(names):
+            selected = i == self.difficulty_index
+            label = self.small.render(
+                name, False, config.WHITE if selected else config.GREY
+            )
+            if selected:
+                # A box rather than a brighter colour alone: this row sits
+                # between two other centred lines of small grey text, and
+                # brightness on its own does not read as "this one is armed".
+                box = pygame.Rect(x - 3, DIFFICULTY_Y - 3, label.get_width() + 6, 13)
+                pygame.draw.rect(surface, config.PANEL, box)
+                pygame.draw.rect(surface, config.ACCENT, box, 1)
+            surface.blit(label, (x, DIFFICULTY_Y))
+            x += label.get_width() + self.small.size("   ")[0]
+
+        blurb = chosen.blurb
+        if not chosen.measured:
+            # Said on the screen, not only in the data file. Every other
+            # unmeasured number in this project is flagged where it lives, and
+            # for a tier the place it lives, as far as a player is concerned,
+            # is here.
+            blurb = f"{blurb}  (untuned)" if blurb else "untuned"
+        if blurb:
+            line = self.small.render(blurb, False, config.GREY)
+            surface.blit(line, (centre - line.get_width() // 2, DIFFICULTY_Y + 14))

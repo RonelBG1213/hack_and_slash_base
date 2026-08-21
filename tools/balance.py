@@ -60,16 +60,33 @@ from hack_and_slash.game.autoplay import (  # noqa: E402
     REACTION_SLOPPY,
     Autoplay,
     autoplay,
+    evasive,
     into,
     play_out,
     play_run_out,
     reckless,
+    skilful,
     spread,
 )
-from hack_and_slash.game import jobs  # noqa: E402
+from hack_and_slash.game import difficulty as difficulty_module, jobs  # noqa: E402
+from hack_and_slash.game.difficulty import NORMAL  # noqa: E402
 from hack_and_slash.game.entities import DEFAULT_HERO, load_bestiary  # noqa: E402
 from hack_and_slash.game.run import Run, RunOutcome  # noqa: E402
 from hack_and_slash.game.world import Outcome, World  # noqa: E402
+
+#: The policies `--policy` can drive the *skilled* rows with. The face-tank row
+#: is not in here on purpose: `reckless` is the ceiling instrument and swapping
+#: it would stop the two brackets being the two brackets.
+#:
+#: `reference` is `autoplay` and is the default, because every recorded number
+#: in this project was measured through it. Anything else in this table is a
+#: second instrument being compared *against* that one, never a replacement --
+#: see the note on `Skilful` and on `Evasive` in `game/autoplay.py`.
+POLICIES = {
+    "reference": autoplay,
+    "evasive": evasive,
+    "skilful": skilful,
+}
 
 LATENCIES = [
     ("perfect", REACTION_PERFECT),
@@ -96,11 +113,18 @@ def summarise(wins: int, total: int, seconds: list[float], hp: list[int]) -> dic
     }
 
 
-def measure_stage(level, bestiary, policy, seeds: range, hero: str = DEFAULT_HERO) -> dict:
-    """One stage in isolation, entered at full health."""
+def measure_stage(
+    level, bestiary, policy, seeds: range, hero: str = DEFAULT_HERO, tier=NORMAL
+) -> dict:
+    """One stage in isolation, entered at full health.
+
+    `tier` defaults to the identity difficulty, which is arithmetically the
+    game every recorded number in this project was measured against -- so a
+    sweep run without `--difficulty` measures exactly what it always measured.
+    """
     wins, seconds, hp_left = 0, [], []
     for seed in seeds:
-        world = World(level, bestiary, seed=seed, hero_type_id=hero)
+        world = World(level, bestiary, seed=seed, hero_type_id=hero, difficulty=tier)
         ticks = play_out(world, policy)
         if world.outcome is Outcome.WON:
             wins += 1
@@ -117,6 +141,7 @@ def measure_run(
     hero: str = DEFAULT_HERO,
     job: str = "",
     allocate=None,
+    tier=NORMAL,
 ) -> dict:
     """A whole run, with health carrying between stages.
 
@@ -129,7 +154,9 @@ def measure_run(
     """
     wins, seconds, hp_left = 0, [], []
     for seed in seeds:
-        run = Run.start(campaign, bestiary, seed=seed, hero_type_id=hero)
+        run = Run.start(
+            campaign, bestiary, seed=seed, hero_type_id=hero, difficulty=tier
+        )
         ticks = play_run_out(run, policy, RUN_TICK_LIMIT, job, allocate)
         if run.outcome is RunOutcome.WON:
             wins += 1
@@ -139,7 +166,8 @@ def measure_run(
 
 
 def furthest_stage(
-    campaign, bestiary, policy, seeds: range, hero: str, job: str = "", allocate=None
+    campaign, bestiary, policy, seeds: range, hero: str, job: str = "",
+    allocate=None, tier=NORMAL,
 ) -> tuple[int, str]:
     """Where the worst run of the set died, for a class that cannot finish.
 
@@ -149,7 +177,9 @@ def furthest_stage(
     """
     worst, name = len(campaign), ""
     for seed in seeds:
-        run = Run.start(campaign, bestiary, seed=seed, hero_type_id=hero)
+        run = Run.start(
+            campaign, bestiary, seed=seed, hero_type_id=hero, difficulty=tier
+        )
         play_run_out(run, policy, RUN_TICK_LIMIT, job, allocate)
         if run.outcome is not RunOutcome.WON and run.index < worst:
             worst, name = run.index, run.level.name
@@ -259,6 +289,8 @@ def measure_class(
     full: bool,
     only: int | None = None,
     allocate=None,
+    tier=NORMAL,
+    policy=autoplay,
 ) -> list[str]:
     """One class, top to bottom. Returns whatever is out of balance about it."""
     name = bestiary[hero].name
@@ -273,7 +305,7 @@ def measure_class(
         print(RULE)
         for index in indices:
             level = campaign[index]
-            data = measure_stage(level, bestiary, autoplay, seeds, hero)
+            data = measure_stage(level, bestiary, policy, seeds, hero, tier)
             stage_rows.append((f"stage {index + 1} ({level.name})", data))
             print(row(f"{index + 1}. {level.name}", data))
 
@@ -288,14 +320,18 @@ def measure_class(
     print("\nwhole run, health carrying between stages")
     print(HEADER)
     print(RULE)
-    run_skilled = measure_run(campaign, bestiary, autoplay, seeds, base, branch, allocate)
-    run_tank = measure_run(campaign, bestiary, reckless, seeds, base, branch, allocate)
+    run_skilled = measure_run(
+        campaign, bestiary, policy, seeds, base, branch, allocate, tier
+    )
+    run_tank = measure_run(
+        campaign, bestiary, reckless, seeds, base, branch, allocate, tier
+    )
     print(row("skilled", run_skilled))
     print(row("face-tank", run_tank))
 
     if run_skilled["wins"] < run_skilled["total"]:
         stage, stage_name = furthest_stage(
-            campaign, bestiary, autoplay, seeds, base, branch, allocate
+            campaign, bestiary, policy, seeds, base, branch, allocate, tier
         )
         print(f"\n  worst run ended on stage {stage} ({stage_name})")
 
@@ -353,6 +389,28 @@ def main() -> int:
         "number was measured with -- and which stops being the right default "
         "the day data/progression.json sets xp_base above zero",
     )
+    parser.add_argument(
+        "--difficulty",
+        default="",
+        metavar="TIER",
+        help="which difficulty tier to measure. Default is the tier named in "
+        "data/difficulty.json, which is the identity one -- every recorded "
+        "number in this project was measured at it, and a sweep without this "
+        "flag measures exactly what it always measured. The other tiers ship "
+        "unmeasured and this flag is how that stops being true",
+    )
+    parser.add_argument(
+        "--policy",
+        default="reference",
+        choices=sorted(POLICIES),
+        help="which instrument drives the skilled rows. 'reference' is the bot "
+        "every recorded number was measured through and is the default. "
+        "'evasive' is the same bot with a lateral disengage instead of a "
+        "straight-line one -- the thing that unblocks the flanker demon, and a "
+        "second instrument rather than a replacement. The face-tank row is "
+        "always the reckless bot: it is the ceiling and swapping it would stop "
+        "the two brackets being the two brackets",
+    )
     args = parser.parse_args()
 
     try:
@@ -364,6 +422,20 @@ def main() -> int:
     campaign = campaign_io.load(config.LEVELS_DIR / "campaign.json")
     bestiary = load_bestiary(config.ENTITIES_DATA, config.WEAPONS_DATA)
     seeds = range(args.seeds)
+
+    difficulties = difficulty_module.table()
+    if args.difficulty:
+        try:
+            tier = difficulties[args.difficulty]
+        except KeyError:
+            print(
+                f"unknown difficulty '{args.difficulty}'; pick one of: "
+                f"{', '.join(t.id for t in difficulties.tiers)}",
+                file=sys.stderr,
+            )
+            return 1
+    else:
+        tier = difficulties.default
 
     if args.stage is not None and not 1 <= args.stage <= len(campaign):
         print(f"--stage must be between 1 and {len(campaign)}", file=sys.stderr)
@@ -393,7 +465,10 @@ def main() -> int:
     print(
         f"{campaign.name}  --  {len(campaign)} stages, {args.seeds} seeds, "
         f"{len(heroes)} class{'es' if len(heroes) > 1 else ''}, "
-        f"spending {args.allocate or 'nothing'}"
+        f"spending {args.allocate or 'nothing'}, "
+        f"policy {args.policy}, "
+        f"difficulty {tier.id}"
+        + ("" if tier.measured else "  [UNMEASURED TIER]")
     )
 
     notes = []
@@ -404,7 +479,8 @@ def main() -> int:
         # whether they can finish at all.
         full = args.stages or hero == DEFAULT_HERO or len(heroes) == 1
         notes += measure_class(
-            campaign, bestiary, hero, seeds, full, args.stage, allocate
+            campaign, bestiary, hero, seeds, full, args.stage, allocate, tier,
+            POLICIES[args.policy],
         )
 
     if len(heroes) == 1 and args.stage is None:
@@ -423,7 +499,8 @@ def main() -> int:
                 row(
                     f"{name} ({ticks})",
                     measure_run(
-                        campaign, bestiary, Autoplay(ticks), seeds, base, branch, allocate
+                        campaign, bestiary, Autoplay(ticks), seeds, base, branch,
+                        allocate, tier,
                     ),
                 )
             )

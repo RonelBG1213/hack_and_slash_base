@@ -41,6 +41,7 @@ from ..core.spatial import SpatialHash
 from ..core.vec2 import Vec2
 from . import hazards
 from .attributes import NEUTRAL, Attributes
+from .difficulty import NORMAL as NORMAL_DIFFICULTY, Difficulty
 from .entities import DEFAULT_HERO, Bestiary, Entity, Faction, spawn
 from .events import Event
 from .loot import Pickup
@@ -140,6 +141,7 @@ class World:
         hero_type_id: str = DEFAULT_HERO,
         purse: Purse | None = None,
         hero_bonus: Attributes = NEUTRAL,
+        difficulty: Difficulty = NORMAL_DIFFICULTY,
     ) -> None:
         """One stage in progress.
 
@@ -165,6 +167,13 @@ class World:
         would have it clipped back to the bare class's 130 by the very line
         meant to preserve it. Defaults to neutral, so every test and tool that
         predates the attribute layer is untouched.
+
+        `difficulty` is the tier the run was started on, and it reaches the
+        fight through `combat` rather than through anything here -- no body is
+        built differently and no enemy is given a stat of its own. Defaults to
+        the identity tier, which is arithmetically the game every recorded
+        number in this project was measured against, so a world built without
+        an opinion is still that fight.
         """
         self.level = level
         self.bestiary = bestiary
@@ -174,6 +183,7 @@ class World:
         self.hero_type_id = hero_type_id
         self.purse = purse or Purse()
         self.hero_bonus = hero_bonus
+        self.difficulty = difficulty
 
         #: Separate from `rng` on purpose. See the module docstring: this is the
         #: guarantee that adding loot to a tuned game moved nothing.

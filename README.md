@@ -76,6 +76,14 @@ beside them for reference. They are printed, not rebindable. Nothing on that scr
 can change how a fight resolves, which is the line it is drawn on: difficulty is
 a balance decision and balance decisions live in `data/` where they get swept.
 
+**Difficulty** is chosen on the character select, beside the class — three tiers,
+up and down to move between them. It is one dial: how much damage *the hero*
+takes. Enemy health, cadence and counts are identical on every tier, so a fight
+learned on one reads the same on another. The default tier is structurally
+pinned to the arithmetic every recorded balance number was measured against —
+`data/difficulty.json` refuses to load if it is not — and the other two ship
+marked untuned until `tools/balance.py --difficulty` has swept them.
+
 **Achievements** and **Unlockables** are stubs and say so. Achievements draws
 four lifetime counters from `state/profile.json`; nothing is defined. Unlockables
 is empty because unlocks were chosen to be gameplay-affecting, and the first one

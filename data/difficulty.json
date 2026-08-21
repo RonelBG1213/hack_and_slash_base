@@ -1,0 +1,68 @@
+{
+  "_comment": [
+    "How hard the fight is, chosen once per run beside the class.",
+    "",
+    "WHY THIS FILE EXISTS RATHER THAN A SETTINGS ROW. scenes/options.py is",
+    "drawn on the line that nothing on it may change how a fight resolves --",
+    "'a difficulty row would be a balance decision worn as a preference, and",
+    "the project's whole measurement culture rests on balance decisions being",
+    "made in data/ where they can be swept'. That refusal is still correct and",
+    "still stands. This is the other half of the same sentence: the decision",
+    "lives here, in content, with a sweep axis behind it.",
+    "",
+    "ONE DIAL, AND WHY IT IS THIS ONE. 'incoming' is a per-mille multiplier on",
+    "damage arriving at the hero, and nothing else moves. Enemy health was the",
+    "obvious alternative and this project has already measured it as nearly",
+    "inert: the enrage threshold is a fraction, so a boss spends the same",
+    "PROPORTION of a shorter fight enraged, and both late bosses were",
+    "eventually tuned by damage after health changes moved the win rate by",
+    "nothing. A run with every permanent good maxed finishes with ONE point of",
+    "health more than a run that buys nothing, because past a point the hero",
+    "dies inside a stage rather than to attrition between them. Damage is the",
+    "axis this fight actually turns on; health is the one that reads like it",
+    "should and does not.",
+    "",
+    "1000 IS THE IDENTITY, AND THAT IS LOAD-BEARING. At 1000 the multiply is",
+    "skipped by an early return and the arithmetic is the arithmetic that was",
+    "measured -- so 'Normal is the game the 280 cells were recorded against'",
+    "is a millisecond test rather than a twenty-minute sweep. Same trick as",
+    "attributes.py defaulting every field to the identity of its own",
+    "operation, and it is here for the same reason.",
+    "",
+    "ROLLBACK: set every tier's 'incoming' to 1000. The code goes inert and",
+    "the game is arithmetically today's, exactly as loot.json switches off at",
+    "gold.base 0.",
+    "",
+    "MEASURED: nothing below except 'normal', which is measured by every",
+    "recorded number in the project by construction. The other two are opening",
+    "bids and are marked as such until tools/balance.py --difficulty has swept",
+    "them. What must hold and is checked by the suite: the easiest tier still",
+    "loses every face-tank run. Only the ceiling and there is no game."
+  ],
+
+  "default": "normal",
+
+  "tiers": [
+    {
+      "id": "forgiving",
+      "name": "Forgiving",
+      "blurb": "a mistake costs less",
+      "incoming": 700,
+      "_measured": false
+    },
+    {
+      "id": "normal",
+      "name": "Normal",
+      "blurb": "the game as it is tuned",
+      "incoming": 1000,
+      "_measured": true
+    },
+    {
+      "id": "relentless",
+      "name": "Relentless",
+      "blurb": "a mistake costs more",
+      "incoming": 1300,
+      "_measured": false
+    }
+  ]
+}

@@ -19,7 +19,7 @@ import pytest
 
 from hack_and_slash import config
 from hack_and_slash.core import campaign_io
-from hack_and_slash.game import jobs, profile, save
+from hack_and_slash.game import difficulty, jobs, profile, save
 from hack_and_slash.game.run import Run
 from hack_and_slash.scenes.achievements import AchievementsScene
 from hack_and_slash.scenes.menu import ITEMS, MenuScene
@@ -103,6 +103,74 @@ def test_new_game_goes_to_the_character_select(atlas) -> None:
     assert isinstance(chosen, CharacterSelectScene)
     assert chosen.seed == 9, "the seed must survive the menu"
     assert chosen.start_stage == 0
+
+
+# --- the difficulty row on the character select ------------------------------
+def select(atlas, **kwargs) -> CharacterSelectScene:
+    return CharacterSelectScene(campaign(), BESTIARY, atlas, **kwargs)
+
+
+def test_the_character_select_opens_on_the_measured_tier(atlas) -> None:
+    """Not on the first tier in the file -- on the *default* one.
+
+    A screen that opened on Forgiving would make the unmeasured tier the normal
+    way to play the game, and every number in docs/balance.md would describe a
+    fight most players never have.
+    """
+    scene = select(atlas)
+    assert scene.difficulty.is_identity
+    assert scene.difficulty.id == difficulty.table().default.id
+
+
+def test_up_and_down_move_the_tier_and_leave_the_roster_alone(atlas) -> None:
+    """Two axes, no focus cursor. Left and right are still the roster."""
+    scene = select(atlas)
+    hero_before = scene.index
+
+    press(scene, pygame.K_DOWN)
+    assert scene.difficulty.id == "relentless"
+    assert scene.index == hero_before, "moving the tier moved the roster"
+
+    press(scene, pygame.K_UP)
+    press(scene, pygame.K_UP)
+    assert scene.difficulty.id == "forgiving"
+
+
+def test_the_tier_clamps_rather_than_wrapping(atlas) -> None:
+    """The roster wraps and this deliberately does not. Difficulty is an
+    ordered scale, and wrapping one puts the hardest tier a single keypress
+    below the easiest -- the worst misread available on this screen."""
+    scene = select(atlas)
+    for _ in range(6):
+        press(scene, pygame.K_DOWN)
+    assert scene.difficulty.id == "relentless"
+
+    for _ in range(6):
+        press(scene, pygame.K_UP)
+    assert scene.difficulty.id == "forgiving"
+
+
+def test_the_chosen_tier_reaches_the_run(atlas) -> None:
+    """The whole point of the row. It has to survive the scene handover, land
+    on the `Run`, and reach the `World` where combat can read it."""
+    scene = select(atlas)
+    press(scene, pygame.K_DOWN)
+
+    play = press(scene, pygame.K_RETURN)
+    assert isinstance(play, PlayScene)
+    assert play.run.difficulty.id == "relentless"
+    assert play.run.world.difficulty.id == "relentless"
+
+
+def test_restarting_keeps_the_tier_that_was_chosen(atlas) -> None:
+    """`R` is a second attempt at this run. A second attempt that quietly
+    changed how hard it was would not be one -- the same argument that keeps
+    the class across a restart."""
+    scene = select(atlas)
+    press(scene, pygame.K_DOWN)
+    play = press(scene, pygame.K_RETURN)
+
+    assert play.restarted().run.difficulty.id == "relentless"
 
 
 def test_quit_asks_the_app_to_close(atlas) -> None:

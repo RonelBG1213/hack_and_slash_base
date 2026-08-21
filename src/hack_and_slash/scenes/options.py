@@ -18,6 +18,14 @@ slider, a "start with more health" toggle would each be a balance decision worn
 as a preference, and the project's whole measurement culture rests on balance
 decisions being made in `data/` where they can be swept.
 
+**The game now has difficulty tiers, and they are still not here.** They live in
+`data/difficulty.json` -- swept by `tools/balance.py --difficulty`, with the
+default tier structurally pinned to the arithmetic the recorded grid was
+measured against -- and they are chosen on the character select, beside the
+class, which is the other decision taken once per run. That is this paragraph
+being followed rather than overturned: the objection was never to difficulty, it
+was to a balance decision reached through a preferences screen.
+
 The seed row is the apparent exception and is not one. Choosing a seed chooses
 *which* fight; it does not change one. It exists because `--seed` is a command
 line flag and not everybody who plays this has a terminal open.

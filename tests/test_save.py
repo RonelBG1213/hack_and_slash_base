@@ -23,7 +23,7 @@ import pytest
 from hack_and_slash import config
 from hack_and_slash.core import campaign_io
 from hack_and_slash.core.level import Direction, RoomKind
-from hack_and_slash.game import jobs, rooms, save
+from hack_and_slash.game import difficulty, jobs, rooms, save
 from hack_and_slash.game.attributes import NEUTRAL, Attributes
 from hack_and_slash.game.run import Run
 from hack_and_slash.game.world import World
@@ -262,6 +262,49 @@ def test_a_neutral_block_comes_back_as_the_shared_singleton() -> None:
 
 
 # --- promotion ---------------------------------------------------------------
+def test_a_run_comes_back_on_the_tier_it_was_started_on() -> None:
+    """The same class of failure as a promotion loaded away, and it is worth
+    naming that way round.
+
+    A run reloaded onto the default tier is a run that silently got harder or
+    easier at the moment the player walked back into it -- and nothing on the
+    screen says so, because the tier is chosen once at the select and never
+    shown again. The health carried into the next stage is the only symptom,
+    and by then it is twenty stages of arithmetic away from the cause.
+    """
+    tier = difficulty.table()["relentless"]
+    run = Run.start(
+        campaign(), BESTIARY, seed=11, at_stage=13, hero_type_id="archer",
+        difficulty=tier,
+    )
+
+    payload = save.snapshot(run)
+    assert payload["difficulty"] == "relentless", (
+        "the tier is not in the snapshot at all"
+    )
+
+    restored = save.restore(payload, campaign(), BESTIARY)
+    assert restored.difficulty.id == "relentless"
+    # ...and it has to reach the fight, not merely the run object beside it.
+    assert restored.world.difficulty.id == "relentless"
+
+
+def test_a_save_naming_a_tier_that_no_longer_exists_loads_at_the_default() -> None:
+    """The one deliberately forgiving field in this loader.
+
+    `data/difficulty.json` is content and is explicitly allowed to move -- two
+    of the three tiers ship marked unmeasured. Renaming one must not cost
+    somebody the run they were halfway through, and the default is a coherent
+    place to put them; every other malformed field still raises.
+    """
+    run = mid_run()
+    payload = save.snapshot(run)
+    payload["difficulty"] = "nightmare"
+
+    restored = save.restore(payload, campaign(), BESTIARY)
+    assert restored.difficulty.is_identity
+
+
 def test_a_promoted_run_comes_back_promoted() -> None:
     run = mid_run(stage=jobs.PROMOTION_STAGE + 3, hero="knight")
     jobs.promote(run, BESTIARY.promotions_for("knight")[0])

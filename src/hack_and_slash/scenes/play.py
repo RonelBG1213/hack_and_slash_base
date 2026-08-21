@@ -47,6 +47,7 @@ from ..game import (
 )
 from ..game.entities import DEFAULT_HERO, Bestiary
 from ..game.intent import Intent
+from ..game.difficulty import NORMAL as NORMAL_DIFFICULTY, Difficulty
 from ..game.run import Run, RunOutcome
 from ..game.sim import Accumulator, step
 from ..render import level_panel as level_rows
@@ -194,6 +195,7 @@ class PlayScene(Scene):
         hero_type_id: str = DEFAULT_HERO,
         run: Optional[Run] = None,
         settings: Optional[Settings] = None,
+        difficulty: Difficulty = NORMAL_DIFFICULTY,
     ) -> None:
         self.campaign = campaign
         self.bestiary = bestiary
@@ -227,10 +229,17 @@ class PlayScene(Scene):
             seed=seed,
             at_stage=start_stage,
             hero_type_id=hero_type_id,
+            difficulty=difficulty,
         )
         self.seed = self.run.seed
         self.start_stage = self.run.start_index
         self.hero_type_id = self.run.hero_type_id
+
+        # Read back off the run for the same reason the three above are: a run
+        # loaded off disk carries the tier it was begun on, and R has to mean
+        # "this run again" rather than "this run, at whatever the argument
+        # happened to default to".
+        self.difficulty = self.run.difficulty
 
         # Replaced immediately by _enter_stage, which needs the stage's real
         # size. A placeholder rather than an Optional so nothing downstream has
@@ -540,6 +549,7 @@ class PlayScene(Scene):
             on_exit=self.on_exit,
             start_stage=self.start_stage,
             hero_type_id=self.hero_type_id,
+            difficulty=self.difficulty,
         )
 
     def _read_intent(self) -> Intent:

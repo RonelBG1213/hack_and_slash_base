@@ -19,6 +19,7 @@ headless.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, replace
 
 from ..core.collision import path_is_clear
@@ -349,7 +350,7 @@ class Autoplay:
         was being measured before was the bot's inability to do it, not the
         arena's difficulty.
         """
-        away = -toward
+        away = self._retreat_direction(world, hero, toward)
         tile = world.level.tile
         reach = tile * 1.5
 
@@ -367,6 +368,22 @@ class Autoplay:
         # Boxed in on three sides. Keep pushing back rather than standing still:
         # something is about to land either way, and the wall does not hit back.
         return away
+
+    def _retreat_direction(self, world, hero: Entity, toward: Vec2) -> Vec2:
+        """Which way this policy gives ground. **Straight back, and that is the
+        whole of the reference bot's defensive repertoire.**
+
+        Extracted as its own method rather than left inline, and the reason is
+        not tidiness. `Evasive` below overrides exactly this and nothing else,
+        which is what lets "the reference policy is unchanged" be a millisecond
+        assertion about one function instead of a re-run of the 280-cell grid.
+
+        It is also the blind spot the `flanker` brain exists to punish -- see
+        the demon in `data/entities.json`. A brain that targets a specific
+        player behaviour can only be measured by an instrument that has that
+        behaviour, and this line is why the reference instrument does not.
+        """
+        return -toward
 
     def _ranged(
         self, world, hero: Entity, target: Entity, toward: Vec2, distance: float
@@ -541,6 +558,79 @@ class Reckless:
         return Intent(move=toward, aim=toward, attack=True)
 
 
+#: How far off a straight line back an `Evasive` retreat leans, in degrees.
+#:
+#: **Unswept.** The `flanker`'s own arc has a measured cliff between 35 and 55
+#: degrees, but that number is the *enemy's* approach and says nothing about the
+#: hero's disengage -- the two are different geometries with different things at
+#: stake, and borrowing one for the other would be exactly the kind of guess
+#: this project flags rather than makes quietly. 40 is a starting point chosen
+#: to be clearly lateral without being sideways.
+EVASIVE_DEGREES = 40.0
+
+
+@dataclass(frozen=True)
+class Evasive(Autoplay):
+    """`Autoplay`, except that it gives ground on an arc instead of in a line.
+
+    **A separate instrument rather than a change to `Autoplay`, and that is the
+    whole point of it** -- the same argument `Skilful` below makes. Every
+    recorded number in this project was measured against a reference bot whose
+    entire defensive repertoire is backing straight away. Changing that in place
+    would move all 280 cells of the class-by-stage grid on the day it landed,
+    and there would be no way to tell which of two changes did it.
+
+    So this exists to answer one question first: **what does a lateral disengage
+    do to the campaign as it already is?** That is a number nobody has, and it
+    is the thing that decides whether the sidestep can be promoted into the
+    reference cheaply or not at all.
+
+    *Why anyone wants it.* `data/entities.json` ships a `demon` that is spawned
+    nowhere. Its `flanker` brain closes on an arc precisely so that backing away
+    in a straight line stops working, and against the reference bot it took
+    cells that were 8/8 to 6/8 and the assassin's stage 39 to 0/8. The recorded
+    finding is that this measured *"the instrument has no answer"* and reported
+    it in the same units as *"the fight is too hard"*. A human sidesteps; the
+    reference bot cannot. **A brain that targets a specific player behaviour can
+    only be measured by an instrument that has that behaviour**, and this is the
+    instrument.
+
+    It overrides exactly one method. The wall-probe in `_away_from` still sits
+    in front of it, which is not optional: the corner death-spiral that probe
+    exists to stop -- every boss pushes the hero backwards, and the measured
+    runs ended with the hero flattened against the far wall -- is not made any
+    less likely by leaning the retreat forty degrees.
+    """
+
+    degrees: float = EVASIVE_DEGREES
+
+    def _retreat_direction(self, world, hero: Entity, toward: Vec2) -> Vec2:
+        """Straight back, leaned to whichever side is open.
+
+        Probe each way round and take the one that is clear, which is the same
+        shape `_approach` uses against a pillar and is deliberately not
+        pathfinding. Fixed order rather than anything drawn from `random`: a
+        seeded run has to replay exactly, and every recorded number in this
+        project rests on that.
+
+        Falling through to a straight retreat when neither lean is clear is the
+        conservative end and is the right one -- with walls on both diagonals
+        the arc has nowhere to go, and the thing this is a disengage *from* is
+        still in front of the hero.
+        """
+        away = -toward
+        tile = world.level.tile
+        reach = tile * 1.5
+        offset = math.radians(self.degrees)
+
+        for side in (1.0, -1.0):
+            leaned = away.rotated(offset * side)
+            if path_is_clear(hero.pos, hero.pos + leaned * reach, world.is_solid, tile):
+                return leaned
+
+        return away
+
+
 @dataclass(frozen=True)
 class Skilful:
     """`Autoplay`, plus it spends every skill the moment one is available.
@@ -638,6 +728,12 @@ twitchy = Autoplay(reaction_ticks=REACTION_PERFECT)
 
 #: The other end of the bracket.
 reckless = Reckless()
+
+#: A competent player who sidesteps rather than reversing. Not the reference and
+#: not a replacement for it -- it exists to be compared *against* `autoplay`, so
+#: "what does a lateral disengage cost or buy" is a question with a number
+#: attached. Driven by `tools/balance.py --policy evasive`.
+evasive = Evasive(reaction_ticks=REACTION_SHARP)
 
 #: The same competent player with all four buttons. Not the reference and never
 #: the default -- it exists to be compared against `autoplay`, so that "how much
