@@ -280,6 +280,12 @@ loads perfectly and then binds the ultimate to the light-attack button.
 }
 ```
 
+A buff may also carry `buff_haste`, a per-mille cut in what a **skill cooldown**
+is stamped at while it runs — the Priest's Benediction is the only one that does,
+at `300`. It is a field on the weapon rather than a ninth `Attributes` field
+because `progression.SPENDABLE` is derived from that dataclass: a ninth field
+there becomes a shrine stat, an equipment stat and a ninth panel row.
+
 `buff_ticks` is what makes it a buff — `Weapon.is_buff` reads the duration, not
 the block, so a buff granting nothing is a tuning mistake rather than an attack.
 The `buff` block goes through `Attributes.from_dict` and therefore **raises on an
@@ -292,6 +298,12 @@ rules, all pinned by test:
 | `0 < buff_ticks < cooldown` | Two buffs can then never overlap, which is what makes "a cast replaces" an unambiguous rule |
 | No buff grants `max_hp` | It is a ceiling `hp` is clamped to, so expiry drops it under a hero standing above it — and `jobs.promote` then reads a full-health fraction off a wounded hero |
 | No enemy carries one | Every branch added for buffs is guarded on `is_buff`, so the layer costs a body without one exactly one falsy test |
+| `0 <= buff_haste < 1000` | At 1000 a cooldown is stamped at zero and the slot becomes a second light attack; above it the arithmetic goes negative |
+
+And one rule that is code rather than content: **a buff never hastes its own
+cooldown** (`actions.hasted`). Otherwise pressing it on time shortens the next
+wait, and the next, until it is permanently up — and the `buff_ticks < cooldown`
+row above stops being a fact you can check by reading this file.
 
 ## Adding an advanced class
 

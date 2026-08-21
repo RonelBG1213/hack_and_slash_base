@@ -178,6 +178,15 @@ class Hud:
         one worth screen space -- the slot cannot be pressed while the buff is
         running anyway, because every buff is shorter than its own cooldown.
         Free of new HUD real estate, on a 384px strip that has none.
+
+        **A hasted pip starts part-filled, and that is left alone deliberately.**
+        The fill is `remaining / weapon.cooldown`, and haste shortens what gets
+        *stamped* rather than the number in the data -- so a Smite spent under
+        Benediction begins its pip at 30% rather than at empty. It still reaches
+        full exactly when the skill is ready, which is the only endpoint a
+        player reads, and the head start is a true statement about what the
+        buff just did. Drawing it from empty would need the stamped duration
+        remembered per slot, which is state the sim would carry for a cosmetic.
         """
         y = top + BAR_Y_OFFSET - BAR_H
         drawn = 0

@@ -253,8 +253,8 @@ def test_every_class_declares_its_four_slots_in_the_order_the_game_expects() -> 
             f"{cls.id}'s {neutral.id} still hits for {neutral.damage} at "
             f"reach {neutral.reach}"
         )
-        assert neutral.buff != NEUTRAL, (
-            f"{cls.id}'s {neutral.id} grants a block of nothing for "
+        assert neutral.buff != NEUTRAL or neutral.buff_haste > 0, (
+            f"{cls.id}'s {neutral.id} grants nothing at all for "
             f"{neutral.buff_ticks} ticks"
         )
         assert heavy.damage > light.damage, f"{cls.id}'s heavy does not hit harder"
@@ -308,6 +308,23 @@ def test_no_buff_grants_max_hp() -> None:
             assert weapon.buff.max_hp == 0, (
                 f"{cls.id}'s {weapon.id} ({skills.SLOT_NAMES[slot]}) grants "
                 f"{weapon.buff.max_hp} max_hp for {weapon.buff_ticks} ticks"
+            )
+
+
+def test_no_buff_hastes_more_than_it_could_possibly_cool() -> None:
+    """Haste is a per-mille cut, so it has to stay under the whole thing.
+
+    At 1000 a cooldown is stamped at zero and the slot becomes a second light
+    attack; above it the arithmetic goes negative and `max(1, ...)` in
+    `actions.hasted` is the only thing between that and a skill that can be
+    held down. The clamp is the belt; this is the braces, and it fires in the
+    content file where the mistake would actually be made.
+    """
+    for cls in PLAYABLE:
+        for slot, weapon in enumerate(cls.weapons):
+            assert 0 <= weapon.buff_haste < 1000, (
+                f"{cls.id}'s {weapon.id} ({skills.SLOT_NAMES[slot]}) hastes by "
+                f"{weapon.buff_haste} per mille"
             )
 
 

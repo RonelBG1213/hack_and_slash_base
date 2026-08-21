@@ -365,6 +365,121 @@ def test_re_casting_replaces_the_window_rather_than_extending_it() -> None:
     assert hero.buff_ticks == RESOLVE.buff_ticks, "a re-cast stacked"
 
 
+# --- haste, which the Priest's buff carries ----------------------------------
+PRIEST = BESTIARY["priest"]
+BENEDICTION = PRIEST.weapons[skills.NEUTRAL]
+SMITE = PRIEST.weapons[skills.HEAVY]
+
+
+def priest_world():
+    world = make_world()
+    world.hero.type = PRIEST
+    return world, world.hero
+
+
+def test_a_haste_buff_shortens_what_the_other_slots_are_stamped_at() -> None:
+    """The Priest's whole idea: press Q first and the rest of the kit runs
+    faster. Measured on what lands in `skill_cooldowns`, because that is the
+    number the player actually waits out."""
+    world, hero = priest_world()
+    assert BENEDICTION.buff_haste > 0, "the Priest stopped hasting; rewrite this"
+
+    # Unhasted, for the baseline.
+    assert actions.begin_attack(hero, facing=0.0, weapon_index=skills.HEAVY)
+    assert hero.cooldown_on(skills.HEAVY) == SMITE.cooldown
+
+    world, hero = priest_world()
+    actions.begin_attack(hero, facing=0.0, weapon_index=skills.NEUTRAL)
+    with enemies_idle():
+        run(world, BENEDICTION.windup + BENEDICTION.active + BENEDICTION.recovery + 2)
+    assert hero.buff_haste == BENEDICTION.buff_haste
+
+    assert actions.begin_attack(hero, facing=0.0, weapon_index=skills.HEAVY)
+    expected = SMITE.cooldown * (1000 - BENEDICTION.buff_haste) // 1000
+    assert hero.cooldown_on(skills.HEAVY) == expected, (
+        f"smite stamped at {hero.cooldown_on(skills.HEAVY)}, wanted {expected}"
+    )
+    assert expected < SMITE.cooldown
+
+
+def test_a_buff_never_hastes_its_own_gate() -> None:
+    """The ratchet, refused. If a haste buff shortened the cooldown on the slot
+    that granted it, pressing it on time would shorten the next wait, and the
+    next, until it was permanently live -- and `buff_ticks < cooldown` would
+    stop being a fact about the content files.
+
+    Checked by hasting the hero far harder than any content does and asserting
+    the neutral is stamped at its full, unhasted number anyway.
+    """
+    world, hero = priest_world()
+    hero.buff_haste = 900
+
+    assert actions.begin_attack(hero, facing=0.0, weapon_index=skills.NEUTRAL)
+    assert hero.cooldown_on(skills.NEUTRAL) == BENEDICTION.cooldown, (
+        "the buff shortened its own cooldown"
+    )
+    assert hero.cooldown_on(skills.NEUTRAL) > BENEDICTION.buff_ticks, (
+        "the buff can now outlast its own gate"
+    )
+
+
+def test_haste_expires_with_the_buff_that_brought_it() -> None:
+    world, hero = priest_world()
+    actions.begin_attack(hero, facing=0.0, weapon_index=skills.NEUTRAL)
+    with enemies_idle():
+        run(world, BENEDICTION.windup + 1)
+        live = hero.buff_ticks
+        assert hero.buff_haste == BENEDICTION.buff_haste
+        run(world, live)
+
+    assert hero.buff_ticks == 0
+    assert hero.buff_haste == 0, "haste outlived the buff"
+    assert hero.buff is NEUTRAL
+
+
+def test_haste_leaves_a_cooldown_already_running_alone() -> None:
+    """It is stamped, not a rate. A skill spent before the buff went up waits
+    the whole time it was told to -- so casting Q is a decision about the
+    *next* few presses, not a refund on the last one."""
+    world, hero = priest_world()
+    actions.begin_attack(hero, facing=0.0, weapon_index=skills.HEAVY)
+    with enemies_idle():
+        run(world, SMITE.total_ticks + 2)
+    before = hero.cooldown_on(skills.HEAVY)
+
+    actions.begin_attack(hero, facing=0.0, weapon_index=skills.NEUTRAL)
+    with enemies_idle():
+        run(world, BENEDICTION.windup + 1)
+    assert hero.buff_haste > 0
+
+    # One tick of countdown happened for each tick run; nothing else moved it.
+    spent = BENEDICTION.windup + 1
+    assert hero.cooldown_on(skills.HEAVY) == before - spent, (
+        "haste reached back and shortened a cooldown already running"
+    )
+
+
+def test_a_class_with_no_haste_stamps_exactly_what_the_data_says() -> None:
+    """Four of the five buffs carry no haste at all, so `actions.hasted` takes
+    an early return and the arithmetic is the arithmetic that was there before
+    the field existed -- the same shape as every other zero-is-the-identity
+    dial in this project."""
+    for class_id in ("knight", "rogue", "archer", "magician"):
+        world = make_world()
+        hero = world.hero
+        hero.type = BESTIARY[class_id]
+        actions.begin_attack(hero, facing=0.0, weapon_index=skills.NEUTRAL)
+        with enemies_idle():
+            run(world, hero.type.weapons[skills.NEUTRAL].windup + 2)
+        assert hero.buff_haste == 0
+
+        heavy = hero.type.weapons[skills.HEAVY]
+        world2 = make_world()
+        world2.hero.type = BESTIARY[class_id]
+        actions.begin_attack(world2.hero, facing=0.0, weapon_index=skills.HEAVY)
+        assert world2.hero.cooldown_on(skills.HEAVY) == heavy.cooldown
+
+
 def test_no_enemy_ever_carries_a_buff() -> None:
     """The counterpart to `test_no_enemy_ever_records_a_cooldown`, and the same
     claim: this layer costs nothing for a body that has none. Every branch

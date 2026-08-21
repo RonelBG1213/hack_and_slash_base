@@ -18,7 +18,7 @@ touches this file.
 from __future__ import annotations
 
 from ..core.vec2 import ZERO, Vec2, from_angle
-from .attributes import NEUTRAL
+from .attributes import NEUTRAL, PER_MILLE
 from .entities import ActionState, Entity
 
 #: How much of your walking speed you keep mid-swing. Not zero -- rooting the
@@ -89,7 +89,7 @@ def begin_attack(
     # Stamped at the start of the swing, so the number in the data is the gap
     # between one attack beginning and the next -- which is what a player counts
     # -- rather than a pause that starts once the recovery has already run.
-    cooldown = entity.weapon.cooldown
+    cooldown = hasted(entity, entity.weapon)
     if cooldown > 0:
         entity.skill_cooldowns[index] = cooldown
 
@@ -106,6 +106,31 @@ def begin_attack(
         # nothing you can act on.
         entity.dash_dir = from_angle(entity.facing)
     return True
+
+
+def hasted(entity: Entity, weapon) -> int:
+    """What this attack's cooldown is stamped at, buff haste included.
+
+    **A buff never hastes its own gate**, and that is the whole safety story of
+    this feature rather than a detail. Let it, and pressing the slot on cooldown
+    shortens the wait for the next press, which shortens it again -- a ratchet
+    that ends with the buff permanently live. Refusing it keeps
+    `0 < buff_ticks < cooldown` a *static* property of the content files, which
+    is what `test_a_buff_cannot_still_be_live_when_its_slot_comes_back` checks,
+    instead of something that depends on how much haste a body happens to have
+    when the key is pressed.
+
+    Keyed on `weapon.is_buff` and not on the slot index, so it stays true if the
+    buff ever moves off Q.
+
+    Floor division on whole ticks, like every other duration in the project, and
+    never below 1 -- a cooldown rounded to zero is an attack with no cooldown,
+    which is the one thing index 0 is supposed to be alone in being.
+    """
+    cooldown = weapon.cooldown
+    if cooldown <= 0 or weapon.is_buff or entity.buff_haste <= 0:
+        return cooldown
+    return max(1, cooldown * (PER_MILLE - entity.buff_haste) // PER_MILLE)
 
 
 def apply_buff(entity: Entity) -> None:
@@ -131,6 +156,7 @@ def apply_buff(entity: Entity) -> None:
         return
     entity.buff = weapon.buff
     entity.buff_ticks = weapon.buff_ticks
+    entity.buff_haste = weapon.buff_haste
 
 
 def begin_dodge(entity: Entity, direction: Vec2) -> bool:
@@ -256,6 +282,7 @@ def tick_timers(entity: Entity) -> None:
         entity.buff_ticks -= 1
         if entity.buff_ticks == 0:
             entity.buff = NEUTRAL
+            entity.buff_haste = 0
 
     # Empty for anything without skills, so this costs nothing on the hundreds
     # of enemy bodies a run steps through. Entries are left at zero rather than

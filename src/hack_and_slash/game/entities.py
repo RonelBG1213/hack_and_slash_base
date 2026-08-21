@@ -106,6 +106,19 @@ class Weapon:
     buff: Attributes = NEUTRAL
     buff_ticks: int = 0
 
+    #: Per-mille cut in what a *skill cooldown* is stamped at, while this buff
+    #: is live. Beside the block rather than in it, because `Attributes` is the
+    #: layer equipment and the shrine also write to, and `progression.SPENDABLE`
+    #: is derived from its fields -- a ninth field there would be a stat every
+    #: class can buy, a ninth row on a character sheet whose eighth already
+    #: draws through the hint, and a ninth key on the level panel. This is a
+    #: skill effect, so it lives on the skill.
+    #:
+    #: Per-mille like `crit_chance` and `move_speed`, zero being the identity.
+    #: Does not touch the dodge: `dodge_cooldown` is the roll, which is a
+    #: defensive tool designed against the i-frame window rather than a skill.
+    buff_haste: int = 0
+
     @property
     def total_ticks(self) -> int:
         return self.windup + self.active + self.recovery
@@ -154,6 +167,7 @@ class Weapon:
             # exactly the kind of thing that gets tuned around for an afternoon.
             buff=Attributes.from_dict(payload.get("buff")),
             buff_ticks=int(payload.get("buff_ticks", 0)),
+            buff_haste=int(payload.get("buff_haste", 0)),
         )
 
 
@@ -502,6 +516,11 @@ class Entity:
     #: fighting when it was cast, exactly as `skill_cooldowns` already does.
     buff: Attributes = NEUTRAL
     buff_ticks: int = 0
+
+    #: The live half of `Weapon.buff_haste`, on the same timer as `buff` and
+    #: cleared beside it. Read only by `actions.begin_attack`, at the moment a
+    #: cooldown is stamped.
+    buff_haste: int = 0
 
     # Cosmetic only. The renderer reads these; the sim never branches on them,
     # which is what lets the feel pass be turned off without changing a fight.

@@ -156,22 +156,44 @@ is the Knight's actual problem, and more damage was never the answer to it.
 
 **One buff per starting class, inherited by both branches it promotes into**, so
 there are five and not fifteen — the same rule that already governs the light
-attack. Each leans on the attribute that class's identity already names:
+attack. Four of them lean on the attribute that class's identity already names,
+and the fifth reaches for something the attribute layer does not have:
 
 | Class | | What it grants | Why that one |
 | --- | --- | --- | --- |
 | Knight | Resolve | `defense` | The commitment it cannot walk out of, made survivable |
 | Rogue | Bloodlust | `crit_chance`, `crit_damage` | A five-damage dagger against durable enemies is the worst matchup in the game, and a crit rate is worth what the class's swing rate makes it worth — where a flat point would be worth three times as much to the Magician |
 | Archer | Quickstep | `move_speed` | "Can you keep the room between you", bought continuously instead of once |
-| Magician | Ward | `evasion` | An evaded hit lands no stagger and no interrupt, so a 31-tick bolt survives being wrong about it |
-| Priest | Benediction | `regen` | The run-level class, given a fight-level version of the same idea |
+| Magician | Focus | `damage` | The hardest single hit in the game, made harder — and flat, so it is a third of a bolt and a sixth of a lance. Lining the window up with the seven-shot Nova is the class's one real combo |
+| Priest | Benediction | `regen` **+ haste** | The only one that does two things, and the second is the headline: every *other* skill is stamped at 70% of its cooldown while it runs. The Priest's window is a rhythm rather than a stat — press Q first and the rest of the kit comes back faster |
 
-The vehicle is the attribute layer, so nothing new happens in a fight: a buff is a
-third `Attributes` block summed into `Entity.attrs` for a number of ticks, and
-crit and evasion draw from `world.attr_rng` exactly as they already did. **Every
+The vehicle is the attribute layer, so almost nothing new happens in a fight: a
+buff is a third `Attributes` block summed into `Entity.attrs` for a number of
+ticks, and crit draws from `world.attr_rng` exactly as it already did. **Every
 buff is shorter than the cooldown gating it**, so two can never overlap and a cast
 replaces rather than stacks — pinned by test, so the question never has to be
 answered at the call site.
+
+**Haste is the one thing a buff does that is not an attribute**, and it sits on
+the weapon rather than in the block on purpose. `progression.SPENDABLE` is derived
+from the fields of `Attributes`, so a ninth field there would be a stat every
+class can buy at a shrine, a ninth row on a character sheet whose eighth already
+draws through the hint, and a ninth key on the level panel. Cooldown reduction is
+a skill effect, so it lives on the skill.
+
+> [!IMPORTANT]
+> **A buff never hastes its own gate.** `actions.hasted` refuses on any weapon
+> that is itself a buff, and that is the safety story rather than a detail: let
+> it through and pressing the slot on cooldown shortens the wait for the next
+> press, which shortens it again, until the buff is permanently live. Refusing
+> keeps `0 < buff_ticks < cooldown` a *static* property of the content files
+> instead of one that depends on what the hero happens to be carrying. Keyed on
+> `is_buff` and not on the slot index, so it survives the buff moving off Q.
+>
+> Haste does not touch the dodge either. `dodge_cooldown` is the roll, which is
+> designed against its own i-frame window, and shortening it is buying
+> invulnerability rather than readiness — the same line `move_speed` already
+> declines to cross.
 
 Being hit during the windup loses you the cast *and* the cooldown, like any other
 attack. That is what keeps the commitment real, and it falls out of the state

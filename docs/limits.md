@@ -287,6 +287,11 @@ measurement, and it stops the grid being a fixed reference on the same day.
 The reference bot plays light-only by design, so it cannot see the neutral, heavy
 or ultimate slots. The suite pins the relationships between slots, not the values.
 
+The Priest's `buff_haste` is unmeasured in a second way: it multiplies the value
+of the two slots it speeds up, and both of those are unmeasured too. Nothing
+knows what a Consecrate every 1120 ticks instead of 1600 is worth, because
+nothing knows what one is worth at all.
+
 The five buffs in the neutral slot are the least measured numbers in the game:
 neither instrument presses the slot, and `Skilful` now skips it deliberately
 rather than by accident. The Priest's `regen` is the flagged one — the recorded
