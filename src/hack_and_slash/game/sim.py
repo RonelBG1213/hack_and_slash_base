@@ -183,7 +183,7 @@ def _begin_actions(world: World, entity: Entity, intent: Intent) -> None:
         if not entity.is_hero:
             # Read *after* the attack starts, so the pause is measured against
             # the attack actually chosen rather than the type's default one.
-            entity.attack_cooldown = ai.cooldown_for(entity)
+            entity.attack_cooldown = ai.cooldown_for(entity, world.difficulty)
 
 
 def _move(world: World, entity: Entity, intent: Intent) -> None:
@@ -343,8 +343,12 @@ def _loose_projectile(world: World, entity: Entity) -> None:
         # culled by the time it arrives. `NEUTRAL` for the defender: the target
         # is not known yet, and its defense is taken in `resolve_projectile_hits`
         # where it is. Per shot, like the damage roll and for the same reason.
+        # Through `combat.dealt` for the same reason the melee path is: the
+        # tier's enemy-damage dial belongs to the attacker, and the attacker is
+        # known here and gone by the time the shot lands. Hero shots return
+        # unchanged, so this is inert for every arrow the player ever fires.
         damage, crit = combat.resolve_damage(
-            combat.roll_damage(weapon, world.rng),
+            combat.dealt(world, entity, combat.roll_damage(weapon, world.rng)),
             entity.attrs,
             attributes.NEUTRAL,
             world.attr_rng,

@@ -4,6 +4,13 @@ Everything here is known, and most of it is deliberate. Where a limit was a
 decision, the reasoning is given — so that reversing it is a decision too, taken
 with the same information.
 
+> [!NOTE]
+> **This document argues each limit against the codebase. [Roadmap](roadmap.md)
+> prices several of them against the genre the game sits in**, which is a
+> different question and sometimes reaches a different answer. Nothing there
+> overturns a decision here; it records what one costs. Where the two disagree,
+> this document holds the reasoning and that one holds the judgement.
+
 ---
 
 ## Deliberate
@@ -255,13 +262,25 @@ anything else, and `test_difficulty.py` runs a default-tier fight beside one
 built by a world that has never heard of difficulty and demands the same health
 tick for tick.
 
-**`Forgiving` at 700 and `Relentless` at 1300 are opening bids.** They are round
-numbers picked to be legible, not swept values, and both are flagged as untuned
-in the data file *and on the select screen* — a player choosing one is told. What
-is pinned rather than guessed is the thing a tier could quietly destroy: a hero
-that walks in swinging still loses every run on the gentlest tier, checked
-against whichever tier is gentlest rather than against a name, so adding a softer
-one below cannot slide out from under it.
+**Every number on Easy, Hard and Nightmare is an opening bid**, and there are
+now seven dials per tier rather than one — `incoming` plus six on the monsters.
+They are round numbers picked to be legible, not swept values, and all three
+tiers are flagged as untuned in the data file *and on the select screen*, so a
+player choosing one is told.
+
+The monster dials are the less measured half, and unevenly so. `hp` and `aggro`
+have recorded findings behind their *direction* (durability is the strongest
+lever on an ordinary creature; disengaging is what decides a run) but nothing
+behind their size. `cadence` has a recorded finding that it is nearly inert and
+is in anyway, so it may be doing nothing at all. `evasion` has no precedent in
+the project whatsoever — no enemy has ever defended before — and it lengthens
+fights, which is a tick-limit question as much as a balance one.
+
+What is pinned rather than guessed is the thing a tier could quietly destroy: a
+hero that walks in swinging still loses every run on the gentlest tier, checked
+against whichever tier is gentlest rather than against a name, so adding a
+softer one below cannot slide out from under it. Gentlest is file order now,
+because with seven dials there is no single number to minimise.
 
 `tools/balance.py --difficulty <tier>` is how this stops being true.
 

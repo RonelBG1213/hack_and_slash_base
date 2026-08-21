@@ -92,36 +92,62 @@ them learns a new move, so nothing you worked out stops being true.
 
 ## Difficulty
 
-Three tiers, chosen on the character select beside the class and never revisited
+Four tiers, chosen on the character select beside the class and never revisited
 — a run is one arc, and a dial turned halfway through makes the health carried
 out of stage 12 mean something different from the health carried into it. `R`
 restarts on the tier the run was begun on, for the same reason it restarts as the
 base class.
 
-| Tier | What it changes |
-| --- | --- |
-| **Forgiving** | A mistake costs 70% of what it costs on Normal |
-| **Normal** | The game as it is tuned. Every recorded number describes this tier |
-| **Relentless** | A mistake costs 130% |
+| Tier | What a mistake costs | What you fight |
+| --- | --- | --- |
+| **Easy** | 70% | Slower, softer, and slower to notice you |
+| **Normal** | 100% | The game as it is tuned. Every recorded number describes this tier |
+| **Hard** | 130% | Tougher and quicker, and some of your blows are slipped |
+| **Nightmare** | 160% | Sees you first, hits harder, and slips a good deal more |
 
-**One dial, and it is damage the hero takes.** Not enemy health, not cadence,
-not counts — so an enemy's time-to-kill is identical on every tier and a fight
-learned on one reads the same on another. That choice is not a simplification:
-enemy health has already been measured here as close to inert, because the
-enrage threshold is a fraction and hero output never grows. See
-[Balance](balance.md).
+**A tier is a statement about the monsters as well as about your mistakes.**
+That is a reversal: it used to be one dial — damage arriving at the hero, and
+nothing else — on the argument that enemy time-to-kill is the number the whole
+cadence layer is tuned against, so a menu should not move it. The argument was
+not wrong; it was overruled, because a difficulty that only changes how fast you
+die is not a different fight, it is the same fight with a shorter health bar.
 
-**Normal is not a tier so much as the absence of one.** At the default the
-multiply is skipped by an early return, so the arithmetic is the arithmetic the
-280-cell grid was measured against — and `data/difficulty.json` refuses to load
-if its default is anything else. The other two ship marked untuned, flagged on
-the select screen as well as in the data file, until the sweep says otherwise.
+Seven dials now, six of them on the creatures: health, damage, walking speed,
+aggro radius, attack cadence, and **evasion — the harder tiers defend, slipping
+a share of your blows outright**. Three things worth knowing, all of them
+recorded rather than guessed:
+
+- **Health bites hard on a stage and barely at all on a boss.** One percentage,
+  two effects: an ordinary creature dies sooner, while a boss spends the same
+  *proportion* of a shorter fight enraged, because the enrage threshold is a
+  fraction.
+- **Cadence is the weakest of them.** A flanker pause taken most of the way to a
+  charger's once moved not one seed of eight across three stages.
+- **Aggro is probably the strongest and certainly the least measured.** It is
+  aimed squarely at disengaging, which the reaction ladder recorded as the thing
+  that actually separates a won run from a lost one.
+
+See [Balance](balance.md).
+
+**Normal is not a tier so much as the absence of one.** Every dial's identity
+is its own declared default — 1000 for the six multipliers, 0 for evasion — and
+at the default every one of them takes an early return, right down to the
+monsters, who are handed the shared neutral attribute block and are therefore
+the creatures `data/entities.json` declares, to the byte. So the arithmetic is
+the arithmetic the 280-cell grid was measured against, and
+`data/difficulty.json` refuses to load if its default is anything else. That
+guard is the single thing protecting every recorded number in the project, and
+it now asks about the monsters too. The other three ship marked untuned,
+flagged on the select screen as well as in the data file, until the sweep says
+otherwise.
 
 > The one bracket a difficulty setting can quietly break is the ceiling: *only
 > the floor and the game is unfair; only the ceiling and there is no game.* A
 > hero that walks in swinging has to lose every run on the gentlest tier too,
 > and the suite pins that against whichever tier is gentlest rather than against
-> a name.
+> a name. Gentlest is now *file order* — the order the select screen draws as a
+> scale — because with seven dials there is no single number to take the
+> minimum of: a tier could halve incoming damage and double enemy health.
 
 ---
 

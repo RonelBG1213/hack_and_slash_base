@@ -168,12 +168,14 @@ class World:
         meant to preserve it. Defaults to neutral, so every test and tool that
         predates the attribute layer is untouched.
 
-        `difficulty` is the tier the run was started on, and it reaches the
-        fight through `combat` rather than through anything here -- no body is
-        built differently and no enemy is given a stat of its own. Defaults to
-        the identity tier, which is arithmetically the game every recorded
-        number in this project was measured against, so a world built without
-        an opinion is still that fight.
+        `difficulty` is the tier the run was started on. It reaches the fight
+        two ways: through `combat` for what a hit is worth, and through
+        `_populate` below, which hands every enemy the tier's attribute block --
+        health, walking speed and the evasion that is the whole of "the monsters
+        defend". Defaults to the identity tier, whose block is the shared
+        `NEUTRAL` and whose every multiplier takes an early return, so a world
+        built without an opinion is still the fight every recorded number in
+        this project was measured against.
         """
         self.level = level
         self.bestiary = bestiary
@@ -310,9 +312,20 @@ class World:
 
         for entry in self.level.enemy_spawns:
             enemy_type = self.bestiary[entry.type_id]
-            self.entities.append(
-                spawn(self._take_id(), enemy_type, self.level.tile_center(*entry.tile))
-            )
+            enemy = spawn(self._take_id(), enemy_type, self.level.tile_center(*entry.tile))
+
+            # The same two lines the hero gets above, for the same reason: the
+            # maximum a body can hold is not knowable until its attributes are
+            # on it, and `spawn` has already filled it to the old ceiling. At
+            # the identity tier `block_for` hands back the shared NEUTRAL and
+            # nothing here runs at all, which is what keeps a Normal fight the
+            # fight every recorded number was measured against.
+            block = self.difficulty.enemies.block_for(enemy_type)
+            if block is not NEUTRAL:
+                enemy.bonus = block
+                enemy.hp = enemy.max_hp
+
+            self.entities.append(enemy)
 
     # --- queries -------------------------------------------------------------
     @property

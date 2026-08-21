@@ -292,14 +292,19 @@ def test_a_run_comes_back_on_the_tier_it_was_started_on() -> None:
 def test_a_save_naming_a_tier_that_no_longer_exists_loads_at_the_default() -> None:
     """The one deliberately forgiving field in this loader.
 
-    `data/difficulty.json` is content and is explicitly allowed to move -- two
-    of the three tiers ship marked unmeasured. Renaming one must not cost
+    `data/difficulty.json` is content and is explicitly allowed to move -- three
+    of the four tiers ship marked unmeasured. Renaming one must not cost
     somebody the run they were halfway through, and the default is a coherent
     place to put them; every other malformed field still raises.
+
+    The id below is deliberately not a plausible tier name. It used to be
+    "nightmare", which stopped testing anything the day a tier was called that
+    -- the assertion still passed, because Nightmare is not the identity, but
+    for the opposite reason to the one intended.
     """
     run = mid_run()
     payload = save.snapshot(run)
-    payload["difficulty"] = "nightmare"
+    payload["difficulty"] = "no-such-tier"
 
     restored = save.restore(payload, campaign(), BESTIARY)
     assert restored.difficulty.is_identity

@@ -140,14 +140,17 @@ def test_the_tier_clamps_rather_than_wrapping(atlas) -> None:
     """The roster wraps and this deliberately does not. Difficulty is an
     ordered scale, and wrapping one puts the hardest tier a single keypress
     below the easiest -- the worst misread available on this screen."""
-    scene = select(atlas)
-    for _ in range(6):
-        press(scene, pygame.K_DOWN)
-    assert scene.difficulty.id == "relentless"
+    tiers = difficulty.table().tiers
+    walk = len(tiers) + 3  # comfortably past either end
 
-    for _ in range(6):
+    scene = select(atlas)
+    for _ in range(walk):
+        press(scene, pygame.K_DOWN)
+    assert scene.difficulty.id == tiers[-1].id
+
+    for _ in range(walk):
         press(scene, pygame.K_UP)
-    assert scene.difficulty.id == "forgiving"
+    assert scene.difficulty.id == difficulty.table().gentlest.id
 
 
 def test_the_chosen_tier_reaches_the_run(atlas) -> None:

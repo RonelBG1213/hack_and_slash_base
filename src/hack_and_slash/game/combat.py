@@ -113,6 +113,26 @@ def resolve_damage(
     return max(MIN_DAMAGE, damage - defender.defense), crit
 
 
+def dealt(world, attacker: Entity, damage: int) -> int:
+    """This attack's damage, on this tier. The mirror of `incoming`.
+
+    Enemy-only, exactly as `incoming` is hero-only, and the asymmetry is the
+    whole point of having two functions rather than one multiplier: a tier is
+    allowed to say the monsters hit harder *and* that the hero's mistakes cost
+    more, and those are different sentences. The hero's own output is never
+    scaled by a tier -- what a greatsword is worth is a property of the
+    greatsword.
+
+    The two compound where a tier sets both, deliberately. `incoming` is
+    applied afterwards, on what arrives, so a hit passes through this first.
+
+    The floor is the caller's, as it is for `Difficulty.scaled`.
+    """
+    if attacker.is_hero:
+        return damage
+    return world.difficulty.enemies.scaled_damage(damage)
+
+
 def evades(defender: Attributes, rng) -> bool:
     """Whether this hit is avoided outright.
 
@@ -146,7 +166,10 @@ def apply_hit(world, attacker: Entity, target: Entity, weapon: Weapon, rng) -> b
         return False
 
     damage, crit = resolve_damage(
-        roll_damage(weapon, rng), attacker.attrs, target.attrs, world.attr_rng
+        dealt(world, attacker, roll_damage(weapon, rng)),
+        attacker.attrs,
+        target.attrs,
+        world.attr_rng,
     )
     damage = incoming(world, target, damage)
     target.hp = max(0, target.hp - damage)

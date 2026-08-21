@@ -115,6 +115,24 @@ Four things the measurement overturned. That is what it is for.
 
 ### The difficulty tiers, and what the first sweep of them found
 
+> [!warning] This sweep measured a design that no longer ships — kept, not deleted
+> It was taken when a tier was **one dial**, `incoming`, and the monsters were
+> identical on every tier. A tier now also moves enemy health, damage, speed,
+> aggro radius, cadence and evasion, and there are four of them: Easy, Normal,
+> Hard, Nightmare (ids `forgiving` / `normal` / `relentless` / `nightmare` —
+> the ids were kept so existing saves survive).
+>
+> **The Normal row is still exact**, because Normal is still the identity and is
+> pinned as such by test. Every other row below describes tiers that have since
+> been given monsters of their own, and is superseded until
+> `tools/balance.py --class knight --difficulty <tier>` is run again.
+>
+> Recorded rather than removed, on the same rule that keeps known-bad cells in
+> `test_playthrough.py`: a measurement that was true when it was taken is
+> evidence about what the dials do, and the finding underneath it — that the
+> ceiling holds at 700 — is the reason the new Easy could be given weaker
+> monsters at all.
+
 Knight, forty stages, four seeds, `tools/balance.py --class knight --seeds 4
 --difficulty <tier>`. One dial: a per-mille multiplier on damage the hero takes.
 
@@ -146,9 +164,16 @@ slide out from under it.
 > | `test_every_class_can_finish_the_campaign[priest]` | 2/3 |
 >
 > The Knight sweep agrees: 2/4 whole runs at Normal, worst run ending on stage
-> 20. **These are the only two reds in the suite**, and neither is an xfail —
-> `UNTUNED_STAGES` and `UNTUNED_CAMPAIGNS` are both still empty, so the
-> acceptance criterion is unchanged at zero.
+> 20. Neither is an xfail — `UNTUNED_STAGES` and `UNTUNED_CAMPAIGNS` are both
+> still empty, so the acceptance criterion is unchanged at zero.
+>
+> **Re-counted on 2026-08-22: it is four reds, not two.** Measured against a
+> clean `git worktree` at `HEAD`, so this is the baseline and not a regression
+> from anything since. `test_every_class_can_finish_the_campaign[archer]` and
+> `test_a_run_carries_damage_forward` have joined the two above at some point
+> not recorded here. Same diagnosis — all four are the run-level bracket, none
+> is a stage — but anybody comparing a suite run against this page should
+> expect four.
 >
 > Every one of the forty stages clears 4/4 entered at full health, on all three
 > tiers. So this is not a wall in the campaign; it is attrition — the heal

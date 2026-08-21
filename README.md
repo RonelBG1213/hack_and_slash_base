@@ -76,13 +76,16 @@ beside them for reference. They are printed, not rebindable. Nothing on that scr
 can change how a fight resolves, which is the line it is drawn on: difficulty is
 a balance decision and balance decisions live in `data/` where they get swept.
 
-**Difficulty** is chosen on the character select, beside the class — three tiers,
-up and down to move between them. It is one dial: how much damage *the hero*
-takes. Enemy health, cadence and counts are identical on every tier, so a fight
-learned on one reads the same on another. The default tier is structurally
-pinned to the arithmetic every recorded balance number was measured against —
-`data/difficulty.json` refuses to load if it is not — and the other two ship
-marked untuned until `tools/balance.py --difficulty` has swept them.
+**Difficulty** is chosen on the character select, beside the class — **Easy,
+Normal, Hard, Nightmare**, up and down to move between them. A tier says how
+much damage *the hero* takes and what the monsters are: their health, damage,
+walking speed, aggro radius, attack cadence, and how often they slip a blow
+entirely — the harder tiers defend. The default tier is structurally pinned to
+the arithmetic every recorded balance number was measured against, monsters
+included: at Normal every dial sits at its own identity, every enemy is the
+creature `data/entities.json` declares, and `data/difficulty.json` refuses to
+load if that is not true of the default. The other three ship marked untuned
+until `tools/balance.py --difficulty` has swept them.
 
 **Achievements** and **Unlockables** are stubs and say so. Achievements draws
 four lifetime counters from `state/profile.json`; nothing is defined. Unlockables
@@ -169,6 +172,7 @@ take it. It never grants a roll the game would otherwise refuse.
 | [**Content and tuning**](docs/content.md) | Editing the JSON: adding an enemy, a variant, a class, a boss, a brain, a room, a trap. The tools |
 | [**Testing**](docs/testing.md) | Running the suite, the three load-bearing tests, and the strict-xfail policy |
 | [**Known limits**](docs/limits.md) | What this does not do, and which of those were decisions |
+| [**Roadmap**](docs/roadmap.md) | What is missing against the genre this sits in, what each absence costs, and the order to buy them back — the one document here that is judgement rather than measurement |
 
 ### The two rules worth knowing before you touch anything
 

@@ -26,6 +26,7 @@ from ..core.collision import line_of_sight
 from ..core.vec2 import Vec2
 from . import actions
 from .entities import Entity
+from .difficulty import NORMAL as NORMAL_DIFFICULTY, Difficulty
 from .intent import NOTHING, Intent
 
 #: Extra ticks of pause after a full attack cycle, on top of the weapon's own
@@ -60,6 +61,23 @@ BOSS_ENRAGE_PAUSE_SCALE = 0.35
 REACH_MARGIN = 3.0
 
 
+def aggro_of(world, entity: Entity) -> float:
+    """How far this creature notices the hero from, on this tier.
+
+    One function because two callers need the same answer: the cutoff in
+    `decide` that decides whether a creature is awake at all, and the span
+    `_flanker` measures its arc against. Read from two places and they can
+    disagree -- an arc tapering against the type's radius while the creature
+    woke at a scaled one would open its widest offset somewhere other than the
+    edge of its own aggro, which is precisely the shape the flanker's recorded
+    sweep was tuned around.
+
+    Takes `world` because that is where the tier is, and `decide` already has
+    it -- so this costs no signature anywhere.
+    """
+    return world.difficulty.enemies.scaled_aggro(entity.type.aggro)
+
+
 def decide(world, entity: Entity) -> Intent:
     """What this enemy wants to do this tick."""
     hero = world.hero
@@ -68,7 +86,7 @@ def decide(world, entity: Entity) -> Intent:
 
     to_hero = hero.pos - entity.pos
     distance = to_hero.length()
-    if distance > entity.type.aggro:
+    if distance > aggro_of(world, entity):
         return NOTHING
 
     match entity.type.brain:
@@ -177,8 +195,12 @@ def _flanker(world, entity: Entity, hero: Entity, to_hero: Vec2, distance: float
     if distance <= strike_range and _may_attack(entity):
         return Intent(aim=heading, attack=True)
 
-    # 1 at the edge of aggro, 0 at the point it can swing.
-    span = max(1.0, entity.type.aggro - strike_range)
+    # 1 at the edge of aggro, 0 at the point it can swing. Through `aggro_of`
+    # and not `type.aggro`, so the arc opens widest at the distance the
+    # creature actually woke up at -- on a tier that widens aggro the two would
+    # otherwise disagree, and the widest offset would land somewhere inside the
+    # radius rather than at its edge.
+    span = max(1.0, aggro_of(world, entity) - strike_range)
     openness = min(1.0, max(0.0, (distance - strike_range) / span))
 
     # Which side it comes round is fixed per body, exactly as the archer's drift
@@ -236,7 +258,7 @@ def _may_attack(entity: Entity) -> bool:
     return actions.can_act(entity) and entity.attack_cooldown <= 0
 
 
-def cooldown_for(entity: Entity) -> int:
+def cooldown_for(entity: Entity, difficulty: Difficulty = NORMAL_DIFFICULTY) -> int:
     """Ticks before this enemy may swing again, counted from the swing starting.
 
     Includes the attack's own length, so the pause is time spent *idle* rather
@@ -249,4 +271,12 @@ def cooldown_for(entity: Entity) -> int:
     pause = PAUSE_AFTER_ATTACK.get(entity.type.brain, 20)
     if entity.type.brain == "boss" and entity.health_fraction < BOSS_ENRAGE_BELOW:
         pause = int(pause * BOSS_ENRAGE_PAUSE_SCALE)
-    return entity.weapon.total_ticks + pause
+    # The tier scales the *pause* and never `total_ticks`. The telegraph is
+    # what makes an attack readable and therefore dodgeable, so shortening it
+    # is a different and much harsher change than attacking more often -- and
+    # it is the one number `docs/design.md` promises a player can learn.
+    #
+    # Defaulted rather than required, so every caller and test that predates
+    # the monster dials asks the question it always asked and gets the answer
+    # it always got.
+    return entity.weapon.total_ticks + difficulty.enemies.scaled_pause(pause)

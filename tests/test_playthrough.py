@@ -377,13 +377,20 @@ def test_the_ceiling_holds_on_the_easiest_tier_too() -> None:
     Run against whichever shipped tier is gentlest rather than against a name,
     so re-tuning `data/difficulty.json` cannot slide out from under this by
     adding a softer one below the tier this test happened to be written for.
+
+    `Table.gentlest` is file order, and it used to be
+    `min(tiers, key=lambda t: t.incoming)`. That worked while a tier was one
+    number; it stopped meaning anything when a tier became seven, because there
+    is no single number to minimise -- a tier can halve incoming damage and
+    double enemy health, and picking the softest `incoming` would then hand
+    this bracket the *harder* fight while looking correct.
     """
-    gentlest = min(difficulty.table().tiers, key=lambda tier: tier.incoming)
+    gentlest = difficulty.table().gentlest
     won = runs_won(reckless, tier=gentlest)
     assert won == 0, (
         f"a hero that never disengages finishes {won}/{len(SEEDS)} runs on "
-        f"'{gentlest.id}' (incoming {gentlest.incoming}) -- that tier has no "
-        f"game in it, and the dial has gone too far"
+        f"'{gentlest.id}' -- that tier has no game in it, and the dials have "
+        f"gone too far. incoming {gentlest.incoming}, enemies {gentlest.enemies}"
     )
 
 
