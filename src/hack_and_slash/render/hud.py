@@ -49,6 +49,12 @@ PIP_READY = (150, 214, 236)
 PIP_EMPTY = (40, 46, 58)
 PIP_FILLING = (78, 118, 140)
 
+#: A buff running down, which is the opposite state to a cooldown running down
+#: and has to look like it. Warm where the rest of the row is cold, and it
+#: *drains* where a cooldown *fills* -- so the one pip that means "this is
+#: happening right now" cannot be mistaken for the three that mean "not yet".
+PIP_ACTIVE = (236, 190, 110)
+
 
 class Hud:
     def __init__(self) -> None:
@@ -108,6 +114,7 @@ class Hud:
         remaining: int,
         total: int,
         label: str,
+        active: bool = False,
     ) -> None:
         """One cooldown, as a square that refills from the bottom.
 
@@ -115,12 +122,23 @@ class Hud:
         which is why it is a shape. Filling upward rather than draining means
         "full" and "ready" are the same picture, so the row is read by how much
         of it is lit rather than by comparing four part-empty boxes.
+
+        `active` inverts both halves of that: the square drains rather than
+        fills, in `PIP_ACTIVE`, because it is now counting down something the
+        player *has* rather than something they are waiting for. Same pip, same
+        place, opposite reading -- and the label stays lit, which is what says
+        the slot is not merely unavailable.
         """
         size = BAR_H
         ready = remaining <= 0
 
         pygame.draw.rect(surface, (14, 15, 20), (x - 1, y - 1, size + 2, size + 2))
-        if ready:
+        if active:
+            left = int(size * (remaining / max(1, total)))
+            pygame.draw.rect(surface, PIP_EMPTY, (x, y, size, size))
+            if left > 0:
+                pygame.draw.rect(surface, PIP_ACTIVE, (x, y + size - left, size, left))
+        elif ready:
             pygame.draw.rect(surface, PIP_READY, (x, y, size, size))
         else:
             filled = int(size * (1.0 - remaining / max(1, total)))
@@ -128,7 +146,9 @@ class Hud:
             if filled > 0:
                 pygame.draw.rect(surface, PIP_FILLING, (x, y + size - filled, size, filled))
 
-        text = self.small.render(label, False, config.WHITE if ready else config.GREY)
+        text = self.small.render(
+            label, False, config.WHITE if ready or active else config.GREY
+        )
         surface.blit(text, (x + size + 3, y - 1))
 
     def _draw_dodge(self, surface: pygame.Surface, hero: Entity, top: int) -> None:
@@ -151,19 +171,29 @@ class Hud:
         A `World` can be built around any entity type -- the tools and half the
         tests do it -- and a HUD that raised an IndexError on a body without an
         ultimate would break them all.
+
+        **The buff slot borrows its own pip while it is live.** For those ticks
+        the question the pip answers changes from "can I press that yet" to
+        "how long have I got", which is the more urgent of the two and the only
+        one worth screen space -- the slot cannot be pressed while the buff is
+        running anyway, because every buff is shorter than its own cooldown.
+        Free of new HUD real estate, on a 384px strip that has none.
         """
         y = top + BAR_Y_OFFSET - BAR_H
         drawn = 0
         for slot in skills.COOLDOWN_SLOTS:
             if slot >= len(hero.type.weapons):
                 continue
+            weapon = hero.type.weapons[slot]
+            buffing = weapon.is_buff and hero.buff_ticks > 0
             self._draw_pip(
                 surface,
                 SKILL_PIP_X + drawn * SKILL_PIP_SPACING,
                 y,
-                hero.cooldown_on(slot),
-                hero.type.weapons[slot].cooldown,
+                hero.buff_ticks if buffing else hero.cooldown_on(slot),
+                weapon.buff_ticks if buffing else weapon.cooldown,
                 SKILL_PIP_LABELS[slot],
+                active=buffing,
             )
             drawn += 1
 

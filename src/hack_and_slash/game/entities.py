@@ -91,6 +91,21 @@ class Weapon:
     projectile_count: int = 1
     spread: float = 0.0
 
+    #: What using this attack grants its own user, and for how many ticks. The
+    #: two are one fact in two fields on purpose: `buff_ticks` alone says *this
+    #: is a buff*, which is what `is_buff` reads and what every branch guarding
+    #: this feature keys off, and `buff` says *what it does*. A block with no
+    #: duration is inert rather than permanent, which is the safe way round --
+    #: the failure mode of forgetting the number is a skill that does nothing,
+    #: not a hero that is permanently 30% faster.
+    #:
+    #: Neutral and zero on every attack in the game except the five in the Q
+    #: slot, so `is_buff` is False everywhere the balance grid has ever
+    #: measured and every branch added for this costs one falsy test. Same
+    #: argument as `sim._touch_props` opening on an empty prop list.
+    buff: Attributes = NEUTRAL
+    buff_ticks: int = 0
+
     @property
     def total_ticks(self) -> int:
         return self.windup + self.active + self.recovery
@@ -98,6 +113,17 @@ class Weapon:
     @property
     def is_charge(self) -> bool:
         return self.charge_speed > 0.0
+
+    @property
+    def is_buff(self) -> bool:
+        """Whether this attack buffs its user instead of hitting anything.
+
+        Read off the duration rather than off the block, because a buff whose
+        every field happens to be zero is still a buff -- it is a tuning
+        mistake, and a mistake that reads as "the slot is an attack again" is
+        much harder to see than one that reads as "the skill does nothing".
+        """
+        return self.buff_ticks > 0
 
     @classmethod
     def from_dict(cls, weapon_id: str, payload: dict) -> "Weapon":
@@ -121,6 +147,13 @@ class Weapon:
             projectile_lifetime=int(payload.get("projectile_lifetime", 120)),
             projectile_count=int(payload.get("projectile_count", 1)),
             spread=math.radians(float(payload.get("spread_degrees", 0.0))),
+            # Through `Attributes.from_dict`, which *raises* on an unknown key.
+            # Worth reaching for deliberately: everything above this line uses
+            # `payload.get`, so a misspelled weapon field is silently ignored,
+            # and a `crit_rate` sitting quietly at zero in a content file is
+            # exactly the kind of thing that gets tuned around for an afternoon.
+            buff=Attributes.from_dict(payload.get("buff")),
+            buff_ticks=int(payload.get("buff_ticks", 0)),
         )
 
 
@@ -458,6 +491,18 @@ class Entity:
     #: replaying from its seed. See `sim._regen`.
     regen_bank: int = 0
 
+    #: The third attribute layer, and the only one with a lifetime shorter than
+    #: a stage: what the Q slot granted this body, and how many ticks of it are
+    #: left. Written by `actions.apply_buff`, counted down in
+    #: `actions.tick_timers`, and reset to the shared `NEUTRAL` singleton on
+    #: expiry -- by identity, because `attrs` tests against it.
+    #:
+    #: Deliberately *not* saved. `save.snapshot` writes `Run` state only and a
+    #: save is taken between stages, so a buff dies with the `World` that was
+    #: fighting when it was cast, exactly as `skill_cooldowns` already does.
+    buff: Attributes = NEUTRAL
+    buff_ticks: int = 0
+
     # Cosmetic only. The renderer reads these; the sim never branches on them,
     # which is what lets the feel pass be turned off without changing a fight.
     flash: int = 0
@@ -505,14 +550,24 @@ class Entity:
 
     @property
     def attrs(self) -> Attributes:
-        """Content plus earned. The only attribute value the sim ever reads.
+        """Content plus earned plus whatever the Q slot is granting right now.
 
         Summed on every access rather than cached: the earned half changes when
-        a level is spent and the content half changes when `jobs.promote` swaps
-        the type, and a cache invalidated in two places is a cache that will be
-        wrong in a third.
+        a level is spent, the content half changes when `jobs.promote` swaps the
+        type, the third half expires on a timer, and a cache invalidated in
+        three places is a cache that will be wrong in a fourth.
+
+        **The buff is tested by identity against the shared `NEUTRAL`
+        singleton**, not summed unconditionally, and that is not a
+        micro-optimisation. `sim._walk_speed` reads this once per body per tick,
+        so an unconditional third addend would put an eight-field construction
+        on every enemy on every tick of a 300,000-tick run to add zero to
+        zero. The same trick `save._attributes` and `World._populate` already
+        play, for the same reason -- which is why `apply_buff` must reset to the
+        singleton rather than to a fresh `Attributes()` that merely equals it.
         """
-        return self.type.attributes + self.bonus
+        base = self.type.attributes + self.bonus
+        return base if self.buff is NEUTRAL else base + self.buff
 
     @property
     def max_hp(self) -> int:

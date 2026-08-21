@@ -299,7 +299,17 @@ def _advance_state(world: World, entity: Entity) -> None:
         return
 
     weapon = entity.weapon
-    if weapon.projectile:
+    if weapon.is_buff:
+        # Before the projectile branch, so the three kinds of active window are
+        # mutually exclusive and read in the order they were added. A buff
+        # opens no hitbox and looses no arrow; `combat.resolve_swings` skips it
+        # for the same reason it skips a projectile.
+        actions.apply_buff(entity)
+        world.emit(
+            Event(EventKind.BUFF, entity.pos, entity.id, facing=entity.facing,
+                  is_hero=entity.is_hero)
+        )
+    elif weapon.projectile:
         _loose_projectile(world, entity)
         world.emit(
             Event(EventKind.SHOOT, entity.pos, entity.id, facing=entity.facing,

@@ -244,6 +244,12 @@ def resolve_swings(world) -> None:
         weapon = attacker.weapon
         if weapon.projectile:
             continue  # loosed at the windup transition; the arrow does the hitting
+        if weapon.is_buff:
+            # A buff has reach 0 and arc 0, so the cone would refuse every
+            # target anyway -- but it would run a broadphase query first, and
+            # relying on the geometry to say "this does not hit things" is
+            # relying on two numbers staying zero. Say it once, here.
+            continue
 
         # Broadphase: reach plus the largest body that could be clipping the far
         # edge of the arc. Over-fetching here is free; under-fetching is a miss.

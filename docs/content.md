@@ -266,6 +266,33 @@ ultimate, ascending in commitment and cooldown. `game/skills.py` names the
 indices, and a test fails if a class lists them in another order — otherwise it
 loads perfectly and then binds the ultimate to the light-attack button.
 
+**The neutral slot is a buff, not an attack.** It carries `buff_ticks` and a
+`buff` block instead of damage and reach:
+
+```json
+"knight_resolve": {
+  "name": "Resolve",
+  "damage": 0, "arc_degrees": 0, "reach": 0,
+  "windup": 7, "active": 3, "recovery": 12,
+  "cooldown": 180,
+  "buff_ticks": 120,
+  "buff": { "defense": 4 }
+}
+```
+
+`buff_ticks` is what makes it a buff — `Weapon.is_buff` reads the duration, not
+the block, so a buff granting nothing is a tuning mistake rather than an attack.
+The `buff` block goes through `Attributes.from_dict` and therefore **raises on an
+unknown key**, unlike every other weapon field, which is silently ignored. Four
+rules, all pinned by test:
+
+| Rule | Why |
+| --- | --- |
+| Only the neutral slot buffs | Q is the buff button and E and F are attacks; a player learns that in stage one |
+| `0 < buff_ticks < cooldown` | Two buffs can then never overlap, which is what makes "a cast replaces" an unambiguous rule |
+| No buff grants `max_hp` | It is a ceiling `hp` is clamped to, so expiry drops it under a hero standing above it — and `jobs.promote` then reads a full-health fraction off a wounded hero |
+| No enemy carries one | Every branch added for buffs is guarded on `is_buff`, so the layer costs a body without one exactly one falsy test |
+
 ## Adding an advanced class
 
 Same as a class, plus one field:
@@ -275,7 +302,7 @@ Same as a class, plus one field:
   "name": "Dark Knight", "faction": "hero", "sprite": "dark_knight",
   "promotes_from": "knight",
   "hp": 115, "speed": 1.45, "radius": 5.5,
-  "weapons": ["greatsword", "knight_bash", "dark_knight_ruin", "dark_knight_black_tide"],
+  "weapons": ["greatsword", "knight_resolve", "dark_knight_ruin", "dark_knight_black_tide"],
   "brain": "player",
   "dodge_speed": 3.6, "dodge_ticks": 12, "iframe_ticks": 8, "dodge_cooldown": 38,
   "heal_between_stages": 56

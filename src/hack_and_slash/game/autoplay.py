@@ -701,6 +701,20 @@ class Skilful:
             weapon = hero.type.weapons[slot]
             if hero.cooldown_on(slot) > 0:
                 continue
+            # The Q slot buffs rather than hits, and this policy has no model of
+            # "buff, then fight" -- it picks the most expensive thing that can
+            # connect, on the tick it wants to attack. Pressing a buff on
+            # cooldown inside that rule would measure the ordering this loop
+            # happens to have rather than what the buff is worth, which is the
+            # recorded trap: an instrument that touches the feature reports its
+            # own perturbation in the same units it reports difficulty.
+            #
+            # The `reach` test below already excluded it, by accident, because a
+            # buff has reach 0. Said out loud here so that the slot going
+            # unmeasured is a decision on record rather than a side effect of a
+            # number somebody could reasonably change.
+            if weapon.is_buff:
+                continue
             # A projectile carries its own distance; a swing has to be next to
             # the thing. Reach 0 on a non-projectile is not a real attack.
             if not weapon.projectile and distance > weapon.reach + target_radius:

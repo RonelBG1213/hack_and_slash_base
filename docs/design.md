@@ -145,19 +145,44 @@ Every class has four attacks, on ascending commitment and ascending cooldown.
 | Slot | Key | What it is |
 | --- | --- | --- |
 | **Light** | click / `J` | No cooldown. The attack in the table above — the one the class *is*. |
-| **Neutral** | `Q` | ~3s. Answers the situation the light attack is worst in, and always hits for less. The Archer's kick, the Magician's ward, the Rogue's thrown knife. |
+| **Neutral** | `Q` | ~3s, and the only slot that is not an attack. A self-buff: no damage, no hitbox, reach 0. Answers the situation the light attack is worst in by changing the hero for a few seconds rather than by hitting something. |
 | **Heavy** | `E` | ~5s. Roughly double the light attack in damage and in commitment. |
 | **Ultimate** | `F` | ~25–30s. The largest payoff the class has. Once or twice a stage. |
 
-A neutral buys position rather than kills things — that is the point of it, and it
-is why every one of them does less damage than the attack it sits beside. The
-Knight's Shield Bash shoves a crowd nearly twice as far as a greatsword swing for
-five damage, because a 30-tick greatsword cycle with three grunts on you is the
-Knight's actual problem and more damage was never the answer to it.
+A neutral answers the class's own worst situation, and it does it by changing the
+hero rather than by hitting anything — that is the point of it, and it is why the
+slot deals no damage at all. A 30-tick greatsword cycle with three grunts on you
+is the Knight's actual problem, and more damage was never the answer to it.
+
+**One buff per starting class, inherited by both branches it promotes into**, so
+there are five and not fifteen — the same rule that already governs the light
+attack. Each leans on the attribute that class's identity already names:
+
+| Class | | What it grants | Why that one |
+| --- | --- | --- | --- |
+| Knight | Resolve | `defense` | The commitment it cannot walk out of, made survivable |
+| Rogue | Bloodlust | `crit_chance`, `crit_damage` | A five-damage dagger against durable enemies is the worst matchup in the game, and a crit rate is worth what the class's swing rate makes it worth — where a flat point would be worth three times as much to the Magician |
+| Archer | Quickstep | `move_speed` | "Can you keep the room between you", bought continuously instead of once |
+| Magician | Ward | `evasion` | An evaded hit lands no stagger and no interrupt, so a 31-tick bolt survives being wrong about it |
+| Priest | Benediction | `regen` | The run-level class, given a fight-level version of the same idea |
+
+The vehicle is the attribute layer, so nothing new happens in a fight: a buff is a
+third `Attributes` block summed into `Entity.attrs` for a number of ticks, and
+crit and evasion draw from `world.attr_rng` exactly as they already did. **Every
+buff is shorter than the cooldown gating it**, so two can never overlap and a cast
+replaces rather than stacks — pinned by test, so the question never has to be
+answered at the call site.
+
+Being hit during the windup loses you the cast *and* the cooldown, like any other
+attack. That is what keeps the commitment real, and it falls out of the state
+machine rather than being coded for.
 
 > [!IMPORTANT]
 > **The neutral, heavy and ultimate slots are the part of the game that has not
-> been measured** — fifteen attacks across the starting classes and twenty more
+> been measured**, and the neutral is now the furthest out of reach of the two
+> instruments — the skill-using bot skips the slot explicitly, because a policy
+> with no model of *buff, then fight* would measure its own attack ordering
+> rather than the buff. The rest of this note stands unchanged — fifteen attacks across the starting classes and twenty more
 > across the ten they promote into. The reference bot plays light-only by design,
 > which is what keeps every recorded number still meaning what it meant, so it
 > cannot see the other three slots for any of the fifteen classes. The suite pins

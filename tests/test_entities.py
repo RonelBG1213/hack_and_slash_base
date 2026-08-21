@@ -9,6 +9,7 @@ import pytest
 
 from hack_and_slash import config
 from hack_and_slash.game import skills
+from hack_and_slash.game.attributes import NEUTRAL
 from hack_and_slash.game.entities import Faction, load_bestiary
 
 from .helpers import BESTIARY, HERO
@@ -242,11 +243,19 @@ def test_every_class_declares_its_four_slots_in_the_order_the_game_expects() -> 
             "which is not an ultimate"
         )
 
-        # Neutral buys position; heavy buys damage. A neutral that out-damages
-        # the light attack is just a better light attack on a cooldown.
-        assert neutral.damage < light.damage, (
-            f"{cls.id}'s {neutral.id} hits for {neutral.damage} against the "
-            f"light attack's {light.damage}"
+        # The neutral is a buff, not an attack. Asserted as `is_buff` and not
+        # as `damage == 0`, because a weapon that deals no damage is also what
+        # a half-finished attack looks like -- `is_buff` says it is meant.
+        assert neutral.is_buff, (
+            f"{cls.id}'s {neutral.id} is in the buff slot and buffs nothing"
+        )
+        assert neutral.damage == 0 and neutral.reach == 0, (
+            f"{cls.id}'s {neutral.id} still hits for {neutral.damage} at "
+            f"reach {neutral.reach}"
+        )
+        assert neutral.buff != NEUTRAL, (
+            f"{cls.id}'s {neutral.id} grants a block of nothing for "
+            f"{neutral.buff_ticks} ticks"
         )
         assert heavy.damage > light.damage, f"{cls.id}'s heavy does not hit harder"
         assert heavy.total_ticks > light.total_ticks, (
@@ -261,6 +270,64 @@ def test_every_class_declares_its_four_slots_in_the_order_the_game_expects() -> 
             f"{cls.id}'s ultimate offers {_payload(ultimate)} damage against "
             f"its heavy's {_payload(heavy)}"
         )
+
+
+def test_a_buff_cannot_still_be_live_when_its_slot_comes_back() -> None:
+    """Duration strictly under cooldown, so two buffs can never overlap.
+
+    `actions.apply_buff` replaces rather than adds, and that is only an
+    unambiguous rule while overlap is impossible -- the day a buff outlasts its
+    own cooldown, "replace" silently becomes "a player who presses Q on time
+    gets less than one who does not". Pinning the gap here means the question
+    never has to be answered at the call site.
+    """
+    for cls in PLAYABLE:
+        neutral = cls.weapons[skills.NEUTRAL]
+        assert 0 < neutral.buff_ticks < neutral.cooldown, (
+            f"{cls.id}'s {neutral.id} lasts {neutral.buff_ticks} ticks against "
+            f"a {neutral.cooldown}-tick cooldown"
+        )
+
+
+def test_no_buff_grants_max_hp() -> None:
+    """The one attribute a *timed* block must not touch.
+
+    Every other field is read fresh each time it is wanted, so losing it is
+    losing a bonus. `max_hp` is a ceiling that `hp` is measured against and
+    clamped to -- grant it, and expiry drops the ceiling under a hero standing
+    above it. `Entity.health_fraction` clamps to 1.0, so nothing crashes and
+    nothing reports it; what happens instead is that `jobs.promote` reads a
+    full-health fraction off a wounded hero and the fork becomes a stealth heal.
+
+    Nothing in `data/weapons.json` does this today. The test is here so that
+    nothing does it later, on the far side of the one code path that would
+    turn it into a silent balance change.
+    """
+    for cls in PLAYABLE:
+        for slot, weapon in enumerate(cls.weapons):
+            assert weapon.buff.max_hp == 0, (
+                f"{cls.id}'s {weapon.id} ({skills.SLOT_NAMES[slot]}) grants "
+                f"{weapon.buff.max_hp} max_hp for {weapon.buff_ticks} ticks"
+            )
+
+
+def test_only_the_neutral_slot_buffs() -> None:
+    """The buff is a slot, not a free-floating weapon property.
+
+    Q is the buff button and E and F are attacks, and a player learns that in
+    the first stage. An `is_buff` heavy would load perfectly, draw a normal pip
+    and quietly deal no damage.
+    """
+    for cls in PLAYABLE:
+        for slot, weapon in enumerate(cls.weapons):
+            if slot == skills.NEUTRAL:
+                continue
+            assert not weapon.is_buff, (
+                f"{cls.id}'s {skills.SLOT_NAMES[slot]} ({weapon.id}) is a buff"
+            )
+    for enemy in ENEMIES:
+        for weapon in enemy.weapons:
+            assert not weapon.is_buff, f"{enemy.id}'s {weapon.id} is a buff"
 
 
 def _payload(weapon) -> int:

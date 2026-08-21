@@ -17,7 +17,8 @@ from __future__ import annotations
 import pytest
 
 from hack_and_slash.core.vec2 import Vec2
-from hack_and_slash.game.autoplay import Autoplay, Evasive, autoplay, evasive
+from hack_and_slash.game import skills
+from hack_and_slash.game.autoplay import Autoplay, Evasive, Skilful, autoplay, evasive
 from hack_and_slash.game.entities import ActionState
 
 from .helpers import BESTIARY, add_enemy, level_with, make_world, open_room, run
@@ -161,3 +162,36 @@ def test_both_policies_agree_the_hero_is_giving_ground_at_all() -> None:
     hurt(hero)
 
     assert autoplay._should_give_ground(hero, True)
+
+
+# --- the skill-ceiling policy and the buff slot ------------------------------
+def test_the_skilful_policy_never_reaches_for_the_buff_slot() -> None:
+    """The Q slot is invisible to both instruments, and that is a decision.
+
+    `Autoplay` cannot see it because it plays light-only. `Skilful` skips it
+    explicitly, because a policy whose whole rule is "the most expensive thing
+    that can connect, on the tick I want to attack" has no model of *buff, then
+    fight* -- pressing a buff inside that rule would measure the ordering this
+    loop happens to have rather than what the buff is worth.
+
+    That is the recorded trap in this repo, hit for the fourth time: an
+    instrument that touches the feature reports its own perturbation in the
+    same units it reports difficulty. The flanker demon was the first.
+
+    Asserted over every class, and at ranges either side of every skill's
+    reach, so it cannot pass merely because the bot was too far away to want
+    anything.
+    """
+    policy = Skilful()
+    for cls in BESTIARY.hero_classes:
+        for distance in (12, 30, 60, 140, 300):
+            world = a_world()
+            world.hero.type = cls
+            add_enemy(world, "grunt", world.hero.pos + Vec2(distance, 0))
+
+            for _ in range(90):
+                intent = policy(world)
+                assert not (intent.attack and intent.weapon == skills.NEUTRAL), (
+                    f"{cls.id} pressed the buff slot at {distance}px"
+                )
+                run(world, 1, intent)

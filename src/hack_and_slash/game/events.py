@@ -27,6 +27,12 @@ class EventKind(str, Enum):
     CRIT = "crit"
     DEATH = "death"
     DODGE = "dodge"
+    #: A body granted itself a timed attribute block -- the Q slot. Its own
+    #: kind rather than a SWING with no hitbox, because to a player the two are
+    #: opposite events: one is an attack that missed, the other is a cast that
+    #: landed. `effects.feed` has no case for it yet, which is the same
+    #: position SWING, DODGE and PROP are in -- the HUD pip is the feedback.
+    BUFF = "buff"
     SHOOT = "shoot"
     PROJECTILE_SPENT = "projectile_spent"
     PICKUP = "pickup"  # gold or a valuable was collected

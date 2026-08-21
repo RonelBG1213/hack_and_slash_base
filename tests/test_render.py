@@ -20,7 +20,7 @@ from hack_and_slash.game.intent import Intent
 from hack_and_slash.game.sim import step
 from hack_and_slash.render.atlas import load as load_atlas
 from hack_and_slash.render.effects import Effects
-from hack_and_slash.render.hud import Hud
+from hack_and_slash.render.hud import PIP_ACTIVE, Hud
 from hack_and_slash.render.renderer import Renderer
 from hack_and_slash.scenes import smoke
 from hack_and_slash.scenes.menu import MenuScene
@@ -262,6 +262,50 @@ def test_the_hud_draws_the_skill_pips_for_every_class(atlas) -> None:
         world.hero.dodge_cooldown = cls.dodge_cooldown // 2
         Hud().draw(surface, world, tick=0)
     assert not is_blank(surface)
+
+
+def _has_colour(surface: pygame.Surface, colour) -> bool:
+    """Whether that exact colour is anywhere in the bottom strip.
+
+    Every pixel, not the sampled grid `is_blank` uses -- a pip is eight pixels
+    square and a stride of seven would find it or miss it depending on where
+    the row happened to start.
+    """
+    top = config.INTERNAL_H - config.HUD_H
+    return any(
+        surface.get_at((x, y))[:3] == colour
+        for y in range(top, config.INTERNAL_H)
+        for x in range(config.INTERNAL_W)
+    )
+
+
+def test_the_buff_slot_takes_over_its_own_pip_while_it_is_live(atlas) -> None:
+    """`PIP_ACTIVE` on screen exactly while the hero is buffed, for every class.
+
+    Asserted on the colour rather than on "something was drawn", because the
+    whole point of this pip is that it reads differently from the three around
+    it -- a version that drew the buff in `PIP_FILLING` would be indis-
+    tinguishable from the cooldown it replaces and would pass any `is_blank`
+    check ever written.
+    """
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    for cls in BESTIARY.hero_classes:
+        world = make_world()
+        world.hero.type = cls
+        buff = cls.weapons[skills.NEUTRAL]
+
+        Hud().draw(surface, world, tick=0)
+        assert not _has_colour(surface, PIP_ACTIVE), (
+            f"{cls.id} drew an active buff without one"
+        )
+
+        world.hero.buff = buff.buff
+        world.hero.buff_ticks = buff.buff_ticks // 2
+        world.hero.skill_cooldowns = {skills.NEUTRAL: buff.cooldown // 2}
+        Hud().draw(surface, world, tick=0)
+        assert _has_colour(surface, PIP_ACTIVE), (
+            f"{cls.id}'s live buff drew as an ordinary cooldown"
+        )
 
 
 def test_the_hud_draws_for_a_body_with_no_skills(atlas) -> None:

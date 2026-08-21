@@ -18,6 +18,7 @@ touches this file.
 from __future__ import annotations
 
 from ..core.vec2 import ZERO, Vec2, from_angle
+from .attributes import NEUTRAL
 from .entities import ActionState, Entity
 
 #: How much of your walking speed you keep mid-swing. Not zero -- rooting the
@@ -105,6 +106,31 @@ def begin_attack(
         # nothing you can act on.
         entity.dash_dir = from_angle(entity.facing)
     return True
+
+
+def apply_buff(entity: Entity) -> None:
+    """Grant this body whatever its current attack buffs it with.
+
+    Called when the active window opens, beside the swing and the arrow, so a
+    buff costs the same windup it always did and is lost to an interrupt in the
+    same way -- `interrupt` cancels a WINDUP, and a cancelled cast never reaches
+    here. Being able to be hit out of it is what keeps the commitment real.
+
+    **Replaces rather than stacks.** Every buff in the game is shorter than the
+    cooldown that gates it -- pinned by
+    `test_a_buff_cannot_still_be_live_when_its_slot_comes_back` -- so a second
+    cast cannot arrive while the first is live, and replacing is the reading
+    that stays correct if that ever stops being true. Adding would let one slot
+    ratchet itself upwards by being pressed on time.
+
+    A no-op for the hundreds of enemy bodies a run steps through: `is_buff` is
+    False on every attack in the game but the five in the Q slot.
+    """
+    weapon = entity.weapon
+    if not weapon.is_buff:
+        return
+    entity.buff = weapon.buff
+    entity.buff_ticks = weapon.buff_ticks
 
 
 def begin_dodge(entity: Entity, direction: Vec2) -> bool:
@@ -219,6 +245,17 @@ def tick_timers(entity: Entity) -> None:
         entity.attack_cooldown -= 1
     if entity.flash > 0:
         entity.flash -= 1
+
+    # Reset to the shared singleton and not to `Attributes()`, because
+    # `Entity.attrs` tests `self.buff is NEUTRAL` by identity -- an equal-but-
+    # distinct block would leave every subsequent tick paying for a sum of
+    # zeroes. Cleared on the tick the counter reaches zero rather than lazily in
+    # `attrs`, so the identity holds from the moment the buff ends instead of
+    # from the next time somebody happens to ask.
+    if entity.buff_ticks > 0:
+        entity.buff_ticks -= 1
+        if entity.buff_ticks == 0:
+            entity.buff = NEUTRAL
 
     # Empty for anything without skills, so this costs nothing on the hundreds
     # of enemy bodies a run steps through. Entries are left at zero rather than

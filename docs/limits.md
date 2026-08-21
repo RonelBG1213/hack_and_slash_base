@@ -286,6 +286,13 @@ measurement, and it stops the grid being a fixed reference on the same day.
 
 The reference bot plays light-only by design, so it cannot see the neutral, heavy
 or ultimate slots. The suite pins the relationships between slots, not the values.
+
+The five buffs in the neutral slot are the least measured numbers in the game:
+neither instrument presses the slot, and `Skilful` now skips it deliberately
+rather than by accident. The Priest's `regen` is the flagged one — the recorded
+finding is that past a point the hero dies *inside* a stage rather than to
+attrition between them, so the risk is that sustain is worthless there rather
+than that it is too strong. Nothing measures which.
 See [Balance](balance.md#what-is-not-measured).
 
 ### The twenty attacks the advanced classes bring

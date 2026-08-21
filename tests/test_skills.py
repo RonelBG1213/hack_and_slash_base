@@ -13,9 +13,11 @@ attack behaves precisely as it did before.
 
 from __future__ import annotations
 
-from hack_and_slash.core.vec2 import Vec2
+from hack_and_slash.core.vec2 import ZERO, Vec2
 from hack_and_slash.game import actions, skills
+from hack_and_slash.game.attributes import NEUTRAL
 from hack_and_slash.game.entities import ActionState
+from hack_and_slash.game.events import EventKind
 from hack_and_slash.game.intent import Intent
 
 from .helpers import BESTIARY, add_enemy, enemies_idle, make_world, run
@@ -23,7 +25,9 @@ from .helpers import BESTIARY, add_enemy, enemies_idle, make_world, run
 RIGHT = Vec2(1, 0)
 
 KNIGHT = BESTIARY["knight"]
-BASH = KNIGHT.weapons[skills.NEUTRAL]
+#: The Knight's neutral, which is a buff rather than an attack -- the cooldown
+#: tests below do not care which, and that is the point of them.
+RESOLVE = KNIGHT.weapons[skills.NEUTRAL]
 CLEAVE = KNIGHT.weapons[skills.HEAVY]
 
 
@@ -62,7 +66,7 @@ def test_a_cooling_skill_is_refused_and_costs_nothing() -> None:
 
     # Let the whole attack finish, so only the cooldown can be refusing it.
     with enemies_idle():
-        run(world, BASH.total_ticks + 2)
+        run(world, RESOLVE.total_ticks + 2)
     assert hero.state is ActionState.IDLE
     assert hero.cooldown_on(skills.NEUTRAL) > 0
 
@@ -76,7 +80,7 @@ def test_a_skill_comes_back_exactly_when_the_data_says() -> None:
     actions.begin_attack(hero, facing=0.0, weapon_index=skills.NEUTRAL)
 
     with enemies_idle():
-        run(world, BASH.cooldown - 1)
+        run(world, RESOLVE.cooldown - 1)
         assert hero.cooldown_on(skills.NEUTRAL) == 1
         assert not actions.can_use(hero, skills.NEUTRAL)
 
@@ -95,7 +99,7 @@ def test_the_slots_cool_down_independently() -> None:
     assert actions.can_use(hero, skills.LIGHT) is False, "mid-swing, so nothing is free"
 
     with enemies_idle():
-        run(world, BASH.total_ticks + 2)
+        run(world, RESOLVE.total_ticks + 2)
     assert actions.can_use(hero, skills.HEAVY)
     assert not actions.can_use(hero, skills.NEUTRAL)
 
@@ -164,7 +168,7 @@ def test_holding_a_skill_down_does_not_re_fire_it_off_cooldown() -> None:
 
     starts = 0
     with enemies_idle():
-        for _ in range(BASH.cooldown + BASH.total_ticks + 4):
+        for _ in range(RESOLVE.cooldown + RESOLVE.total_ticks + 4):
             was_idle = hero.state is ActionState.IDLE
             run(world, 1, held)
             if was_idle and hero.state is ActionState.WINDUP:
@@ -224,3 +228,158 @@ def test_an_out_of_range_slot_wraps_rather_than_raising() -> None:
     assert actions.begin_attack(hero, facing=0.0, weapon_index=len(skills.SLOTS) + skills.HEAVY)
     assert hero.weapon_index == skills.HEAVY
     assert set(hero.skill_cooldowns) == {skills.HEAVY}
+
+
+# --- the buff slot -----------------------------------------------------------
+def test_the_neutral_slot_buffs_its_user_instead_of_hitting_anything() -> None:
+    """The whole feature, end to end and through the sim.
+
+    A hero casts Q with a brute at 18px -- inside the reach 20 the Shield Bash
+    this replaces had, so an unchanged neutral would both damage it and shove
+    it 9.5. Afterwards the brute must be untouched and the hero must be
+    carrying the block.
+
+    "Untouched" is checked on health and on `velocity`, deliberately not on
+    `pos`: knockback is an impulse on `velocity`, while `sim._separate` moves
+    `pos` every tick two bodies overlap. Asserting the position would fail on
+    the crowd physics that a Shield Bash landing has nothing to do with.
+    """
+    world = make_world()
+    hero = world.hero
+    enemy = add_enemy(world, "brute", hero.pos + RIGHT * 18)
+    before_hp = enemy.hp
+
+    with enemies_idle():
+        run(world, RESOLVE.windup + RESOLVE.active + 1,
+            Intent(aim=RIGHT, attack=True, weapon=skills.NEUTRAL))
+
+    assert enemy.hp == before_hp, "the buff dealt damage"
+    assert enemy.velocity == ZERO, "the buff knocked something back"
+    assert enemy.id not in hero.hit_ids, "the buff opened a hitbox"
+    assert hero.buff == RESOLVE.buff
+    assert hero.buff_ticks > 0
+
+
+def test_the_buff_reaches_the_arithmetic_the_sim_reads() -> None:
+    """`Entity.attrs` is the only attribute value the sim ever consults, so a
+    buff that does not arrive there is a buff that does nothing at all."""
+    world, hero = knight_world()
+    assert hero.attrs.defense == 0
+
+    actions.begin_attack(hero, facing=0.0, weapon_index=skills.NEUTRAL)
+    with enemies_idle():
+        run(world, RESOLVE.windup + 1)
+
+    assert hero.attrs.defense == RESOLVE.buff.defense, (
+        "the buff never reached `attrs`"
+    )
+
+
+def test_a_buff_expires_exactly_when_the_data_says() -> None:
+    """And leaves the *shared* neutral block behind, not an equal copy.
+
+    `Entity.attrs` tests `self.buff is NEUTRAL` by identity to keep the sum
+    free for every unbuffed body on every tick. An expiry that assigned a fresh
+    `Attributes()` would pass every equality test in this file and quietly put
+    an eight-field construction on every tick of the rest of the run.
+    """
+    world, hero = knight_world()
+    actions.begin_attack(hero, facing=0.0, weapon_index=skills.NEUTRAL)
+    with enemies_idle():
+        # The buff lands when the active window opens, which `_advance_state`
+        # does at the *end* of a tick -- so by the time this reads it, phase 1
+        # of the following tick has already spent one. Hence the -1, and it is
+        # the same arithmetic every other timer in the game is read with.
+        run(world, RESOLVE.windup + 1)
+        live = hero.buff_ticks
+        assert live == RESOLVE.buff_ticks - 1
+
+        run(world, live - 1)
+        assert hero.buff_ticks == 1
+        assert hero.attrs.defense == RESOLVE.buff.defense, (
+            "the buff stopped applying before its last tick"
+        )
+
+        run(world, 1)
+    assert hero.buff_ticks == 0
+    assert hero.buff is NEUTRAL, "expiry left a copy rather than the singleton"
+    assert hero.attrs.defense == 0
+
+
+def test_a_buff_interrupted_during_its_windup_is_lost() -> None:
+    """Being hit out of a cast costs you the cast and the cooldown both.
+
+    That is what makes the commitment real, and it is not a special case: the
+    buff lands when the active window opens, and `actions.interrupt` cancels a
+    WINDUP, so this falls out of the state machine rather than being coded for.
+    """
+    world, hero = knight_world()
+    assert actions.begin_attack(hero, facing=0.0, weapon_index=skills.NEUTRAL)
+    assert hero.state is ActionState.WINDUP
+
+    actions.interrupt(hero)
+
+    assert hero.state is ActionState.IDLE
+    assert hero.buff is NEUTRAL and hero.buff_ticks == 0
+    assert hero.cooldown_on(skills.NEUTRAL) > 0, (
+        "an interrupted cast refunded its cooldown"
+    )
+
+
+def test_casting_a_buff_emits_its_own_event_and_no_swing() -> None:
+    """A cast that landed and an attack that missed are opposite events, so
+    they are different kinds. The renderer has no case for either yet; what
+    matters is that anything counting swings does not count this one."""
+    world, hero = knight_world()
+    actions.begin_attack(hero, facing=0.0, weapon_index=skills.NEUTRAL)
+
+    kinds = []
+    with enemies_idle():
+        for _ in range(RESOLVE.windup + RESOLVE.active + 1):
+            run(world, 1)
+            kinds.extend(e.kind for e in world.events)
+
+    assert EventKind.BUFF in kinds
+    assert EventKind.SWING not in kinds
+    assert EventKind.SHOOT not in kinds
+
+
+def test_re_casting_replaces_the_window_rather_than_extending_it() -> None:
+    """Documented behaviour rather than reachable behaviour.
+
+    Every buff in the game is shorter than the cooldown gating it -- pinned by
+    `test_a_buff_cannot_still_be_live_when_its_slot_comes_back` -- so a player
+    cannot get here. Pinned anyway, because "replace" is the reading that stays
+    correct if that ever changes, and the alternative is a slot that ratchets
+    itself upwards for anybody who presses it on time.
+    """
+    world, hero = knight_world()
+    actions.begin_attack(hero, facing=0.0, weapon_index=skills.NEUTRAL)
+    with enemies_idle():
+        run(world, RESOLVE.windup + 1)
+        live = hero.buff_ticks
+        run(world, 30)
+    assert hero.buff_ticks == live - 30, "the window did not run down"
+
+    actions.apply_buff(hero)
+    assert hero.buff_ticks == RESOLVE.buff_ticks, "a re-cast stacked"
+
+
+def test_no_enemy_ever_carries_a_buff() -> None:
+    """The counterpart to `test_no_enemy_ever_records_a_cooldown`, and the same
+    claim: this layer costs nothing for a body that has none. Every branch
+    added for buffs is guarded on `is_buff` or on `buff_ticks`, and both are
+    falsy on every enemy attack in the game."""
+    world = make_world()
+    hero = world.hero
+    for offset, type_id in enumerate(("grunt", "rat", "charger", "bowman")):
+        add_enemy(world, type_id, hero.pos + Vec2(30 + offset * 14, 0))
+
+    run(world, 240, Intent(aim=RIGHT, attack=True))
+
+    for entity in world.entities:
+        if entity.is_hero:
+            continue
+        assert entity.buff is NEUTRAL and entity.buff_ticks == 0, (
+            f"{entity.type.id} is carrying {entity.buff}"
+        )

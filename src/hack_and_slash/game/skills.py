@@ -12,8 +12,11 @@ The order is ascending commitment, which is also the order the HUD draws:
 * **light** -- the attack the class has always had. Index 0, no cooldown, and
   the only one the reference bot ever presses. That is what keeps every recorded
   balance number measuring the same thing it measured before skills existed.
-* **neutral** -- answers the situation the light attack is worst in. Cheap,
-  frequent, buys position rather than killing things.
+* **neutral** -- answers the situation the light attack is worst in, and the
+  only slot that is not an attack at all. A self-buff: no damage, no hitbox,
+  reach 0, granting the class's own `Attributes` block for a few seconds. One
+  per starting class, inherited by both branches it promotes into, exactly as
+  the light attack is.
 * **heavy** -- roughly double the light attack in damage and in commitment.
 * **ultimate** -- the largest numbers the class has, once or twice a stage.
 
@@ -42,4 +45,10 @@ SLOT_NAMES = {
 
 #: The slots that sit on a cooldown and therefore need a pip drawn for them.
 #: Light is excluded because it has none -- a pip that is always full is noise.
+#:
+#: The neutral is still in here even though it is a buff: it has a cooldown like
+#: the other two, and while the buff is *live* the HUD reuses that same pip to
+#: count the buff down instead. One pip, two questions, and never both at once
+#: -- a buff is always shorter than the cooldown gating it, so the slot cannot
+#: be pressed while it is running anyway.
 COOLDOWN_SLOTS = (NEUTRAL, HEAVY, ULTIMATE)

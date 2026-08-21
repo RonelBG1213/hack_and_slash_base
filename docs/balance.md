@@ -662,7 +662,9 @@ Three holes, all deliberate and all stated where somebody will trip over them.
 
 **The thirty-five attacks.** The reference bot plays light-only, which is what
 keeps every recorded number meaning what it meant when it was recorded. It cannot
-see the neutral, heavy or ultimate slots — and because an advanced class inherits
+see the neutral, heavy or ultimate slots — and the neutral is doubly invisible now
+that it is a buff, because the skill-using bot skips the slot explicitly rather
+than measuring its own attack ordering — and because an advanced class inherits
 its light, promoting does not widen what the bot can see. So the ten advanced
 classes are measured (their health and their bodies, against acts V–VIII) and
 their twenty attacks are not.
