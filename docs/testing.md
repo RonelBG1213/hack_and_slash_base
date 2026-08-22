@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-python -m pytest              # 1293 tests, headless, no window
+python -m pytest              # 1305 tests, headless, no window
 python -m pytest tests/test_loot.py
 python main.py --smoke        # pixel fidelity: every sprite upscales with hard edges
 ```
@@ -52,28 +52,37 @@ That only matters for the handful of render tests; everything under `core/` and
 
 | File | Tests | What it guards |
 | --- | --- | --- |
-| `test_playthrough.py` | 313 | the [balance brackets](balance.md) and both class×stage grids |
+| `test_playthrough.py` | 415 | the [balance brackets](balance.md) and both class×stage grids |
+| `test_render.py` | 122 | drawing, the HUD, the five panels, the pause overlay, the input path including rebound keys, and **that a fight actually reaches the speaker** — headless |
+| `test_rooms.py` | 86 | the reward rooms: which one you get, how it turns, and what stands in the middle |
+| `test_menu.py` | 76 | the six menu rows, the autosave, the options and Controls screens, pausing a fight, and every column layout |
+| `test_equipment.py` | 36 | the twelve pieces, the rarity multiplier, and **the two-attribute ceiling** |
+| `test_entities.py` | 35 | content validity: levels, boss weapon order, sprite scale |
 | `test_run.py` | 34 | carry-over: health, gold, banking across stages, and that a promotion survives one |
-| `test_render.py` | 116 | drawing, the HUD, the five panels, the pause overlay, and the input path including rebound keys — headless |
+| `test_progression.py` | 33 | experience, the curve, spending, and **that the layer ships off** |
+| `test_hazards.py` | 29 | the traps, what unlocks them by floor, and what they refuse to stand on |
+| `test_save.py` | 29 | **that a loaded stage is the stage that was saved** |
+| `test_difficulty.py` | 28 | the seven dials per tier, and **that Normal is arithmetically the grid's game** |
 | `test_loot.py` | 28 | the gold formula, rarity weights, the sweep, the RNG split |
-| `test_progression.py` | 14 | experience, the curve, spending, and **that the layer ships off** |
-| `test_attributes.py` | 12 | the attribute block, and **that it moved nothing** |
-| `test_entities.py` | 27 | content validity: levels, boss weapon order, sprite scale |
-| `test_collision.py` | 20 | movement against walls, separation, swept paths |
+| `test_shop.py` | 26 | prices, caps, the late shelf, the Boots, refusal when short |
+| `test_collision.py` | 24 | movement against walls, separation, swept paths |
+| `test_ai.py` | 23 | the brains |
+| `test_skills.py` | 23 | slot indices and the cooldown contract |
+| `test_sim.py` | 21 | one tick |
+| `test_audio.py` | 21 | the cue table, the mixer, and **that a fight resolves identically with cues running** |
+| `test_bindings.py` | 20 | **that the shipped keys are the keys that shipped**, and the rules about changing them |
+| `test_jobs.py` | 20 | the fork: who promotes into what, and when it is offered |
 | `test_actions.py` | 19 | the WINDUP → ACTIVE → RECOVERY state machine |
-| `test_ai.py`, `test_boss.py`, `test_sim.py` | 17 each | brains, the boss positional brain, one tick |
+| `test_boss.py` | 17 | the boss positional brain |
+| `test_attributes.py` | 17 | the attribute block, and **that it moved nothing** |
 | `test_combat.py` | 16 | hit resolution and damage rolls |
 | `test_campaign.py` | 15 | act structure, stage ordering, playability |
-| `test_shop.py` | 23 | prices, caps, the late shelf, the Boots, refusal when short |
-| `test_level.py` | 13 | tiles, solidity, spawns |
+| `test_settings.py` | 17 | preferences and the profile, and that neither can stop the game starting |
 | `test_effects.py` | 14 | that the feel pass changes nothing, whichever way its toggles are set |
-| `test_menu.py` | 72 | the six menu rows, the autosave, the options and Controls screens, pausing a fight, and every column layout |
-| `test_save.py` | 16 | **that a loaded stage is the stage that was saved** |
-| `test_settings.py` | 15 | preferences and the profile, and that neither can stop the game starting |
-| `test_bindings.py` | 20 | **that the shipped keys are the keys that shipped**, and the rules about changing them |
-| `test_skills.py` | 11 | slot indices and the cooldown contract |
+| `test_level.py` | 13 | tiles, solidity, spawns |
 | `test_atlas.py` | 9 | data and art agree about which sprites exist |
-| others | | vectors, camera, spatial hash, level IO |
+| `test_autoplay.py` | 8 | the reference bot: **that it still does not shop** |
+| others | 30 | vectors, camera, spatial hash, level IO |
 | `test_architecture.py` | 1 | **the rule the project rests on** |
 
 ## The seven tests that are load-bearing
@@ -266,6 +275,25 @@ assertion has already failed — the hundreds of passing cells pay nothing.
 | Test | Why |
 | --- | --- |
 | — | — |
+
+> [!IMPORTANT]
+> **An empty list here does not mean a green suite, and the difference has
+> caught somebody out already.** Nothing is *recorded* as expected-to-fail --
+> there are no `xfail`s in the project at all -- but four tests in the
+> run-level bracket fail on `main` and are not written down anywhere:
+>
+> - `test_the_floor_a_skilled_hero_finishes_the_whole_run`
+> - `test_every_class_can_finish_the_campaign[archer]`
+> - `test_every_class_can_finish_the_campaign[priest]`
+> - `test_a_run_carries_damage_forward`
+>
+> Confirmed at `929b32e`. They are the run-level bracket rather than the grid,
+> and the distinction is the one this whole page rests on: **the per-stage grid
+> is clean and must stay clean**; the run bracket is the open question about
+> whether `heal_between_stages` sustains a campaign. Before treating a
+> `test_playthrough.py` failure as a regression, run those four ids against a
+> bare `HEAD` worktree — it needs no generated assets, because that file
+> imports only `game/` and `core/`.
 
 The list was these two until the Magician was fixed:
 

@@ -31,6 +31,8 @@ from typing import Optional
 import pygame
 
 from .. import config
+from ..audio import bank as sound_bank
+from ..audio.cues import Cues
 from ..core.campaign import Campaign
 from ..core.level import PropKind
 from ..core.vec2 import ZERO, Vec2
@@ -213,6 +215,15 @@ class PlayScene(Scene):
         self.pause_panel = PausePanel()
         self.accumulator = Accumulator()
         self.effects = Effects()
+
+        #: The audio pass, beside the feel pass and fed from the same events.
+        #: The bank that turns these names into noise is *not* held here -- see
+        #: `audio/bank.get`, which memoises one for the process because it has
+        #: no per-scene state and threading it would change a constructor that
+        #: `restarted()`, `tools/screenshot.py` and a lot of tests call
+        #: positionally.
+        self.cues = Cues()
+
         self._reapply_settings()
 
         # A run handed in is a run loaded off disk. The three parameters that
@@ -429,7 +440,10 @@ class PlayScene(Scene):
                     # is not one of them: the overlay would cover the result and
                     # take away the only way off it, and its Quit row would
                     # promise a save file that `_settle` has already deleted.
-                    return self.on_exit() if self.on_exit else None
+                    if self.on_exit is None:
+                        return None
+                    self._silence()
+                    return self.on_exit()
                 self.paused = True
                 self.pause_index = 0
                 # Nothing else this frame, for the sheet's reason: the world
@@ -503,7 +517,23 @@ class PlayScene(Scene):
             # `on_exit`. Resume rather than leave an overlay up over a scene
             # nobody can leave.
             self.paused = False
+            return nxt
+
+        # Cut the tail off whatever was still ringing. Leaving a run, not
+        # pausing one -- a cue that outlives the arena it belongs to arrives
+        # over the title screen, which is the one place it means nothing.
+        self._silence()
         return nxt
+
+    def _silence(self) -> None:
+        """Stop every cue still sounding, and drop the ones not yet played.
+
+        Called on the two ways out of a run and on neither way into a pause.
+        `SoundBank.stop` is a no-op on the silent bank, so this is safe on a
+        machine with no audio device and under the headless suite alike.
+        """
+        self.cues.clear()
+        sound_bank.get().stop()
 
     def _resume_from_settings(self) -> "PlayScene":
         """This fight again, still paused, with the new preferences in force.
@@ -655,6 +685,7 @@ class PlayScene(Scene):
         """
         self.effects.screenshake = self.settings.screenshake
         self.effects.damage_numbers = self.settings.damage_numbers
+        self.cues.volume = self.settings.volume
 
         self.keys = keymap.keycodes(self.settings)
         self.move_keys = {
@@ -931,7 +962,15 @@ class PlayScene(Scene):
             # Aged after the tick that saw it, never before -- so the press is
             # live for exactly `DODGE_BUFFER_TICKS` stepped ticks.
             self._consume_edges()
-            self.effects.feed(self.world.drain_events(), self.world.hitstop)
+
+            # **Drained once and handed to both.** `drain_events` empties the
+            # queue, so a second call for the audio pass would come back empty
+            # and the game would be silent for reasons no test would explain.
+            # The feel pass and the audio pass are two readers of one list, and
+            # neither may be the reason the other stops working.
+            events = self.world.drain_events()
+            self.effects.feed(events, self.world.hitstop)
+            self.cues.feed(events)
             if self.world.hitstop > 0:
                 self.freeze = self.world.hitstop
 
@@ -944,6 +983,10 @@ class PlayScene(Scene):
                 # A new stage means a new arena and new bounds; the damage
                 # numbers from the last one would hang over empty floor.
                 self.effects.clear()
+                # The cues queued by the last tick of a stage already left
+                # belong to an arena the player is no longer standing in --
+                # `Effects.clear` above is here for exactly the same reason.
+                self.cues.clear()
                 self._enter_stage()
                 self.banner = BANNER_FRAMES
 
@@ -993,6 +1036,13 @@ class PlayScene(Scene):
                 break
 
         self.effects.tick()
+
+        # Once per *frame*, not once per tick, and `Cues.drain` is what makes
+        # that the right place: one rendered frame can pay out up to fifteen
+        # simulated ticks after a stall, and fifteen stacked swings is a buzz
+        # rather than a swing. Deliberately after `effects.tick()` and outside
+        # the tick loop above, which is where the collapsing pays off.
+        sound_bank.get().play(self.cues.drain(), self.cues.level)
         if self.banner > 0:
             self.banner -= 1
 

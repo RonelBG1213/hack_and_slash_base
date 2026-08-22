@@ -23,12 +23,14 @@ python -m venv .venv
 # .venv/bin/python -m pip install -r requirements.txt     # macOS / Linux
 ```
 
-The art and the stages are both generated. The art is not committed, so build it
-once; the stages are, so you only need to rebuild them after editing one:
+The art, the sound and the stages are all generated. The art and the sound are
+not committed, so build them once; the stages are, so you only need to rebuild
+them after editing one:
 
 ```sh
 .venv/Scripts/python tools/gen_art.py       # assets/sprites.png
-.venv/Scripts/python tools/make_level.py    # levels/stage1..40.json + campaign.json
+.venv/Scripts/python tools/gen_sfx.py       # assets/sfx/*.wav
+.venv/Scripts/python tools/make_level.py    # levels/stage1..50.json + campaign.json
 .venv/Scripts/python tools/make_rooms.py    # levels/rooms/chamber.json
 ```
 
@@ -70,9 +72,11 @@ class, the health carried in and what the run has banked; the arena itself is
 stage that was saved rather than one that resembles it. There is deliberately no
 mid-fight save — see `src/hack_and_slash/game/save.py` for why.
 
-**Settings** covers window scale and fullscreen, screenshake, damage numbers, the
-seed for the next run, erasing the save and profile, and a **Controls** row that
-opens the key bindings. It is reachable from the pause overlay as well as from
+**Settings** covers window scale and fullscreen, screenshake, damage numbers,
+**sound volume**, the seed for the next run, erasing the save and profile, and a
+**Controls** row that opens the key bindings. Volume is a 0-10 dial: left and
+right move it, Enter mutes and a second Enter puts it back where it was, and the
+row reads `off` at zero. It is reachable from the pause overlay as well as from
 here; the erase row is the one thing it does not offer mid-run. Nothing on that screen can change how a fight resolves,
 which is the line it is drawn on: difficulty is a balance decision and balance
 decisions live in `data/` where they get swept. Which key swings is not how hard

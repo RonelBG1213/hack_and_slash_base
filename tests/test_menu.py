@@ -29,6 +29,7 @@ from hack_and_slash.scenes import keymap
 from hack_and_slash.scenes.controls import ROWS as ROWS_C
 from hack_and_slash.scenes.controls import ControlsScene
 from hack_and_slash.scenes.menu import ITEMS, MenuScene
+from hack_and_slash.audio.cues import DEFAULT_VOLUME, MAX_VOLUME
 from hack_and_slash.scenes.options import ROWS, OptionsScene
 from hack_and_slash.scenes.play import PlayScene
 from hack_and_slash.scenes.select import DIFFICULTY_Y, CharacterSelectScene
@@ -972,6 +973,71 @@ def test_the_quit_row_is_still_honest_from_a_reward_room(atlas) -> None:
 
     restored = save.restore(save.read(), campaign(), BESTIARY)
     assert pause_panel.kept(scene.run) == f"keeps stage {restored.stage_number}"
+
+
+# --- the volume row ----------------------------------------------------------
+def _volume_screen(**kw) -> OptionsScene:
+    settings = Settings(**kw)
+    screen = OptionsScene(settings, lambda: None)
+    screen.index = row_of("volume")
+    return screen
+
+
+def test_the_volume_row_clamps_at_both_ends_rather_than_cycling() -> None:
+    """Unlike the scale row, which cycles.
+
+    A dial has ends. A player holding left wants silence and should get it, not
+    full volume one press later -- which is what `scale`'s wrap-around would do
+    if this row were written by copying it.
+    """
+    screen = _volume_screen(volume=1)
+    press(screen, pygame.K_LEFT)
+    assert screen.settings.volume == 0
+    press(screen, pygame.K_LEFT)
+    assert screen.settings.volume == 0, "left wrapped round to loud"
+
+    screen = _volume_screen(volume=MAX_VOLUME - 1)
+    press(screen, pygame.K_RIGHT)
+    assert screen.settings.volume == MAX_VOLUME
+    press(screen, pygame.K_RIGHT)
+    assert screen.settings.volume == MAX_VOLUME, "right wrapped round to silent"
+
+
+def test_enter_mutes_the_volume_and_puts_it_back_where_it_was() -> None:
+    """The most common thing anybody wants from a volume control is "off, now".
+
+    Left-and-right alone would make that ten presses, and would lose the level
+    they were listening at on the way.
+    """
+    screen = _volume_screen(volume=6)
+
+    press(screen, pygame.K_RETURN)
+    assert screen.settings.volume == 0
+
+    press(screen, pygame.K_RETURN)
+    assert screen.settings.volume == 6, "unmuting did not restore the level"
+
+
+def test_unmuting_a_run_that_started_muted_reaches_the_shipped_default() -> None:
+    """There is nothing to restore, so it has to invent something audible.
+
+    A player who saved while muted and comes back to press Enter must not get
+    silence twice -- which is what restoring a remembered zero would give them.
+    """
+    screen = _volume_screen(volume=0)
+
+    press(screen, pygame.K_RETURN)
+    assert screen.settings.volume == DEFAULT_VOLUME > 0
+
+
+def test_the_volume_row_says_off_rather_than_zero() -> None:
+    """Matching the toggles above it: zero is a state a player chose, not a
+    number they are part-way through typing."""
+    screen = _volume_screen(volume=0)
+    assert screen._value("volume", selected=True)[0] == "off"
+
+    screen.settings.volume = 4
+    assert screen._value("volume", selected=True)[0] == "4"
 
 
 # --- Settings, from inside a fight -------------------------------------------

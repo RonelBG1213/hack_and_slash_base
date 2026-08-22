@@ -202,10 +202,19 @@ does mean a clever player can farm it against pillars.
 Generated shapes, not drawn sprites. Replace `assets/sprites.png` with a PNG of
 the same cell layout to swap in real art — see [Content](content.md#tools).
 
-### No sound
+### No music, and no sound that is not a cue
 
-Nothing here would have to change to add it; hits already emit events with
-everything a sound cue needs.
+The sound effects shipped: `audio/cues.py` turns events into named cues,
+`audio/bank.py` owns the mixer, `tools/gen_sfx.py` generates the WAVs, and
+`scenes/play.py` feeds and drains them. `tests/test_audio.py` pins that a fight
+resolves identically with cues running, which is what makes the audio pass
+tunable without re-checking the balance under it.
+
+What is still absent is everything that is not a combat cue: **no music**, no
+stinger on a boss or a victory, no sound on a menu row, and no positional
+audio -- `SoundBank.play` takes one global level, so a trap across the arena is
+as loud as the one underfoot. The first two are content and the third is a
+panning argument in `bank.py`; none of them is the hole silence was.
 
 ### Pause writes nothing
 
@@ -341,7 +350,7 @@ The hole this leaves is the same one the shop has: an instrument that spends is
 an instrument that has stopped being a fixed reference, and this project has
 chosen the fixed reference every time it has been asked.
 
-### Two of the three difficulty tiers are unmeasured
+### Three of the four difficulty tiers are unmeasured
 
 `Normal` is measured by every recorded number in the project, and structurally
 so: at the identity multiplier the arithmetic is the arithmetic the grid was

@@ -661,6 +661,7 @@ and `harms`.
 
 ```sh
 python tools/gen_art.py                          # rebuild assets/sprites.png
+python tools/gen_sfx.py                          # rebuild assets/sfx/*.wav
 python tools/make_level.py                       # rebuild the fifty stages
 python tools/make_rooms.py                       # rebuild the reward-room template
 python tools/balance.py                          # where the fight sits, reference class

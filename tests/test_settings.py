@@ -17,6 +17,7 @@ import json
 
 from hack_and_slash import settings as settings_module
 from hack_and_slash.game import profile
+from hack_and_slash.audio.cues import DEFAULT_VOLUME, MAX_VOLUME
 from hack_and_slash.settings import AUTO_SCALE, Settings
 
 
@@ -123,6 +124,46 @@ def test_a_file_from_another_build_loads_what_it_recognises(tmp_path) -> None:
     read = settings_module.load(path)
     assert read.seed == 8
     assert read.screenshake is True
+
+
+def test_the_volume_ships_audible_and_survives_a_round_trip(tmp_path) -> None:
+    """A fresh install makes noise.
+
+    Worth pinning rather than assuming: the cue layer sat in the tree unwired
+    for a while, and a default of 0 would have made the wiring look broken while
+    every test still passed.
+    """
+    assert Settings().volume == DEFAULT_VOLUME
+    assert DEFAULT_VOLUME > 0, "the game ships silent"
+
+    path = tmp_path / "settings.json"
+    settings_module.save(Settings(volume=3), path)
+    assert settings_module.load(path).volume == 3
+
+    # Zero is a real setting and not a sentinel -- the row reads "off" there --
+    # so it has to survive the trip rather than being read back as "unset".
+    settings_module.save(Settings(volume=0), path)
+    assert settings_module.load(path).volume == 0
+
+
+def test_a_volume_outside_the_dial_is_clamped_not_dropped(tmp_path) -> None:
+    """`Cues.level` clamps too, so a wild value could never be *heard*.
+
+    It is clamped here as well because the options screen draws this number back
+    to the player, and a row reading "99" that sounds like 10 is a preferences
+    file arguing with the screen that edits it.
+    """
+    path = tmp_path / "settings.json"
+
+    path.write_text('{"volume": 99}', encoding="utf-8")
+    assert settings_module.load(path).volume == MAX_VOLUME
+
+    path.write_text('{"volume": -4}', encoding="utf-8")
+    assert settings_module.load(path).volume == 0
+
+    # Still an int field, so the coercion above it still applies.
+    path.write_text('{"volume": "loud"}', encoding="utf-8")
+    assert settings_module.load(path).volume == DEFAULT_VOLUME
 
 
 def test_the_window_follows_the_scale() -> None:

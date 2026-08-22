@@ -262,9 +262,10 @@ SOUND_NAMES = (
     "relic",
 )
 
-#: Sample rate and width of the generated cues. Read by the generator and by
-#: nothing else -- the mixer is told the same numbers in `main.py` so that no
-#: resampling happens between the file and the speaker.
+#: Sample rate of the generated cues. Read by `tools/gen_sfx.py`, which writes
+#: the WAVs, and by `main.py`, which hands the same number to
+#: `pygame.mixer.pre_init` along with the 16-bit mono the generator uses -- so
+#: no resampling happens between the file and the speaker.
 SOUND_RATE = 44100
 
 

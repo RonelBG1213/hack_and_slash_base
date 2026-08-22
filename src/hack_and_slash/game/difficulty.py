@@ -9,12 +9,19 @@ stands and is still right. This module is the other half of the sentence -- the
 decision lives in `data/difficulty.json`, beside every other tuning number, with
 `tools/balance.py --difficulty` behind it.
 
-**One dial.** `incoming` is a per-mille multiplier on damage arriving at the
-hero. Nothing else moves: not enemy health, not cadence, not counts. Enemy
-health is the obvious alternative and this project has already measured it as
-close to inert -- the enrage threshold is a fraction, so a boss spends the same
-*proportion* of a shorter fight enraged, and both late bosses were eventually
-tuned by damage after health changes moved the win rate by nothing.
+**Seven dials, and one of them carries the tier.** `incoming` is a per-mille
+multiplier on damage arriving at the hero, and it is the dial the recorded
+brackets were swept on. The other six ride on `Enemies` and move the monsters
+instead: `hp`, `damage`, `speed`, `aggro`, `cadence`, `evasion`. Counts are
+still untouched -- a tier changes what the stage is made of, never how much of
+it there is, because the stage literals are what the grid is pinned to.
+
+**Expect `hp` to be the weakest of them.** This project has already measured
+enemy health as close to inert: the enrage threshold is a fraction, so a boss
+spends the same *proportion* of a shorter fight enraged, and both late bosses
+were eventually tuned by damage after health changes moved the win rate by
+nothing. It is a dial here because a tier wants a coherent story about its
+monsters, not because it is expected to do the work -- `incoming` does that.
 
 **`PER_MILLE` is the identity and that is load-bearing.** At 1000 `scaled`
 takes an early return and the arithmetic is the arithmetic that was measured, so

@@ -30,10 +30,11 @@ from typing import Optional
 
 from ..game.events import Event, EventKind
 
-#: The loudest the options screen can set. Volume is an integer 0-10 rather than
-#: a float, and that is not cosmetic: `settings.load` coerces bools and ints and
-#: nothing else, so a float field would be dropped on every load and silently
-#: fall back to its default forever, with no error anywhere.
+#: The loudest the options screen can set, and it does -- `Settings.volume`
+#: imports this and the Sound volume row clamps to it. Volume is an integer 0-10
+#: rather than a float, and that is not cosmetic: `settings.load` coerces bools
+#: and ints and nothing else, so a float field would be dropped on every load and
+#: silently fall back to its default forever, with no error anywhere.
 MAX_VOLUME = 10
 
 #: Loud enough to hear over nothing, quiet enough not to be the first thing

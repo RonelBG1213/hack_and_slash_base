@@ -118,6 +118,25 @@ def main(argv: list[str] | None = None) -> int:
     # defaulting to 0 would silently overrule a seed set on the options screen.
     seed = args.seed if args.seed is not None else settings.seed
 
+    # Asked for before `pygame.init()`, because that is the only moment the
+    # mixer takes these numbers -- afterwards it has already opened a device
+    # with its own. They are `config.SOUND_RATE`, signed 16-bit and mono
+    # because that is exactly what `tools/gen_sfx.py` writes, so nothing is
+    # resampled or converted between the file and the speaker.
+    #
+    # The buffer is the one number not taken from the files. 512 frames is
+    # about 12ms at 44100; pygame's default of 4096 is about 93ms, which is
+    # late enough that a swing sounds like a reply to itself.
+    #
+    # Wrapped because a machine with no audio device must still reach the
+    # menu. `pygame.init()` below tolerates a mixer that failed to open, and
+    # `audio/bank.load` treats an uninitialised mixer as the quiet case, so
+    # the whole failure path here is one silent game rather than an error.
+    try:
+        pygame.mixer.pre_init(config.SOUND_RATE, -16, 1, 512)
+    except pygame.error:
+        pass
+
     # The display has to exist before the atlas, so surfaces can be converted to
     # the window's pixel format -- an unconverted blit costs more every frame.
     pygame.init()

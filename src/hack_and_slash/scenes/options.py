@@ -1,4 +1,4 @@
-"""The Settings screen: seven preferences, one of which opens another screen.
+"""The Settings screen: eight preferences, one of which opens another screen.
 
 The controls used to be printed down the side of the title screen, then down the
 side of this one. They are a reference and the title screen is a decision, and a
@@ -8,13 +8,14 @@ to do next -- they are already in a run, and Escape brings them here.
 **They are editable now, and they left.** This module used to say that rebinding
 "would be the same column with a cursor in it, and the day that lands it takes
 `CONTROLS` with it rather than replacing anything here". That is what happened:
-eleven actions and a reset row do not fit in a column beside seven settings, so
+eleven actions and a reset row do not fit in a column beside eight settings, so
 `scenes/controls.py` is a screen and the Controls row is how you reach it. The
 prediction was right about the tuple and wrong about the column.
 
-Seven rows, and the discipline behind them is worth stating once: **five of them
-change how the game looks, one changes what is remembered, and the seventh
-changes which key does a thing. None of them changes how a fight resolves.**
+Eight rows, and the discipline behind them is worth stating once: **six of them
+change how the game presents itself, one changes what is remembered, and the
+eighth changes which key does a thing. None of them changes how a fight
+resolves.**
 That is not an accident of what happened to be easy -- it is the line this
 screen is drawn on. A difficulty row, a damage slider, a "start with more
 health" toggle would each be a balance decision worn as a preference, and the
@@ -25,6 +26,12 @@ The bindings row is that line holding rather than bending, and it is worth being
 explicit about why, because it is the first row here that a player uses *during*
 a fight: which key swings is not how hard the swing lands. The sim takes an
 `Intent` and never learns a key was involved.
+
+The volume row is the same line holding for the same reason as the two effect
+toggles above it. `audio/` is fed by events the sim emits and never reads back,
+and `test_audio.py` runs one seeded fight at every volume from silent to full
+and demands a single answer -- so this row is safe by construction rather than
+by care.
 
 **The game now has difficulty tiers, and they are still not here.** They live in
 `data/difficulty.json` -- swept by `tools/balance.py --difficulty`, with the
@@ -54,6 +61,7 @@ from typing import Optional
 import pygame
 
 from .. import config, settings as settings_module
+from ..audio import cues
 from ..game import profile, save
 from ..settings import SCALES, Settings
 from .base import Scene
@@ -66,6 +74,7 @@ ROWS = (
     ("fullscreen", "Fullscreen"),
     ("screenshake", "Screenshake"),
     ("damage_numbers", "Damage numbers"),
+    ("volume", "Sound volume"),
     ("controls", "Controls"),
     ("seed", "Run seed"),
     ("erase", "Erase saved run"),
@@ -116,11 +125,16 @@ def rows(in_run: bool = False) -> tuple[tuple[str, str], ...]:
 # The row spacing is the dial rather than the hint's position, because the hint
 # is the last line on the screen and has nowhere below it to go.
 #
+# It came down again, 18 to 16, when the volume row made it eight. The same
+# arithmetic and the same answer: at 18 the eighth row sat at y=180 and its
+# 13px crossed the hint at 186. Sixteen puts it at 166 with 7px to spare, and
+# `test_menu.py` asserts exactly that rather than trusting this comment.
+#
 # `test_menu.py` measures all of it against the real fonts rather than trusting
 # these numbers to stay true.
 TITLE_Y = 18
 ROW_Y = 54
-ROW_H = 18
+ROW_H = 16
 # Shifted right by 78 when the controls left: the rows used to be the left
 # column of two and are now the only one, and a block hard against the left edge
 # under a centred title reads as a screen that lost something. The pair moves
@@ -160,6 +174,14 @@ class OptionsScene(Scene):
         #: would have described is gone.
         self.erased = False
 
+        #: What the volume was before Enter muted it, so a second Enter can put
+        #: it back. Deliberately *not* on `Settings`: a player who quits while
+        #: muted has chosen to be muted, and restoring a level they last heard
+        #: two sessions ago would be this screen overruling the file it writes.
+        #: Zero until something is muted, which is why `_activate` falls back to
+        #: the shipped default rather than trusting it.
+        self._muted = 0
+
     # --- input ---------------------------------------------------------------
     def handle_event(self, event: pygame.event.Event) -> Optional[Scene]:
         if event.type != pygame.KEYDOWN:
@@ -194,7 +216,7 @@ class OptionsScene(Scene):
         self.confirming = False
 
     def _nudge(self, step: int) -> None:
-        """Left and right on the two rows that have more than two values."""
+        """Left and right on the three rows that have more than two values."""
         row = self.rows[self.index][0]
         self.confirming = False
 
@@ -209,6 +231,13 @@ class OptionsScene(Scene):
                 nxt = SCALES[0] if step > 0 else SCALES[-1]
             self.settings.scale = nxt
             self._apply_display()
+        elif row == "volume":
+            # Clamps rather than cycling, unlike scale. A dial has ends: a
+            # player holding left wants silence and should get it, not full
+            # volume one press later.
+            self.settings.volume = max(
+                0, min(cues.MAX_VOLUME, self.settings.volume + step)
+            )
         elif row == "seed":
             # Never negative: `Run._stage_seed` adds a per-stage offset and a
             # negative seed is a perfectly good `Random` key, but the number is
@@ -236,6 +265,17 @@ class OptionsScene(Scene):
             self.confirming = False
             if row == "fullscreen":
                 self._apply_display()
+            return None
+
+        if row == "volume":
+            # Enter is mute, and it remembers. A row that only moved on left and
+            # right would leave the most common thing anybody wants from a
+            # volume control -- "off, now" -- as ten presses.
+            if self.settings.volume > 0:
+                self._muted = self.settings.volume
+                self.settings.volume = 0
+            else:
+                self.settings.volume = self._muted or cues.DEFAULT_VOLUME
             return None
 
         if row == "erase":
@@ -362,6 +402,13 @@ class OptionsScene(Scene):
             if self.settings.scale == settings_module.AUTO_SCALE:
                 return f"auto ({config.DEFAULT_SCALE}x)", config.WHITE
             return f"{self.settings.scale}x", config.WHITE
+
+        if row == "volume":
+            # "off" rather than "0", matching the toggles above it: zero is a
+            # state a player chose, not a number they are part-way through.
+            if self.settings.volume <= 0:
+                return "off", config.GREY
+            return f"{self.settings.volume}", config.WHITE
 
         if row == "seed":
             return str(self.settings.seed), config.WHITE

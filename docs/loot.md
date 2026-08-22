@@ -339,7 +339,7 @@ Two implementation facts worth knowing before changing anything here.
 
 **Loot never draws from `world.rng`.** It has its own seeded generator. This is
 the guarantee that adding loot to a tuned game moved nothing — see
-[Architecture](architecture.md#three-random-streams-not-one).
+[Architecture](architecture.md#five-random-streams-not-one).
 
 **Drops are swept up the moment a stage is won, and that is not a convenience.**
 A stage is won on the tick its last enemy dies, and the run layer builds the next

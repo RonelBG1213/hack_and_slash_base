@@ -19,16 +19,18 @@ src/hack_and_slash/
   core/     vectors, level, campaign, collision, spatial index   <- no pygame
   game/     entities, actions, combat, AI, run, the tick          <- no pygame
   render/   atlas, camera, renderer, HUD, effects, shop and job panels
+  audio/    cues (which noise an event asks for)      <- cues.py has no pygame
+            bank (the mixer and the files)
   scenes/   menu, select, play, options, controls, keymap, achievements,
             unlockables, smoke
   settings.py  the player's preferences                            <- no pygame
   bindings.py  which action a key asks for                         <- no pygame
 data/       entities.json, weapons.json, loot.json   -- content, not code
-levels/     stage1..40.json, campaign.json           -- generated
-assets/     sprites.png                              -- generated
+levels/     stage1..50.json, campaign.json           -- generated
+assets/     sprites.png, sfx/*.wav                   -- generated
 state/      save.json, settings.json, profile.json   -- written while playing
-tools/      art generator, level builder, balance sweep, screenshots
-tests/      803 tests, all headless
+tools/      art and sound generators, level builder, balance sweep, screenshots
+tests/      1305 tests, all headless
 ```
 
 | Module | What it is |
@@ -43,12 +45,17 @@ tests/      803 tests, all headless
 | `game/profile.py` | Four lifetime counters, and the only thing in the project that outlives a run |
 | `settings.py` | Window, effect toggles, seed, key bindings. Beside `config.py` rather than in `render/` because the window size is read *before* there is a display to ask |
 | `bindings.py` | The eleven things a player can ask for, and the key names that ship asking them. Pure, as a consequence of `settings.py` being pure — see [the Intent seam](#which-key-and-where-that-lives) |
+| `audio/cues.py` | Which noise an event asks for. No pygame, so the decision is testable headlessly and provably cannot reach a fight — `render/effects.py`'s rule, one layer along |
+| `audio/bank.py` | The mixer and the WAVs. The one loader in the project that never raises: no audio device is a quiet game, not a dead one |
 | `scenes/keymap.py` | The only place a key *name* becomes a keycode, plus the rules about what may be bound. Not a `Scene`, like `scenes/smoke.py` |
 
-Both are **generated**, and they are treated differently on the way into git:
-`assets/*.png` is gitignored, `levels/*.json` is committed. A fresh clone must
-run `tools/gen_art.py` before anything works; `tools/make_level.py` only has to
-be rerun after editing a stage. See [Content](content.md#tools).
+`assets/` and `levels/` are both **generated**, and they are treated
+differently on the way into git: `assets/*.png` and `assets/sfx/` are
+gitignored, `levels/*.json` is committed. A fresh clone must run
+`tools/gen_art.py` and `tools/gen_sfx.py` before anything works — the first or
+the game refuses to start, the second or it starts silent;
+`tools/make_level.py` only has to be rerun after editing a stage. See
+[Content](content.md#tools).
 
 > [!NOTE]
 > This is an inconsistency rather than a decision anybody wrote down, and the
@@ -99,6 +106,18 @@ whole ticks.
 and hitstop live in `render/effects.py`, fed by events the sim emits and never
 reads back. `tests/test_effects.py` runs the same seeded fight with effects on and
 off and demands the two come out identical.
+
+The audio pass is the same claim one layer along: `audio/cues.py` is fed by the
+same events, owns no entity, and `tests/test_audio.py` runs that fight at every
+volume from silent to full and demands one answer. Both read **one** drained
+list — `World.drain_events` empties the queue, so two consumers calling it
+separately would leave whichever went second permanently deaf.
+
+They differ on *when* they pay out, and the difference is the fixed timestep
+again. `Effects.feed` and `Cues.feed` are called per tick, but a rendered frame
+can pay out up to fifteen of them after a stall. Fifteen stacked swings is a
+buzz rather than a swing, so `Cues.drain` collapses a frame to one play per cue
+and is called once per frame beside `effects.tick()`.
 
 **And a trap, which cost the dodge for a long time.** A rendered frame and a
 simulation tick are not the same thing, and a frame can produce zero ticks or —

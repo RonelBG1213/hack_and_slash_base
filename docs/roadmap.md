@@ -36,7 +36,7 @@ list of absences: the systems depth is already past what most projects on that
 shelf ship with. Five classes forking into ten, thirty-five distinct attacks,
 ten bosses, six enemy archetypes with nine variants, an eight-attribute layer,
 a twelve-piece gear pool, hazards, four seeded RNG streams and a headless suite
-of ~1,293 tests holding a measured balance grid. **The gaps below are product
+of ~1,305 tests holding a measured balance grid. **The gaps below are product
 gaps, not engineering ones**, and that is a much better problem to have than the
 reverse.
 
@@ -47,24 +47,39 @@ reverse.
 These are ordered by perceived-quality gained per hour spent, which is not the
 same order as difficulty.
 
-### No sound
+### ~~No sound~~
 
-Verified: there is no mixer call, no audio file and no audio module anywhere in
-the tree. The only string matching in the whole repo is
-`SDL_AUDIODRIVER=dummy` in `tools/screenshot.py`, which exists to *suppress* an
-audio device that is never opened.
+**Shipped.** The layer was written first and wired second: it arrived complete
+in `09bc62c` — cue table, mixer, generator and twenty-one tests — and nothing
+imported it, so the game stayed silent through that commit and the one after it
+while every document went on saying the tree had no audio in it. Both halves are
+in now.
 
-[Limits](limits.md#no-sound) already says this, and says the honest thing about
-it: nothing has to change to add it, because `game/events.py` already emits an
-event carrying everything a cue needs at the moment it would fire.
+`audio/cues.py` maps eleven of the twelve `EventKind`s to a named cue and splits
+four of them on payload — a blow you land and a blow you take are different
+sounds, and so are a coin and a relic. `audio/bank.py` owns the mixer and
+sixteen channels. `tools/gen_sfx.py` writes fourteen WAVs from a fixed seed, the
+way `gen_art.py` writes the sprites, and they are gitignored for the same two
+reasons. `main.py` opens the mixer at the rate, width and channel count the
+generator writes, so nothing is resampled between the file and the speaker.
 
-What that section does not price is what silence does to *this particular*
-genre. The whole combat feel layer here — hitstop, knockback, screenshake,
-damage numbers, i-frames on the roll — is a language for telling the player that
-a hit connected. Delivered silently, that language reads as a bug rather than as
-minimalism: the screen jerks for no reason a player can name. **This is the
-cheapest large improvement available and it should be first**, ahead of things
-that are more interesting to build.
+`scenes/play.py` feeds cues from the same drained event list the feel pass
+reads — **once, shared**, because `drain_events` empties the queue and a second
+call would come back empty — and plays them once per *frame* beside
+`effects.tick()`, where `Cues.drain` collapses a stalled frame's fifteen ticks
+down to one play per cue. Settings → Sound volume is a 0–10 dial that mutes on
+Enter and applies mid-run through the pause overlay.
+
+What it is not: there is **no music**, no boss or victory stinger, no UI sound
+on a menu row, and no positional audio — `bank.play` takes one global level and
+a cue sounds the same wherever it happened. Those are the next things here, and
+none of them is on the critical path the way silence was.
+
+The reason it was worth doing first is unchanged, and worth keeping written
+down. The whole combat feel layer — hitstop, knockback, screenshake, damage
+numbers, i-frames on the roll — is a language for telling the player that a hit
+connected. Delivered silently, that language reads as a bug rather than as
+minimalism: the screen jerks for no reason a player can name.
 
 ### Placeholder art
 
@@ -259,10 +274,10 @@ simply absent.
 | --- | --- | --- |
 | ~~**Key rebinding**~~ | **Shipped.** Settings → Controls rebinds the eleven gameplay keys; menu keys, the panel digits and the mouse buttons are fixed by decision and [Limits](limits.md#only-the-gameplay-keys-rebind) records why | Was an accessibility baseline. It also built `bindings.Action`, which is the list [controller support](#no-controller) now binds to rather than inventing |
 | ~~**In-fight pause**~~ | **Shipped.** `Esc` opens Resume / Settings / Quit to menu; the Quit row names the stage the autosave keeps. It writes nothing — **this did not buy [suspend-and-quit](#what-players-will-file-as-bugs), which is still the row below** | It also made the options screen reachable mid-run, which is where a wrong key binding is actually discovered. [Limits](limits.md#pause-writes-nothing) records what it deliberately is not |
-| **Accessibility options** | Screenshake and damage numbers toggle on the Settings screen | No colourblind palette, no text scale, no assist mode. The difficulty tiers are a start and every one but Normal is [untuned](limits.md#two-of-the-three-difficulty-tiers-are-unmeasured) |
+| **Accessibility options** | Screenshake and damage numbers toggle on the Settings screen | No colourblind palette, no text scale, no assist mode. The difficulty tiers are a start and every one but Normal is [untuned](limits.md#three-of-the-four-difficulty-tiers-are-unmeasured) |
 | **Localisation** | Strings are hardcoded in `scenes/` and `render/` | Cheap now as a string table, expensive later as a refactor across nine render modules |
 | **Suspend mid-fight** | One autosave slot, written on the tick a stage begins. `game/save.py` [argues the refusal](../README.md#the-main-menu) | The argument is about *save scumming* and holds. Handheld play needs suspend-and-quit, which is a different feature and is compatible with it. **The pause overlay above did not deliver it** and was deliberately built not to: quitting from pause keeps the room you started, not the fight you were in |
-| **Run-end summary** | The death screen ends the run | The build recap, the depth, the damage, the time. It is the screen the genre uses to convert a loss into another attempt, and the numbers are all already on `Run` |
+| **Run-end summary** | A four-line wash over the arena (`play.py`, `_draw_result`): the verdict, the depth, the purse, the restart hint | It is the screen the genre uses to convert a loss into another attempt. **Half the numbers are free and half do not exist.** Free on `Run`: the build (`earned`), the class and its promotion (`hero_type_id`, `job_id`), everything bought (`purchases`), the tier, the seed. Absent everywhere: damage dealt or taken, kills, and elapsed time — `World.tick` is rebuilt per arena *and* per reward room, so there is no run-wide clock to read |
 | **Daily seeded run and leaderboard** | Absent | **The expensive half is already built.** Exact seeded determinism is the property this project has defended hardest; a daily seed is a date-derived integer through the same door `--seed` uses |
 | **Tutorial** | Absent | Fifteen attacks across four slots, eight attributes, four room types and a compulsory fork, all introduced by a controls table |
 
@@ -281,10 +296,12 @@ already; what follows is only the consequence.
   which attribute — have never been evaluated by anything.
 - **Every tier except Normal ships flagged untuned** — `_measured: false` in
   `data/difficulty.json` — and the flag is honest and visible on the select
-  screen. It was two tiers of three when [Limits](limits.md#two-of-the-three-difficulty-tiers-are-unmeasured)
-  was written and is three of four in the working tree, where a `nightmare` tier
-  and per-tier enemy multipliers are in flight. The ratio is the point, not the
-  count: the only swept tier is the one the grid is pinned to.
+  screen. It was two tiers of three when [Limits](limits.md#three-of-the-four-difficulty-tiers-are-unmeasured)
+  was written; the `nightmare` tier and the per-tier enemy multipliers have
+  since landed, so it is three of four, and each tier now carries seven dials
+  rather than one. The ratio is the point, not the count: the only swept tier is
+  the one the grid is pinned to, and widening a tier from one dial to seven
+  widened the unmeasured surface with it.
 - **The classes are not balanced against each other.** The Rogue and the Archer
   take about 17% of their health on a median stage where the Knight takes 28%,
   and no attempt has been made to close it. Five classes that are not peers is a
@@ -315,14 +332,18 @@ The honest first instrument for all three is hands on a keyboard, not
 >
 > That is the whole argument for the sequencing below.
 
-1. **Sound.** Biggest perceived-quality jump on the page, and `game/events.py`
-   already fires at every moment a cue is needed.
+1. ~~**Sound.**~~ **Shipped** — the cue layer, the generator and the four call
+   sites that were missing from it. See
+   [the section above](#no-sound). Music, stingers and UI sound are
+   the remainder and are not what silence was.
 2. **Controller.** ~~And rebinding with it~~ — rebinding shipped first and on
    its own, which was the cheaper order than it looked: it did the refactor at
    the `Intent` seam, so the controller is now the second binding table rather
    than the second half of one job.
 3. **Packaging to a single executable**, with the generators run as part of the
-   build. Nothing above this line reaches anyone without it.
+   build. Nothing above this line reaches anyone without it — and note the
+   build now has a fourth generator to run, since `assets/sfx/` is gitignored
+   exactly as `assets/sprites.png` is.
 4. **Run-end summary, then the first unlocks** — access only, never stats, per
    [Nothing survives a run](#nothing-survives-a-run). Turns four dead counters
    into a reason to press New Game.
@@ -334,14 +355,17 @@ The honest first instrument for all three is hands on a keyboard, not
    game is worth dressing.
 
 Items 1–3 are the product line: below it there is nothing to sell, above it
-there is. Items 4–6 are the retention line. Item 7 is what decides whether
+there is. **One of the three is done**, which is the first time that sentence
+has been able to say so. Items 4–6 are the retention line. Item 7 is what decides whether
 anyone arrives.
 
 > [!NOTE]
-> **The suite is not a green gate right now.** Four run-bracket failures were
-> recorded on `main` before any of this work, with no strict xfails outstanding.
-> Re-establish what the baseline actually is before treating a red run as
-> something this roadmap broke — and note that
+> **The suite is not a green gate right now, and the baseline is now written
+> down.** Four run-bracket failures stand on `main` at `929b32e`, with no
+> xfails outstanding anywhere in the project; they are
+> [named in Testing](testing.md#none-currently-recorded) so a red run can be
+> attributed in seconds rather than re-derived. The per-stage grid is clean and
+> is the thing that must stay clean. Note that
 > [`test_playthrough.py` takes tens of minutes](testing.md), so the fast gate is
 > the edit loop and the full suite is the commit.
 

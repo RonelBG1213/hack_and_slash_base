@@ -1,6 +1,6 @@
 """What the player has chosen about how the game runs, and where it is kept.
 
-Six values, and none of them may touch a fight. That is the whole design rule
+Seven values, and none of them may touch a fight. That is the whole design rule
 here: `config.py` is what the game *is* and this is how one person likes looking
 at it, so anything that would move a damage roll belongs in `data/`, behind a
 tuning decision and a sweep, rather than behind a menu row.
@@ -19,8 +19,11 @@ refuses.
 The two effect toggles are safe by construction rather than by care --
 `render/effects.py` is fed by events the sim emits and never reads back, and
 `test_effects.py` runs the same seeded fight with the toggles both ways and
-demands identical output. `seed` is the exception that proves the rule: it
-chooses *which* fight, and choosing a fight is not changing one.
+demands identical output. `volume` is the same claim one layer along: `audio/`
+is fed by the same events, owns no entity, and `test_audio.py` runs that fight
+at every volume from silent to full and demands one answer. `seed` is the
+exception that proves the rule: it chooses *which* fight, and choosing a fight
+is not changing one.
 
 Pure Python. No pygame -- the window size is read from here *before* there is a
 display to ask, which is the whole reason this is not in `render/`.
@@ -36,6 +39,7 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 from . import bindings, config
+from .audio.cues import DEFAULT_VOLUME, MAX_VOLUME
 
 #: `scale: 0` means "whatever the game shipped with". Stored as a sentinel
 #: rather than by writing `DEFAULT_SCALE` into the file, so a settings file
@@ -66,6 +70,14 @@ class Settings:
     #: The feel pass. Both default on, which is the game as it has always been.
     screenshake: bool = True
     damage_numbers: bool = True
+
+    #: How loud the cues are, 0-10, where 0 is off and is a real setting rather
+    #: than a sentinel. An integer rather than a float because `load` below
+    #: coerces ints and nothing else -- a float field would be dropped on every
+    #: load and fall back to its default forever, with no error anywhere.
+    #: `audio/cues.py` holds the same default, so a `Cues` built without an
+    #: opinion is the one the game ships with.
+    volume: int = DEFAULT_VOLUME
 
     #: The seed the next run starts from, for players who do not use `--seed`.
     #: Zero is a real seed and the one the game has always defaulted to, so
@@ -162,6 +174,13 @@ def load(path: Path | None = None) -> Settings:
         elif name == "bindings":
             accepted[name] = _clean_bindings(value)
         elif isinstance(value, int) and not isinstance(value, bool):
+            # Volume is the one int with a range, and it is clamped here rather
+            # than only at playback. `Cues.level` clamps too, so a wild value
+            # could never be *heard* -- but the options screen draws this number
+            # back to the player, and a row reading "99" that sounds like 10 is
+            # a preference file arguing with the screen that edits it.
+            if name == "volume":
+                value = max(0, min(MAX_VOLUME, value))
             accepted[name] = value
 
     return Settings(**accepted)

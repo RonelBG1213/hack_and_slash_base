@@ -2140,3 +2140,170 @@ def test_the_hero_panels_columns_clear_its_labels_and_its_title(display) -> None
     assert panel.LEFT + drawn.font.size(line)[0] < first_column, (
         f"'{line}' runs into the column heads"
     )
+
+
+# --- the audio pass, as the game actually plays it ---------------------------
+# `test_audio.py` proves the cue layer in isolation: what a cue is worth, and
+# that it cannot reach a fight. These are the other half of that claim -- that
+# `PlayScene` is wired to it at all.
+#
+# Note what the suite is actually running against. `SDL_AUDIODRIVER=dummy` is a
+# real driver rather than an absent one, so the `display` fixture's
+# `pygame.init()` opens a working mixer and `bank.get()` loads all fourteen
+# WAVs and plays them into a null device. That is worth having -- every test
+# below exercises the real loader -- but it is unobservable, because nothing
+# comes back to say a sound was asked for. The recording stand-in is what turns
+# "did not crash" into "played this, at this level".
+class RecordingBank:
+    """A `SoundBank` that remembers instead of making noise."""
+
+    def __init__(self) -> None:
+        self.played: list[tuple[list[str], float]] = []
+        self.stopped = 0
+
+    def play(self, names, level=1.0) -> None:
+        # Copied: `Cues.drain` clears and reuses nothing, but a caller that
+        # later did would make this record a list that changes after the fact.
+        self.played.append((list(names), level))
+
+    def stop(self) -> None:
+        self.stopped += 1
+
+    @property
+    def names(self) -> list[str]:
+        return [name for names, _ in self.played for name in names]
+
+
+@pytest.fixture
+def heard(monkeypatch) -> RecordingBank:
+    """Swap the process-wide bank for one that records.
+
+    Patched at `_bank` rather than at `get`, so the memo itself is under test:
+    a `get()` that stopped consulting it would fail here rather than quietly
+    reloading a silent bank every frame.
+    """
+    from hack_and_slash.audio import bank as sound_bank
+
+    recorder = RecordingBank()
+    monkeypatch.setattr(sound_bank, "_bank", recorder)
+    return recorder
+
+
+@pytest.fixture
+def swinging(monkeypatch):
+    """Hold the attack button down for the whole test.
+
+    **Not a synthesised MOUSEBUTTONDOWN.** `_read_intent` asks
+    `pygame.mouse.get_pressed()` for the *held* state rather than reading the
+    event queue -- holding the mouse down is the normal way this game is
+    played -- and a posted event does not move that state. A test that pushed
+    events would look like it was attacking, and would in fact be measuring
+    whatever the enemies happened to do.
+    """
+    monkeypatch.setattr(pygame.mouse, "get_pressed", lambda *a, **k: (True, False, False))
+
+
+def a_noisy_fight(atlas, settings=None):
+    """A scene with an enemy close enough to be hit by a swing."""
+    scene = PlayScene(campaign(), BESTIARY, atlas, settings=settings)
+    add_enemy(scene.world, "grunt", scene.world.hero.pos + Vec2(12, 0))
+    return scene
+
+
+def run_frames(scene, count: int) -> None:
+    for _ in range(count):
+        scene.update(1 / 60)
+
+
+def test_a_fight_reaches_the_speaker(atlas, heard, swinging) -> None:
+    """The end-to-end claim, and the one that was false for three commits.
+
+    Everything under it already worked -- `cue_for` mapped the events, the bank
+    loaded the files, the generator wrote them -- and the game was still silent,
+    because nothing joined the two. A test that only checked `Cues` would have
+    passed throughout.
+    """
+    scene = a_noisy_fight(atlas)
+    run_frames(scene, 30)
+
+    assert heard.names, "a fight with a swing in it played nothing"
+    # The hero's own action, and something happening to a body. Not `hit`:
+    # aim follows the cursor, which sits at the origin with no real mouse, so
+    # the swing goes past the grunt rather than through it. What is being
+    # proved here is the path from an event to the mixer, and `hurt` is that
+    # path carrying a payload -- `cue_for` splits it from `hit` on `is_hero`.
+    assert "swing" in heard.names, f"the hero never swung: {sorted(set(heard.names))}"
+    assert "hurt" in heard.names, "the grunt never landed a blow on the hero"
+
+
+def test_the_volume_row_reaches_the_mixer(atlas, heard, swinging) -> None:
+    """The level is passed per play, so the options screen can move it mid-run."""
+    scene = a_noisy_fight(atlas, settings=Settings(volume=10))
+    run_frames(scene, 20)
+
+    assert heard.names, "nothing played at full volume"
+    assert heard.played[-1][1] == 1.0
+
+    # The same trip the pause -> Settings -> back path makes.
+    scene.settings.volume = 5
+    scene._reapply_settings()
+    assert scene.cues.volume == 5
+    assert scene.cues.level == 0.5
+
+
+def test_a_silent_player_asks_for_nothing_at_all(atlas, heard, swinging) -> None:
+    """Volume 0 is gated in `Cues.feed`, not merely at the mixer.
+
+    So a muted game does no work rather than building a list nobody will read --
+    and the row that says "off" means it.
+    """
+    scene = a_noisy_fight(atlas, settings=Settings(volume=0))
+    run_frames(scene, 30)
+
+    assert heard.names == []
+    assert scene.cues.pending == [], "a muted game still built a list"
+
+
+def test_one_frame_plays_each_cue_once_however_many_ticks_it_paid_out(
+    atlas, heard, swinging
+) -> None:
+    """The whole reason `drain` collapses and is called per frame.
+
+    A long frame steps the sim up to `MAX_FRAME_TIME` worth of ticks; feeding a
+    mixer straight off that stacks identical swings into one frame, which is not
+    a swing, it is a buzz.
+    """
+    scene = a_noisy_fight(atlas)
+    scene.update(1.0)
+
+    for names, _ in heard.played:
+        assert len(names) == len(set(names)), f"a cue was played twice in one frame: {names}"
+
+
+def test_leaving_a_run_cuts_the_tail_off_it(atlas, heard) -> None:
+    """Quitting to the menu, not pausing.
+
+    A cue that outlives the arena it belongs to arrives over the title screen,
+    which is the one place it means nothing.
+    """
+    scene = PlayScene(
+        campaign(), BESTIARY, atlas, on_exit=lambda: "the menu"
+    )
+    scene.paused = True
+    scene.pause_index = [name for name, _ in PAUSE_ROWS].index("quit")
+
+    assert scene.handle_event(
+        pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+    ) == "the menu"
+    assert heard.stopped == 1
+
+
+def test_pausing_a_run_does_not(atlas, heard, swinging) -> None:
+    """The counterpart. `SoundBank.stop` is for leaving a run, and a player who
+    pressed Escape has not left one -- the world simply stops feeding it."""
+    scene = a_noisy_fight(atlas)
+    run_frames(scene, 10)
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
+
+    assert scene.paused
+    assert heard.stopped == 0
