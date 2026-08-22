@@ -317,6 +317,18 @@ def tick_timers(entity: Entity) -> None:
         if entity.status_ticks == 0:
             entity.status = NEUTRAL
 
+            # And the part-paid point the status was mid-way through, but only
+            # when the status was the only thing feeding the bank. `regen_bank`
+            # is shared between the healing and the burn -- `sim._regen` says
+            # why one bank is the honest number -- so a burn that lapses partway
+            # through a point would otherwise leave that fraction sitting on the
+            # body, part-paying the next status to land on it. Read *after* the
+            # clear above, so what is left is the body's own standing regen: a
+            # `vital` champion is banking a point it earned, and an unrelated
+            # slow wearing off is not a reason to take it away.
+            if entity.attrs.regen == 0:
+                entity.regen_bank = 0
+
     # Empty for anything without skills, so this costs nothing on the hundreds
     # of enemy bodies a run steps through. Entries are left at zero rather than
     # removed: the HUD reads them every frame, and a key that vanishes is one

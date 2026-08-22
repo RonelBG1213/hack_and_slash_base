@@ -190,6 +190,60 @@ def test_a_champion_is_marked_for_the_renderer() -> None:
     assert set(world.elite_ids.values()) == {"armoured"}
 
 
+def test_a_mark_is_never_drawn_on_a_body_the_affix_did_not_change() -> None:
+    """The loader refuses an affix that changes nothing, and says why: a
+    champion the player cannot tell from an ordinary monster is a mark that
+    means nothing. But that question is asked of the affix in the abstract,
+    while `hp` is per-mille of the creature it lands on and floors -- so a
+    gentle health-only affix rounds away to nothing on the smallest bodies in
+    the game and the promise stops holding exactly there.
+
+    A rat has 8 health, so +10% of it is zero.
+    """
+    gentle = Table(
+        enabled=True,
+        chance=PER_MILLE,
+        from_floor=1,
+        affixes=(Affix(id="tough", name="Tough", hp=1100),),
+    )
+    assert not gentle.affixes[0].is_identity, "the loader would have taken this"
+    assert gentle.affixes[0].block_for(BESTIARY["rat"]) is NEUTRAL
+
+    world = world_with(gentle, level=a_stage("rat"))
+    rat = world.enemies()[0]
+
+    assert world.elite_ids == {}, "a ring over a monster with nothing on it"
+    assert rat.bonus is NEUTRAL
+
+
+def test_an_affix_that_rounds_away_still_costs_the_layer_its_dice() -> None:
+    """The skip is about what is *recorded*, never about what is rolled.
+
+    Moving the roll behind the identity test would make how far this stream
+    advances depend on which creature the affix happened to land on -- which is
+    the one thing every one of the five streams exists to prevent.
+    """
+    gentle = Table(
+        enabled=True,
+        chance=PER_MILLE,
+        from_floor=1,
+        affixes=(Affix(id="tough", name="Tough", hp=1100),),
+    )
+    level = a_stage("rat", "rat")
+
+    # Two rats, so two rolls -- even though neither of them is recorded.
+    by_hand = random.Random(SEED ^ elites.ELITE_STREAM)
+    for _ in range(2):
+        gentle.roll_for(BESTIARY["rat"], 1, by_hand)
+
+    world = World(level, BESTIARY, seed=SEED, purse=Purse(floor=1), elites=gentle)
+
+    assert world.elite_ids == {}
+    assert world.elite_rng.random() == by_hand.random(), (
+        "the world's stream is not where two rolls leave it"
+    )
+
+
 def test_nothing_under_game_reads_the_mark() -> None:
     """The mark is the renderer's copy of a fact the sim already has as
     attributes. A second reading under `game/` is how the two start

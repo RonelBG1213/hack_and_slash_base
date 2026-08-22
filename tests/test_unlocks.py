@@ -185,6 +185,43 @@ def test_the_shipped_table_offers_every_modifier_the_code_implements() -> None:
     assert offered == set(unlocks.MODIFIERS)
 
 
+def test_every_modifier_is_a_field_the_settings_can_actually_hold() -> None:
+    """The half of the modifier contract that nothing was checking.
+
+    `_check_target` proves a data-file target is a modifier the code
+    implements. Nothing proved the other direction: `unlockables._activate`
+    turns a modifier on with a bare `setattr(settings, entry.target, ...)`, so a
+    modifier id that is not a `Settings` field would set an attribute the
+    dataclass does not declare -- the row would read "on", `asdict` would drop
+    it on save, and the toggle would revert on next launch with no error
+    anywhere.
+
+    A test rather than an import in `game/unlocks.py`: the correspondence is a
+    code-to-code claim, and this file is where the module docstring already puts
+    the ones a loader guard cannot make.
+    """
+    from dataclasses import fields
+
+    from hack_and_slash.settings import Settings
+
+    holds = {f.name for f in fields(Settings)}
+    missing = sorted(set(unlocks.MODIFIERS) - holds)
+    assert not missing, (
+        f"{missing} cannot be stored: add the field to Settings, or the toggle "
+        f"will read on and revert on the next launch"
+    )
+
+
+def test_every_modifier_is_stored_as_a_bool() -> None:
+    """`unlockables._activate` writes `not self.is_on(entry)`, and
+    `settings.load` only accepts a JSON value for a field it can coerce -- a
+    modifier stored as anything but a bool would be dropped on the way back in.
+    """
+    from hack_and_slash.settings import BOOL_FIELDS
+
+    assert set(unlocks.MODIFIERS) <= BOOL_FIELDS
+
+
 def test_the_default_tier_is_never_behind_an_unlock() -> None:
     """The load-bearing one. `select.index_of_default` opens the cursor on this
     tier, so a lock in front of it would strand the screen on a row it is not

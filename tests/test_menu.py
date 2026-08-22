@@ -707,6 +707,28 @@ def test_a_locked_tier_cannot_be_reached_by_a_click(atlas) -> None:
             assert scene.difficulty_index == opened
 
 
+def test_a_locked_tier_cannot_start_a_run_from_the_key_path(atlas) -> None:
+    """The click path refused a locked row from the day it was written; Enter
+    did not. Unreachable with the shipped table -- the cursor cannot be walked
+    onto a lock -- but that is a property of `data/unlocks.json`, and which
+    tiers a data file gates is not the thing that should decide whether the
+    commit path is safe.
+    """
+    scene = select(atlas, unlocked=False)
+    locked = [i for i, shut in enumerate(scene.locked) if shut]
+    assert locked, "the shipped table is expected to lock something"
+
+    scene.difficulty_index = locked[0]
+    assert press(scene, pygame.K_RETURN) is None, "a locked tier started a run"
+
+
+def test_an_open_tier_still_starts_a_run(atlas) -> None:
+    """The other half, so the guard above cannot pass by refusing everything."""
+    scene = select(atlas, unlocked=False)
+    assert not scene.locked[scene.difficulty_index]
+    assert press(scene, pygame.K_RETURN) is not None
+
+
 def test_an_earned_profile_reaches_every_tier(atlas) -> None:
     """The other end: nothing above is a permanent restriction."""
     scene = select(atlas)

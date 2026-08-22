@@ -183,6 +183,17 @@ slide out from under it.
 > measured twice: once with the champion layer in and the status layer not, and
 > once with both.
 >
+> **Re-confirmed again after the burn-schedule fix.** Still the same four. The
+> fix changed `sim._burn` to drain its bank on the magnitude rather than on the
+> signed value: `divmod` floors toward minus infinity, so the old code paid a
+> burn's first point on tick 1 where the mirror-image regen waits until tick 9,
+> and rounded the total up where regen rounds down. A full `wizard_cataclysm`
+> now costs 21 points over its 180 ticks instead of 22, with the first landing
+> on tick 9. That is the only live number this project has that moved, it moves
+> a promoted Wizard's ultimate and nothing else, and the recorded grid cannot
+> see it -- the reference bot presses the light attack, and
+> `test_no_enemy_attack_inflicts_anything` pins that no enemy weapon inflicts.
+>
 > Every one of the forty stages clears 4/4 entered at full health, on all three
 > tiers. So this is not a wall in the campaign; it is attrition — the heal
 > between stages no longer sustaining a run — which is precisely what the tool's

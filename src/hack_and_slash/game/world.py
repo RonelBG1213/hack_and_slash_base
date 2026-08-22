@@ -371,8 +371,24 @@ class World:
             # `Entity.attrs` and `Enemies.block_for` already keep.
             affix = self.elites.roll_for(enemy_type, self.purse.floor, self.elite_rng)
             if affix is not None:
-                block = block + affix.block_for(enemy_type)
-                self.elite_ids[enemy.id] = affix.id
+                # Tested for identity, and the roll happens either way. An
+                # affix is refused at load if it changes nothing, but that
+                # question is asked of the affix in the abstract while `hp` is
+                # per-mille of *this* creature and floors -- so a gentle
+                # health-only affix rounds to nothing on the smallest bodies in
+                # the game and hands back the shared NEUTRAL. Recording the id
+                # anyway would put a champion's ring on a monster identical to
+                # the one beside it, which is the thing `elites._affix` refuses
+                # an identity affix in order to prevent.
+                #
+                # It also keeps the `is not NEUTRAL` gate below honest: at the
+                # identity tier `block` is the shared singleton, and summing it
+                # with another one would produce an equal-but-distinct block
+                # that takes the branch on a body with nothing on it.
+                rolled = affix.block_for(enemy_type)
+                if rolled is not NEUTRAL:
+                    block = block + rolled
+                    self.elite_ids[enemy.id] = affix.id
 
             if block is not NEUTRAL:
                 enemy.bonus = block

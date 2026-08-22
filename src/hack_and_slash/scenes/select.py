@@ -263,7 +263,19 @@ class CharacterSelectScene(Scene):
         span = COLUMN_WIDTH * (len(self.classes) - 1)
         return (config.INTERNAL_W - span) // 2
 
-    def _begin(self) -> PlayScene:
+    def _begin(self) -> Optional[PlayScene]:
+        """Start the run, unless the cursor is standing on a locked tier.
+
+        The mouse path refuses a locked row before it ever moves the cursor, and
+        this is the same refusal on the key path. It is unreachable with the
+        shipped table -- `index_of_default` opens on a tier nothing gates and
+        `_move_difficulty` steps over the locked ones -- but both of those are
+        properties of `data/unlocks.json`, and a run begun on a tier the player
+        has not earned is not something a data file should be able to arrange.
+        """
+        if self.locked[self.difficulty_index]:
+            return None
+
         return PlayScene(
             self.campaign,
             self.bestiary,

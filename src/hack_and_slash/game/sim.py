@@ -177,13 +177,24 @@ def _burn(world: World, entity: Entity, rate: int) -> None:
 
     `last_hit_by` is deliberately left alone, exactly as `apply_hazard` leaves
     it: nothing killed you, a status did.
+
+    **The bank is drained on its magnitude, not on its signed value**, and that
+    is the one line here that is not the healing branch mirrored. `divmod`
+    floors toward minus infinity, so draining a *negative* bank directly pays
+    out on the first tick and leaves a positive remainder behind -- a -12 burn
+    would cost a point immediately where a +12 regen waits the nine ticks it
+    takes to bank one, and the leftover would still be sitting on the body when
+    the next status landed. Negating first makes the floor run the same
+    direction for both, so a burn and a heal of the same size are the same
+    schedule pointed opposite ways.
     """
     entity.regen_bank += rate
-    lost, entity.regen_bank = divmod(entity.regen_bank, attributes.REGEN_SCALE)
-    if not lost:
+    paid, remainder = divmod(-entity.regen_bank, attributes.REGEN_SCALE)
+    entity.regen_bank = -remainder
+    if not paid:
         return
 
-    damage = combat.incoming(world, entity, -lost)
+    damage = combat.incoming(world, entity, paid)
     entity.hp = max(0, entity.hp - damage)
     world.emit(
         Event(

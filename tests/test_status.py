@@ -363,6 +363,98 @@ def test_a_burn_pays_out_in_whole_points_like_regen_does() -> None:
     assert enemy.hp == full - 1
 
 
+def test_a_burn_and_a_heal_of_one_size_are_one_schedule() -> None:
+    """The burn drains its bank on the magnitude, not on the signed value.
+
+    `divmod` floors toward minus infinity, so draining the negative bank
+    directly paid out on tick 1 where the mirror-image heal waits until tick 9 --
+    same number, opposite sign, different behaviour. Asserted as the two halves
+    side by side rather than as a tick count on its own, because the claim worth
+    keeping is that they *match*, not that either lands on nine.
+    """
+    def first_payout(regen: int) -> int:
+        # The hero, not a grunt: this has to run for tens of ticks with room to
+        # move in both directions, and a grunt has 18 hit points to do it in.
+        world = make_world()
+        hero = world.hero
+        hero.hp = hero.max_hp - 40
+        hero.status, hero.status_ticks = Attributes(regen=regen), 600
+        start = hero.hp
+        for tick in range(1, 60):
+            step(world, Intent())
+            if hero.hp != start:
+                return tick
+        raise AssertionError(f"nothing paid out at regen={regen}")
+
+    assert first_payout(-12) == first_payout(12) == 9
+
+
+def test_a_burn_pays_the_whole_number_of_points_it_accrued() -> None:
+    """Rounding down, exactly as the healing branch does. Draining the negative
+    bank directly rounded *up* -- 22 points where 2160 hundredths accrued."""
+    world = make_world()
+    hero = world.hero
+    hero.status, hero.status_ticks = Attributes(regen=-12), 600
+    full = hero.hp
+
+    run(world, 180)
+    assert full - hero.hp == 21  # 180 * 12 == 2160 hundredths
+
+
+def test_a_spent_burn_leaves_no_credit_behind_for_the_next_one() -> None:
+    """The residue was the second half of the same bug. Nothing drained the
+    bank when a status expired, so a body that had been burned once carried a
+    part-paid point into every status that landed on it afterwards -- and a
+    `vital` champion carried it as free healing for the rest of the stage.
+    """
+    world = make_world()
+    enemy = add_enemy(world, "grunt", Vec2(400, 200))
+
+    def burn_until_first_point() -> int:
+        enemy.hp = enemy.max_hp
+        actions.apply_status(enemy, Attributes(regen=-12), 600)
+        start = enemy.hp
+        for tick in range(1, 60):
+            step(world, Intent())
+            if enemy.hp != start:
+                return tick
+        raise AssertionError("nothing paid out")
+
+    first = burn_until_first_point()
+
+    # Let it lapse the way the timer does, then light the same fire again.
+    enemy.status_ticks = 1
+    step(world, Intent())
+    assert enemy.status is NEUTRAL
+
+    assert burn_until_first_point() == first, "the second burn started part-paid"
+
+
+def test_an_expiring_status_leaves_a_standing_regen_its_bank() -> None:
+    """The counterpart guard. A body with regen of its own -- a `vital`
+    champion -- is mid-way through banking a point it earned, and an unrelated
+    slow wearing off is not a reason to take it away.
+
+    Compared against a control that never carried a status at all, rather than
+    asserted non-zero: the bank refills the tick after it is emptied, so
+    "non-zero a moment later" is true whether the gate is there or not.
+    """
+    def bank_after(ticks: int, slow: bool) -> int:
+        world = make_world()
+        enemy = add_enemy(world, "grunt", Vec2(400, 200))
+        enemy.hp = enemy.max_hp - 10
+        enemy.bonus = Attributes(regen=40)
+        if slow:
+            actions.apply_status(enemy, SLOW, 2)
+        run(world, ticks)
+        assert enemy.status is NEUTRAL
+        return enemy.regen_bank
+
+    assert bank_after(2, slow=True) == bank_after(2, slow=False) != 0, (
+        "an expiring slow emptied a healer's bank"
+    )
+
+
 def test_a_burn_drains_a_body_that_is_already_at_full_health() -> None:
     """The one place the burn deliberately does not mirror the healing branch.
     Being on fire at full health is the ordinary case, not the excluded one."""
