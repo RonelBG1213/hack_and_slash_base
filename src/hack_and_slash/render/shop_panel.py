@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import pygame
 
-from .. import config
+from .. import config, palette as palette_module
 from ..game import equipment, loot, shop
 
 #: Keys 1..8, spanning both sections. Three rolled pieces above five goods is
@@ -112,16 +112,34 @@ BLURB_X = 142
 #: and `shop.py` keeps its templates short for the same reason.
 TALLY_RIGHT = config.INTERNAL_W - LEFT
 
-#: What each rarity is drawn in. Anything the map does not name falls back to
-#: grey rather than raising -- a tier added to `data/loot.json` should look
-#: unremarkable, not crash somebody's thirtieth stage.
-RARITY_COLOURS = {
-    loot.Rarity.COMMON: config.GREY,
-    loot.Rarity.UNCOMMON: config.GOOD,
-    loot.Rarity.RARE: config.ACCENT,
-    loot.Rarity.EPIC: config.GOLD,
-    loot.Rarity.LEGENDARY: config.GOLD,
-}
+def rarity_colours(colours: palette_module.Palette) -> dict:
+    """What each rarity is drawn in, for one palette.
+
+    Anything the map does not name falls back to grey at the call site rather
+    than raising -- a tier added to `data/loot.json` should look unremarkable,
+    not crash somebody's thirtieth stage.
+
+    **A function rather than the constant this used to be**, so the two rungs
+    that carry a red-green distinction move when the accessibility row is set.
+    Only those two move: grey and gold separate on lightness and read correctly
+    under every deficiency, so they stay `config` constants and the table stays
+    recognisably itself with the row off.
+
+    Deliberately *not* merged with `palette.rarity`, which the relic on the floor
+    and its pickup number are drawn through. The two ladders already disagree --
+    this one calls RARE amber where that one calls it blue, and pays EPIC and
+    LEGENDARY the same gold -- and reconciling them would be a visual change to
+    the shop, which is a different job from making the shop legible. Both are
+    routed through a palette, so both are fixed under `colourblind`; the
+    disagreement is left exactly as it was found.
+    """
+    return {
+        loot.Rarity.COMMON: config.GREY,
+        loot.Rarity.UNCOMMON: colours.good,
+        loot.Rarity.RARE: colours.caution,
+        loot.Rarity.EPIC: config.GOLD,
+        loot.Rarity.LEGENDARY: config.GOLD,
+    }
 
 
 def _hint_for(count: int) -> str:
@@ -161,10 +179,27 @@ def rows(run, offers: tuple[equipment.Offer, ...]) -> tuple[tuple[str, object], 
 
 
 class ShopPanel:
-    def __init__(self) -> None:
+    def __init__(self, colours: palette_module.Palette | None = None) -> None:
         self.title = pygame.font.Font(None, 26)
         self.font = pygame.font.Font(None, 16)
         self.small = pygame.font.Font(None, 13)
+        self.palette = colours or palette_module.SHIPPED
+
+    @property
+    def palette(self) -> palette_module.Palette:
+        return self._palette
+
+    @palette.setter
+    def palette(self, colours: palette_module.Palette) -> None:
+        """Setting the palette rebuilds the table it decides.
+
+        A property rather than two attributes the caller has to set in the right
+        order: `_apply_settings` assigns a palette and nothing else, and a rarity
+        table that had to be refreshed separately is a table that will one day
+        be a row behind.
+        """
+        self._palette = colours
+        self._rarity = rarity_colours(colours)
 
     def draw(self, surface: pygame.Surface, run, offers=()) -> None:
         self._wash(surface)
@@ -239,7 +274,7 @@ class ShopPanel:
         tally = self.small.render(
             offer.rarity.value,
             False,
-            RARITY_COLOURS.get(offer.rarity, config.GREY),
+            self._rarity.get(offer.rarity, config.GREY),
         )
         surface.blit(tally, (TALLY_RIGHT - tally.get_width(), y + 3))
 

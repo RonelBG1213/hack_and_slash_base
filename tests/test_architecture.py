@@ -36,7 +36,29 @@ PURE_PACKAGES = ("core", "game")
 #: the whole reason a binding is stored as a key *name* -- naming a `pygame.K_*`
 #: would need the import this test forbids. `scenes/keymap.py` is where the
 #: translation lives, and it is not on this list.
-PURE_MODULES = ("config", "settings", "bindings")
+#:
+#: `palette` is the newest and is here for the same shape of reason `bindings`
+#: is. It holds the colours that carry meaning, and the accessibility row picks
+#: between two of them -- so it is a preference's worth of data, and a module a
+#: preference resolves through cannot be less pure than `settings` is. It is
+#: also what makes the colours testable at all: a palette that could only be
+#: read with a display in existence could not be compared against `config` in a
+#: headless suite, and that comparison is the only thing standing between the
+#: row's "off" position and last month's red.
+PURE_MODULES = (
+    "config",
+    "settings",
+    "bindings",
+    "palette",
+    # The three readers of the drained event list. None of them needs pygame and
+    # all three say so in their docstrings -- `effects` and `cues` said it for a
+    # while with nothing checking, which is how a claim quietly stops being true.
+    # `render/` and `audio/` are not pure *packages*, so these are named one by
+    # one; the dotted stem works because the list below only prefixes the root.
+    "render.effects",
+    "render.tally",
+    "audio.cues",
+)
 
 
 def _pure_modules() -> list[str]:

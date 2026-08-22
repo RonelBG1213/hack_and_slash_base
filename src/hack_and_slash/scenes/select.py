@@ -89,10 +89,15 @@ class CharacterSelectScene(Scene):
         self.on_exit = on_exit
         self.start_stage = start_stage
 
-        #: Carried through rather than used here -- this screen has no opinion
-        #: about screenshake. It is on the road between the menu that owns the
-        #: settings and the run that reads them, and dropping them here would
-        #: mean a player's toggles applied to a loaded run and not to a new one.
+        #: Carried through, and read for exactly one thing. This screen is on
+        #: the road between the menu that owns the settings and the run that
+        #: reads them, and dropping them here would mean a player's toggles
+        #: applied to a loaded run and not to a new one.
+        #:
+        #: The one thing is `reduce_flashing`: the prompt below blinks, which
+        #: makes this the only screen outside the arena that does. It has no
+        #: opinion about screenshake or about the palette -- nothing it draws
+        #: means something by hue.
         self.settings = settings or Settings()
 
         self.classes: tuple[EntityType, ...] = bestiary.hero_classes
@@ -262,7 +267,12 @@ class CharacterSelectScene(Scene):
         self._draw_details(surface)
         self._draw_difficulty(surface)
 
-        if (self.tick // 30) % 2 == 0:
+        # Blinks at 1Hz to say "this screen is waiting for you", and holds
+        # steady when the player has asked for less flashing. Well under the
+        # health bar's rate and well under the threshold anyone tunes for -- but
+        # a row that says "reduce flashing" and leaves the game's other blink
+        # running is a row that does not mean what it says.
+        if self.settings.reduce_flashing or (self.tick // 30) % 2 == 0:
             prompt = self.small.render(
                 "left / right  hero     up / down  difficulty     enter  begin",
                 False,

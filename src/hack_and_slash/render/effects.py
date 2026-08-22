@@ -16,7 +16,7 @@ import math
 import random
 from dataclasses import dataclass, field
 
-from .. import config
+from .. import config, palette as palette_module
 from ..core.vec2 import ZERO, Vec2
 from ..game.events import Event, EventKind
 
@@ -91,6 +91,18 @@ class Effects:
     screenshake: bool = True
     damage_numbers: bool = True
 
+    #: Which set of the colours that mean something this is drawing in. Held as
+    #: a field with a default for the same reason the two flags above are: every
+    #: caller that predates the accessibility screen -- every test, the smoke
+    #: check, `tools/screenshot.py` -- goes on drawing exactly what it drew.
+    #:
+    #: A palette is a table of colours and cannot reach a fight, so it is safe
+    #: by the guarantee at the top of this file rather than needing one of its
+    #: own. `test_effects.py` sweeps both palettes through the same seeded fight
+    #: alongside the toggles, which is what turns that from an argument into a
+    #: fact.
+    palette: palette_module.Palette = palette_module.SHIPPED
+
     def feed(self, events: list[Event], hitstop: int = 0) -> None:
         """Take one tick's events. Called every frame, before drawing."""
         self.hitstop = hitstop
@@ -126,7 +138,7 @@ class Effects:
                             text=f"+{event.amount}",
                             origin=event.pos,
                             ticks_left=NUMBER_LIFETIME,
-                            color=config.RARITY_COLORS.get(event.rarity, config.GOLD),
+                            color=self.palette.rarity.get(event.rarity, config.GOLD),
                             drift=0.0,
                         )
                     )
@@ -157,9 +169,16 @@ class Effects:
                 text=str(event.amount),
                 origin=event.pos,
                 ticks_left=NUMBER_LIFETIME,
-                # Red when it is the player being hurt, pale when it is not:
+                # Warm when it is the player being hurt, pale when it is not:
                 # the colour answers "was that me?" without reading the number.
-                color=(232, 106, 96) if event.is_hero else (240, 236, 220),
+                # Through the palette rather than inline, so the number in the
+                # air and the health bar under it cannot come to disagree about
+                # what being hurt looks like.
+                color=(
+                    self.palette.hurt_number
+                    if event.is_hero
+                    else self.palette.dealt_number
+                ),
                 drift=self.rng.uniform(-6.0, 6.0),
             )
         )

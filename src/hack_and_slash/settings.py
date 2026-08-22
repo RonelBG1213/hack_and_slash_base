@@ -1,9 +1,18 @@
 """What the player has chosen about how the game runs, and where it is kept.
 
-Seven values, and none of them may touch a fight. That is the whole design rule
+Ten values, and none of them may touch a fight. That is the whole design rule
 here: `config.py` is what the game *is* and this is how one person likes looking
 at it, so anything that would move a damage roll belongs in `data/`, behind a
 tuning decision and a sweep, rather than behind a menu row.
+
+The three accessibility flags are the newest and they are the rule holding at its
+tightest, because they are the first ones a player sets *because they cannot
+otherwise play*. `colourblind` picks a `palette.Palette`, which is a table of
+colours and nothing else. `reduce_flashing` stops the health bar pulsing.
+`reduce_motion` skips the hitstop freeze -- and that one is the only setting in
+this file whose safety is not the events argument below: the freeze drains
+*without stepping the sim*, so skipping it removes frames in which nothing
+happened. It is pinned by its own test for exactly that reason.
 
 The key bindings are the newest of the six and they follow the rule without
 needing an argument: which key swings is not how hard the swing lands. They are
@@ -79,6 +88,27 @@ class Settings:
     #: opinion is the one the game ships with.
     volume: int = DEFAULT_VOLUME
 
+    #: The three accessibility rows, all defaulting to today's behaviour. That
+    #: is `AUTO_SCALE`'s rule for a third time: somebody who never opened the
+    #: screen has expressed no opinion, and the shipped game is what they get.
+    #:
+    #: `colourblind` is a bool rather than a palette name because there are two
+    #: palettes and the row is a toggle. `palette.BY_NAME` is what a third would
+    #: arrive through, and the day it does this field becomes a string -- which
+    #: `load` below already coerces, so the change is here and on the screen and
+    #: nowhere else.
+    colourblind: bool = False
+
+    #: Holds the low-health bar steady instead of alternating it every twelve
+    #: ticks. The `hp/max_hp` label beside the bar already carries the fact, so
+    #: what this costs is the motion and not the information.
+    reduce_flashing: bool = False
+
+    #: Skips the freeze a landed blow puts on the frame clock. See the note at
+    #: the top of this module: this is the one flag here that is not safe by the
+    #: events argument, and `test_render.py` proves the tick count is unmoved.
+    reduce_motion: bool = False
+
     #: The seed the next run starts from, for players who do not use `--seed`.
     #: Zero is a real seed and the one the game has always defaulted to, so
     #: there is no sentinel here and none is wanted.
@@ -109,6 +139,19 @@ class Settings:
         """
         scale = config.DEFAULT_SCALE if self.scale == AUTO_SCALE else self.scale
         return (config.INTERNAL_W * scale, config.INTERNAL_H * scale)
+
+
+#: Every field on `Settings` that is a bool, derived from the dataclass rather
+#: than listed. `load` needs the set to know which JSON values to accept, and a
+#: hand-written list is the shape of bug that costs nothing at import and
+#: silently drops a preference on every load afterwards -- there is no error and
+#: no failing test, only a row that will not stay set.
+#:
+#: The same trick `difficulty.Enemies.is_identity` uses on `field.default`, and
+#: for the same reason: a rule about a dataclass should be asked of the
+#: dataclass. `from __future__ import annotations` makes every annotation a
+#: string, which is why this compares against `"bool"` and not against `bool`.
+BOOL_FIELDS = frozenset(f.name for f in fields(Settings) if f.type == "bool")
 
 
 def _clean_bindings(value: object) -> dict[str, list[str]]:
@@ -168,7 +211,11 @@ def load(path: Path | None = None) -> Settings:
             continue
         # One coercion per field type rather than trusting the JSON: a `scale`
         # of "3" or of true would otherwise reach `window_size` and multiply.
-        if name in ("fullscreen", "screenshake", "damage_numbers"):
+        # Every bool field, by name. A field missing from this tuple is dropped
+        # on every load and falls back to its default forever, with no error
+        # anywhere -- so it is written as a derived set rather than a literal
+        # list, and a fourth toggle needs no edit here at all.
+        if name in BOOL_FIELDS:
             if isinstance(value, bool):
                 accepted[name] = value
         elif name == "bindings":

@@ -1,4 +1,4 @@
-"""The Settings screen: eight preferences, one of which opens another screen.
+"""The Settings screen: seven preferences, two of which open another screen.
 
 The controls used to be printed down the side of the title screen, then down the
 side of this one. They are a reference and the title screen is a decision, and a
@@ -8,13 +8,13 @@ to do next -- they are already in a run, and Escape brings them here.
 **They are editable now, and they left.** This module used to say that rebinding
 "would be the same column with a cursor in it, and the day that lands it takes
 `CONTROLS` with it rather than replacing anything here". That is what happened:
-eleven actions and a reset row do not fit in a column beside eight settings, so
+eleven actions and a reset row do not fit in a column beside the settings, so
 `scenes/controls.py` is a screen and the Controls row is how you reach it. The
 prediction was right about the tuple and wrong about the column.
 
-Eight rows, and the discipline behind them is worth stating once: **six of them
-change how the game presents itself, one changes what is remembered, and the
-eighth changes which key does a thing. None of them changes how a fight
+Seven rows, and the discipline behind them is worth stating once: **three of them
+change how the game presents itself, one chooses which fight, one changes what is
+remembered, and two open a screen of their own. None of them changes how a fight
 resolves.**
 That is not an accident of what happened to be easy -- it is the line this
 screen is drawn on. A difficulty row, a damage slider, a "start with more
@@ -27,11 +27,20 @@ explicit about why, because it is the first row here that a player uses *during*
 a fight: which key swings is not how hard the swing lands. The sim takes an
 `Intent` and never learns a key was involved.
 
-The volume row is the same line holding for the same reason as the two effect
-toggles above it. `audio/` is fed by events the sim emits and never reads back,
-and `test_audio.py` runs one seeded fight at every volume from silent to full
-and demands a single answer -- so this row is safe by construction rather than
-by care.
+The volume row is the same line holding for the same reason the effect toggles
+did while they were still here. `audio/` is fed by events the sim emits and never
+reads back, and `test_audio.py` runs one seeded fight at every volume from silent
+to full and demands a single answer -- so this row is safe by construction rather
+than by care.
+
+**Screenshake and Damage numbers left, and the screen got shorter.** They were
+accessibility settings on the wrong screen; `scenes/accessibility.py` took them
+and added three of its own. That is the Controls move for a second time, and it
+is the answer to a problem this screen had been solving the other way: eight rows
+at `ROW_H 16` cleared the hint line by seven pixels, and `docs/roadmap.md` priced
+the next row at "a layout, not a row". Moving a related group out cost one row
+net and *bought back* two pixels per row, which is four pixels of slack under the
+last one: seven to eleven. See the layout note below.
 
 **The game now has difficulty tiers, and they are still not here.** They live in
 `data/difficulty.json` -- swept by `tools/balance.py --difficulty`, with the
@@ -65,6 +74,7 @@ from ..audio import cues
 from ..game import profile, save
 from ..settings import SCALES, Settings
 from .base import Scene
+from .accessibility import AccessibilityScene
 from .controls import ControlsScene
 
 #: The rows, in order, as `(id, label)`. Branched on by id so a relabelling is
@@ -72,18 +82,27 @@ from .controls import ControlsScene
 ROWS = (
     ("scale", "Window scale"),
     ("fullscreen", "Fullscreen"),
-    ("screenshake", "Screenshake"),
-    ("damage_numbers", "Damage numbers"),
+    ("accessibility", "Accessibility"),
     ("volume", "Sound volume"),
     ("controls", "Controls"),
     ("seed", "Run seed"),
     ("erase", "Erase saved run"),
 )
 
-#: The three that are simply on or off, and are toggled by the same key that
-#: activates any other row. Derived into a set rather than repeated, so adding a
-#: fourth toggle is one entry in `ROWS` and one name here.
-TOGGLES = frozenset({"fullscreen", "screenshake", "damage_numbers"})
+#: The rows that answer with a scene rather than with a value. Two now, which is
+#: what turned a special case in `_activate` into a set -- and what a third
+#: would arrive through unchanged.
+SCREENS = frozenset({"accessibility", "controls"})
+
+#: The ones that are simply on or off, and are toggled by the same key that
+#: activates any other row. One, since the two effect toggles moved to
+#: `scenes/accessibility.py`.
+#:
+#: **Still a set for one member**, which is deliberate: it is what makes adding
+#: a toggle one entry in `ROWS` and one name here rather than an `if` somebody
+#: has to find, and the whole reason the two that left could leave without
+#: touching `_activate` or `_nudge` at all.
+TOGGLES = frozenset({"fullscreen"})
 
 #: Rows that only mean anything from the title screen.
 #:
@@ -127,14 +146,24 @@ def rows(in_run: bool = False) -> tuple[tuple[str, str], ...]:
 #
 # It came down again, 18 to 16, when the volume row made it eight. The same
 # arithmetic and the same answer: at 18 the eighth row sat at y=180 and its
-# 13px crossed the hint at 186. Sixteen puts it at 166 with 7px to spare, and
-# `test_menu.py` asserts exactly that rather than trusting this comment.
+# 13px crossed the hint at 186. Sixteen puts it at 166 with 7px to spare.
+#
+# **And it has now gone back up, 16 to 18, which is the first time this number
+# has moved in that direction.** The Accessibility screen took Screenshake and
+# Damage numbers with it, so seven rows: at 18 the seventh sits at y=162 and
+# clears the hint by 11px, against the 7px eight rows had.
+#
+# That is the point worth keeping rather than the number. This screen had been
+# paying for each new row by tightening, and tightening is a dial with an end --
+# 16 was two pixels of slack from being a rendering fault. Moving a *group* out
+# is the move that gives some back, and it is available exactly once per group
+# that turns out to have been mis-filed.
 #
 # `test_menu.py` measures all of it against the real fonts rather than trusting
 # these numbers to stay true.
 TITLE_Y = 18
 ROW_Y = 54
-ROW_H = 16
+ROW_H = 18
 # Shifted right by 78 when the controls left: the rows used to be the left
 # column of two and are now the only one, and a block hard against the left edge
 # under a centred title reads as a screen that lost something. The pair moves
@@ -253,12 +282,19 @@ class OptionsScene(Scene):
     def _activate(self) -> Optional[Scene]:
         row = self.rows[self.index][0]
 
-        if row == "controls":
-            # The bindings are written by that screen on its own way out, and
-            # `_resume` brings the cursor back to this row rather than to the
-            # top -- a player who went to look at the keys is a player who was
-            # in the middle of something here.
-            return ControlsScene(self.settings, self._resume)
+        if row in SCREENS:
+            # Both write the settings on their own way out, and both come back
+            # through `_resume`, which brings the cursor to this row rather than
+            # to the top -- a player who went to look at the keys is a player
+            # who was in the middle of something here.
+            #
+            # Branched on the id rather than on the class, so a third screen is
+            # one entry in `SCREENS` and one line in this map.
+            opens = {
+                "controls": ControlsScene,
+                "accessibility": AccessibilityScene,
+            }
+            return opens[row](self.settings, self._resume)
 
         if row in TOGGLES:
             setattr(self.settings, row, not getattr(self.settings, row))
@@ -385,10 +421,10 @@ class OptionsScene(Scene):
 
     def _value(self, row: str, selected: bool) -> tuple[str, tuple[int, int, int]]:
         """What to draw in the right-hand column, and in what colour."""
-        if row == "controls":
-            # Nothing. The row opens a screen rather than holding a value, and
-            # a summary of eleven bindings in 61 pixels would be a worse answer
-            # than the screen it is standing in front of.
+        if row in SCREENS:
+            # Nothing. These rows open a screen rather than holding a value, and
+            # a summary of eleven bindings -- or of five toggles -- in 61 pixels
+            # would be a worse answer than the screen it is standing in front of.
             return "", config.GREY
 
         if row == "erase":

@@ -216,6 +216,57 @@ audio -- `SoundBank.play` takes one global level, so a trap across the arena is
 as loud as the one underfoot. The first two are content and the third is a
 panning argument in `bank.py`; none of them is the hole silence was.
 
+### The result screen is a full stop now
+
+The four lines that ended a run are a summary: the verdict, the class and the
+branch it took, the depth and the clock, gold left, kills, damage dealt and
+taken, the attributes the run built and everything it bought.
+
+**It took the panels' wash with it, and that overturns a recorded decision.**
+The old comment read: *"a dim wash rather than a solid panel, so the arena stays
+visible behind the result -- seeing what killed you is part of the message."*
+Two things answer it. There is **nothing left to see** -- `sim._settle` culls the
+corpse on the death tick, so the lighter wash was showing an empty arena. And
+there are now nine lines of numbers on that screen, which need the contrast.
+Recorded here rather than deleted, because the old reasoning was good and the
+next person to reach for a lighter wash should meet the argument, not a blank.
+
+**The world stops when the run ends.** It did not before: the end block sits
+inside the tick loop, so later frames went on stepping the world -- enemies kept
+moving, and on a *won* run the hero was alive and could still walk and swing
+behind the wash. Invisible until a kill count was on screen climbing while the
+player read it. The freeze is a guard around the tick loop and deliberately not
+an early `return`: `effects.tick()` is what decays the screenshake, and stopping
+it would leave the viewport jittering under the summary for as long as it was up.
+
+### What the run summary cannot say
+
+Three things, each an honest ceiling rather than a shortcut.
+
+**Gear is counted, never named.** `run.purchases` keys equipment as
+`eq:{index}:{slot}`, and the `Offer` carrying the name is derived per room and
+thrown away. Re-deriving it means rewinding `run.index` and re-running every
+stall's stream, which yields names that are wrong-but-plausible the moment the
+gear pool is edited. What a piece *did* is not lost -- it is in `run.earned`,
+which the line above prints. Naming them is a separate change: record the name
+at purchase time.
+
+**"Gold collected" was never true and the row no longer claims it.**
+`Run.gold_total` is `gold + world.gold`, and both `shop.buy` and `equipment.buy`
+subtract from `gold` -- so on any run that spent anything, that number is what is
+**left**. The old screen said "collected". Gold collected is not derivable at
+all: chest gold goes straight into `run.gold` and its `PROP` event carries
+`amount=0`. So the row says **Gold left**, and no figure was invented to replace
+it. (`profile.record_end`'s docstring makes the same wrong claim about
+`best_gold`; it is noted, not chased.)
+
+**A resumed run has only counted this session.** The tally is not in the save
+file and deliberately not: persisting it would need `SAVE_VERSION` 4 -> 5, and
+`check_version` refuses anything else outright, so every save in existence would
+stop loading for a number that is thrown away moments later. Instead
+`Tally.partial` makes the clock read `12:04 this session`, which is the honest
+version of the same gap.
+
 ### Pause writes nothing
 
 `Esc` stops the world and offers Resume, Settings and Quit to menu. **Quitting
@@ -262,6 +313,25 @@ that the end of the run then reports into.
 Anything added to that screen from now on has to be safe to change with a fight
 paused behind it.
 
+> [!NOTE]
+> **The first thing added since has cleared that bar, and one of its rows needed
+> a new argument to do it.** Settings → Accessibility is five toggles. Three are
+> safe by the argument this project has used four times now — they are fed by
+> events the sim emits and never reads back — and `colourblind` is safe because a
+> palette is a table of colours.
+>
+> `reduce_motion` is the exception and is worth recording as one: it gates a line
+> in `PlayScene.update` rather than a flag on `Effects`, so the events argument
+> does not reach it. What makes it safe is narrower and is a property of
+> `freeze` — it **drains without stepping**, which is the whole reason `sim.step`
+> clears `world.hitstop` at the top of a tick instead of counting it down. So
+> skipping a freeze removes frames in which the world did not advance.
+>
+> That claim is proved rather than cited:
+> `test_reducing_motion_skips_the_freeze_without_skipping_a_tick` runs the same
+> fight both ways and asserts the two reach the same tick in identical states —
+> in different numbers of *frames*, which is the feature.
+
 ### Only the gameplay keys rebind
 
 The eleven actions in `bindings.py` can be moved on Settings → Controls. Four
@@ -303,6 +373,63 @@ shipped keys become one the moment it is touched. The alternative -- a screen
 that adds -- needs a way to *remove* a binding, which is a second interaction on
 a screen whose whole job is "press the key you want". Reset puts the alternates
 back.
+
+### No text scale
+
+Settings → Accessibility has five rows and none of them resizes the text. That is
+a limit of the resolution rather than a gap in the screen.
+
+The game draws into a 384x216 internal surface, and every layout in it is
+measured in pixels against that surface: 41 `pygame.font.Font` constructions
+across fifteen modules, `test_menu.py` and `test_render.py` asserting that each
+label clears the value beside it and each row clears the hint under it. The
+Settings screen itself is the illustration — its `ROW_H` has been 20, 18, 16 and
+is now 18 again, and each of those moves was forced by one more row of 13px text.
+There is no slack anywhere for a larger glyph, and a text-scale row would not be
+a setting so much as a second set of layouts for every screen in the game.
+
+**What the game does have is the window scale row**, and it is not a consolation
+prize. `config.integer_scale` upscales the whole surface by a whole number, so a
+player on 6x is reading glyphs six times the size of the ones in the source —
+which is more magnification than a text-scale slider in a 1080p game would
+offer. What it cannot do is make the text bigger *relative to the arena*, and
+that is the thing 384x216 forbids.
+
+The honest version of this feature is a larger internal resolution, which moves
+every layout in the project and is a different job.
+
+### No assist mode
+
+Also absent from Settings → Accessibility, and this one is a rule rather than a
+resolution.
+
+`scenes/options.py` states the line that screen is drawn on: **none of its rows
+may change how a fight resolves**, because the project's whole measurement
+culture rests on balance decisions being made in `data/` where they can be swept.
+An assist mode — a damage multiplier, a slow-motion toggle, extra health — is a
+balance decision worn as a preference, and the day one ships behind a menu row is
+the day every recorded number in [Balance](balance.md) needs a note saying which
+assist state produced it.
+
+**The difficulty tiers already are the assist mechanism**, and they are what
+following that rule looks like rather than what breaking it looks like. They live
+in `data/difficulty.json`, they are swept by `tools/balance.py --difficulty`,
+they are pinned so the default tier is structurally the arithmetic the grid was
+measured against, and they are chosen on the character select beside the class —
+the other decision taken once per run.
+
+So the answer to "there is no assist mode" is Easy, and the honest thing to say
+about Easy is what
+[the unmeasured list](#three-of-the-four-difficulty-tiers-are-unmeasured) already
+says: it carries `_measured: false`. The sweep recorded in its own `_comment` is
+`20/20 clean, and the face-tank bot still loses every run` — a real reading, and
+one class over twenty stages, which is a start rather than a verdict. Nothing has
+swept it for the ten advanced classes or for stages 21–50, and nothing has swept
+it run-level at all.
+
+**Measuring it is a balance job, not an accessibility one**, and it is the thing
+worth doing next for the player this section is about — a tier that is easier by
+an unmeasured amount is a worse answer than one that is easier by a known one.
 
 ---
 

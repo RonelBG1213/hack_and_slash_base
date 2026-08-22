@@ -50,7 +50,7 @@ from ..game import (
 from ..game.entities import DEFAULT_HERO, Bestiary
 from ..game.intent import Intent
 from ..game.difficulty import NORMAL as NORMAL_DIFFICULTY, Difficulty
-from ..game.run import Run, RunOutcome
+from ..game.run import Run
 from ..game.sim import Accumulator, step
 from ..render import level_panel as level_rows
 from ..render import shop_panel as shop_rows
@@ -65,8 +65,11 @@ from ..render.level_panel import LevelPanel
 from ..render.pause_panel import ROWS as PAUSE_ROWS
 from ..render.pause_panel import PausePanel
 from ..render.renderer import Renderer
+from ..render.result_panel import ResultPanel
+from ..render.tally import Tally
 from ..render.shop_panel import ROW_KEYS, ShopPanel
 from ..bindings import Action
+from .. import palette as palette_module
 from ..settings import Settings
 from . import keymap
 from .base import Scene
@@ -213,6 +216,7 @@ class PlayScene(Scene):
         self.level_panel = LevelPanel()
         self.hero_panel = HeroPanel()
         self.pause_panel = PausePanel()
+        self.result_panel = ResultPanel()
         self.accumulator = Accumulator()
         self.effects = Effects()
 
@@ -223,6 +227,15 @@ class PlayScene(Scene):
         #: `restarted()`, `tools/screenshot.py` and a lot of tests call
         #: positionally.
         self.cues = Cues()
+
+        #: The third reader of the drained event list, beside the feel pass and
+        #: the audio pass. Four numbers the sim does not count and must not
+        #: start counting -- see `render/tally.py`.
+        #:
+        #: `partial` because a run picked up off disk starts this at zero: the
+        #: tally is not in the save file, so on a resumed run these numbers
+        #: describe this session and the summary has to say so.
+        self.tally = Tally(partial=run is not None)
 
         self._reapply_settings()
 
@@ -453,7 +466,7 @@ class PlayScene(Scene):
                 return None
             if event.key in self.keys[Action.RESTART]:
                 return self.restarted()
-            if event.key in self.keys[Action.SHEET]:
+            if event.key in self.keys[Action.SHEET] and not self.run.is_over:
                 self.inspecting = True
                 # Nothing else this frame. The world stops on the next update,
                 # and a swing queued on the way in would come out on the far
@@ -687,6 +700,17 @@ class PlayScene(Scene):
         self.effects.damage_numbers = self.settings.damage_numbers
         self.cues.volume = self.settings.volume
 
+        # The four objects that draw a colour meaning something, set from one
+        # call so they cannot come to disagree about which palette is live.
+        # `for_settings` is the only place the bool becomes a `Palette`.
+        colours = palette_module.for_settings(self.settings.colourblind)
+        self.renderer.palette = colours
+        self.hud.palette = colours
+        self.shop_panel.palette = colours
+        self.effects.palette = colours
+
+        self.hud.reduce_flashing = self.settings.reduce_flashing
+
         self.keys = keymap.keycodes(self.settings)
         self.move_keys = {
             code: direction
@@ -734,6 +758,27 @@ class PlayScene(Scene):
             settings=self.settings,
             difficulty=self.difficulty,
         )
+
+    def _finish(self) -> None:
+        """Close the books on a run that has ended. Idempotent.
+
+        However it ended, it is not somewhere to come back to. Leaving the file
+        behind would put a dead run on the menu's Load Game row and hand the
+        player back the arena they just died in.
+
+        Hoisted out of the tick loop and called from `update` *above* the guard
+        that stops the world, which is what makes "the guard cannot skip this"
+        true by construction rather than by reasoning about how the loop broke.
+        The loop can also break on `_open_panels_for_props` and on
+        `just_advanced` before ever reaching the `is_over` check, and a scene can
+        be handed a run that is already over with no tick ever run.
+        """
+        if not self.run.is_over or self._ended:
+            return
+        self._ended = True
+        self._needs_save = False
+        save.delete()
+        profile.record_end(self.run)
 
     def _autosave(self) -> None:
         """Write the run, if it is standing somewhere a snapshot describes.
@@ -933,107 +978,146 @@ class PlayScene(Scene):
 
         self._autosave()
 
-        intent = self._read_intent()
+        # Close the books first, so the guard below can never be the reason the
+        # save was not deleted or the profile not written.
+        self._finish()
 
-        for _ in range(self.accumulator.ticks_for(elapsed_seconds)):
-            if self.freeze > 0:
-                # Frozen on a connect. The renderer keeps drawing; the world
-                # simply does not advance -- so the edge flags are left alone,
-                # and a dodge pressed during the freeze fires on the tick it
-                # drains rather than being swallowed by it.
-                self.freeze -= 1
-                continue
-
-            # Movement and aim are sampled once a frame, deliberately -- they
-            # are continuous, and re-reading the mouse mid-frame would give one
-            # frame several aims. The buffer is not continuous, so it is read
-            # here, per tick, and `DODGE_BUFFER_TICKS` therefore means what it
-            # says rather than "that, plus however many ticks this frame owed".
+        if self.run.is_over:
+            # **The world stops when the run does.** It did not before, and the
+            # summary is what makes that visible: the tick loop went on running
+            # behind the result, so enemies kept moving, and on a *won* run the
+            # hero was alive and could still walk and swing behind the wash. The
+            # kill count would climb while the player read it.
             #
-            # An intent built once before the loop keeps `dodge=True` for every
-            # tick of the frame, and a stall pays out up to fifteen of them
-            # (`MAX_FRAME_TIME`). That does *not* roll twice today, and it is
-            # worth being precise about why: `dodge_cooldown` is 18 ticks on the
-            # shortest class in the game, so the second roll is refused by the
-            # cooldown rather than by anything here. Reading per tick means the
-            # buffer does not quietly depend on that being true.
-            step(self.world, replace(intent, dodge=self._dodge_buffer > 0))
+            # A press cannot reach a tick that will not run, so the edges go
+            # rather than age -- the pause overlay's argument, one screen later.
+            #
+            # **Deliberately not a return.** Everything below the tick loop has
+            # to keep running: `effects.tick()` is what decays `shake`, and
+            # `shake_offset` draws a fresh nudge every frame while it is
+            # non-zero -- so returning here would jitter the viewport under the
+            # summary forever, with the last damage numbers hanging in the air.
+            # The cue drain, the banner and the camera are all down there too.
+            self._drop_edges()
+        else:
+            intent = self._read_intent()
+            for _ in range(self.accumulator.ticks_for(elapsed_seconds)):
+                if self.freeze > 0:
+                    # Frozen on a connect. The renderer keeps drawing; the world
+                    # simply does not advance -- so the edge flags are left alone,
+                    # and a dodge pressed during the freeze fires on the tick it
+                    # drains rather than being swallowed by it.
+                    self.freeze -= 1
+                    continue
 
-            # Aged after the tick that saw it, never before -- so the press is
-            # live for exactly `DODGE_BUFFER_TICKS` stepped ticks.
-            self._consume_edges()
-
-            # **Drained once and handed to both.** `drain_events` empties the
-            # queue, so a second call for the audio pass would come back empty
-            # and the game would be silent for reasons no test would explain.
-            # The feel pass and the audio pass are two readers of one list, and
-            # neither may be the reason the other stops working.
-            events = self.world.drain_events()
-            self.effects.feed(events, self.world.hitstop)
-            self.cues.feed(events)
-            if self.world.hitstop > 0:
-                self.freeze = self.world.hitstop
-
-            self.run.settle()
-            if self._open_panels_for_props():
-                # Out of the loop, not merely flagged -- see the note there.
-                break
-
-            if self.run.just_advanced:
-                # A new stage means a new arena and new bounds; the damage
-                # numbers from the last one would hang over empty floor.
-                self.effects.clear()
-                # The cues queued by the last tick of a stage already left
-                # belong to an arena the player is no longer standing in --
-                # `Effects.clear` above is here for exactly the same reason.
-                self.cues.clear()
-                self._enter_stage()
-                self.banner = BANNER_FRAMES
-
-                # The shop used to open here, on all thirty-nine transitions,
-                # whether or not there was anything to decide. It is now a
-                # place: one of the four things a reward room can hold, reached
-                # by choosing the door with a stall over it two rooms earlier.
-                # `_open_panels_for_props` below is what opens it, and the only
-                # thing that does.
-
-                # Once per run, on the way into the half of the campaign
-                # that is fought as an advanced class. The stage it happens on
-                # is `jobs.PROMOTION_STAGE`, named there because the bot has to
-                # promote on the same transition or it is measuring a game
-                # nobody plays. `jobs.can_promote` is what makes deleting the
-                # advanced classes from the JSON turn the whole feature off.
-                if self.run.at_promotion_point and jobs.can_promote(self.run):
-                    self.promoting = True
-
-                # And whenever the stage just cleared paid for a level. Checked
-                # after the promotion so the two open in the order they are
-                # resolved in, and gated on the count rather than on "did we
-                # level this stage" so points banked on an earlier transition
-                # are offered again rather than stranded.
+                # Movement and aim are sampled once a frame, deliberately -- they
+                # are continuous, and re-reading the mouse mid-frame would give one
+                # frame several aims. The buffer is not continuous, so it is read
+                # here, per tick, and `DODGE_BUFFER_TICKS` therefore means what it
+                # says rather than "that, plus however many ticks this frame owed".
                 #
-                # **This is not a shrine**, so the offer is cleared and the panel
-                # falls back to all eight attributes. A point banked at a shrine
-                # and spent here would otherwise be spent against that shrine's
-                # three, in a room the player is no longer standing in -- and the
-                # only symptom would be a plinth that looked oddly familiar.
-                self.shrine_offers = ()
-                self.levelling = self.run.unspent_points > 0
+                # An intent built once before the loop keeps `dodge=True` for every
+                # tick of the frame, and a stall pays out up to fifteen of them
+                # (`MAX_FRAME_TIME`). That does *not* roll twice today, and it is
+                # worth being precise about why: `dodge_cooldown` is 18 ticks on the
+                # shortest class in the game, so the second roll is refused by the
+                # cooldown rather than by anything here. Reading per tick means the
+                # buffer does not quietly depend on that being true.
+                step(self.world, replace(intent, dodge=self._dodge_buffer > 0))
 
-                # Armed, not written. The three panels above are open on this
-                # tick and each of them can still change the run.
-                self._needs_save = True
-                break
+                # The run's clock, advanced only where a `step` ran -- so hitstop,
+                # the shop, the fork and the pause overlay are all outside it. What
+                # it measures is how long the fighting took.
+                self.tally.advance()
 
-            if self.run.is_over and not self._ended:
-                # However it ended, it is not somewhere to come back to. Leaving
-                # the file behind would put a dead run on the menu's Load Game
-                # row and hand the player back the arena they just died in.
-                self._ended = True
-                self._needs_save = False
-                save.delete()
-                profile.record_end(self.run)
-                break
+                # Aged after the tick that saw it, never before -- so the press is
+                # live for exactly `DODGE_BUFFER_TICKS` stepped ticks.
+                self._consume_edges()
+
+                # **Drained once and handed to both.** `drain_events` empties the
+                # queue, so a second call for the audio pass would come back empty
+                # and the game would be silent for reasons no test would explain.
+                # The feel pass and the audio pass are two readers of one list, and
+                # neither may be the reason the other stops working.
+                events = self.world.drain_events()
+                self.effects.feed(events, self.world.hitstop)
+                self.cues.feed(events)
+                self.tally.feed(events)
+                # **Reduce motion is the one preference in this game that is not
+                # safe by the events argument**, so it is worth stating here exactly
+                # why it is safe anyway.
+                #
+                # Every other render setting is fed by events the sim emits and
+                # never reads back. This one gates a line in the scene's own loop.
+                # What it gates, though, is `freeze` -- and `freeze` *drains without
+                # stepping* (see the `continue` above), which is the whole reason
+                # `sim.step` clears `world.hitstop` at the top of a tick rather than
+                # counting it down itself. So skipping a freeze removes frames in
+                # which the world did not advance: the tick count, the damage and
+                # the events come out identical either way, and
+                # `test_reducing_motion_skips_the_freeze_without_skipping_a_tick`
+                # proves that rather than asserting it.
+                #
+                # `_dodge_buffer` needs no change. It exists because hitstop
+                # consumes ticks without stepping, so with hitstop skipped it simply
+                # has less to absorb -- it grants nothing `can_dodge` would refuse.
+                if self.world.hitstop > 0 and not self.settings.reduce_motion:
+                    self.freeze = self.world.hitstop
+
+                self.run.settle()
+                if self._open_panels_for_props():
+                    # Out of the loop, not merely flagged -- see the note there.
+                    break
+
+                if self.run.just_advanced:
+                    # A new stage means a new arena and new bounds; the damage
+                    # numbers from the last one would hang over empty floor.
+                    self.effects.clear()
+                    # The cues queued by the last tick of a stage already left
+                    # belong to an arena the player is no longer standing in --
+                    # `Effects.clear` above is here for exactly the same reason.
+                    self.cues.clear()
+                    self._enter_stage()
+                    self.banner = BANNER_FRAMES
+
+                    # The shop used to open here, on all thirty-nine transitions,
+                    # whether or not there was anything to decide. It is now a
+                    # place: one of the four things a reward room can hold, reached
+                    # by choosing the door with a stall over it two rooms earlier.
+                    # `_open_panels_for_props` below is what opens it, and the only
+                    # thing that does.
+
+                    # Once per run, on the way into the half of the campaign
+                    # that is fought as an advanced class. The stage it happens on
+                    # is `jobs.PROMOTION_STAGE`, named there because the bot has to
+                    # promote on the same transition or it is measuring a game
+                    # nobody plays. `jobs.can_promote` is what makes deleting the
+                    # advanced classes from the JSON turn the whole feature off.
+                    if self.run.at_promotion_point and jobs.can_promote(self.run):
+                        self.promoting = True
+
+                    # And whenever the stage just cleared paid for a level. Checked
+                    # after the promotion so the two open in the order they are
+                    # resolved in, and gated on the count rather than on "did we
+                    # level this stage" so points banked on an earlier transition
+                    # are offered again rather than stranded.
+                    #
+                    # **This is not a shrine**, so the offer is cleared and the panel
+                    # falls back to all eight attributes. A point banked at a shrine
+                    # and spent here would otherwise be spent against that shrine's
+                    # three, in a room the player is no longer standing in -- and the
+                    # only symptom would be a plinth that looked oddly familiar.
+                    self.shrine_offers = ()
+                    self.levelling = self.run.unspent_points > 0
+
+                    # Armed, not written. The three panels above are open on this
+                    # tick and each of them can still change the run.
+                    self._needs_save = True
+                    break
+
+                if self.run.is_over:
+                    self._finish()
+                    break
 
         self.effects.tick()
 
@@ -1105,7 +1189,12 @@ class PlayScene(Scene):
             self._draw_banner(surface)
 
         if self.run.is_over:
-            self._draw_result(surface)
+            self.result_panel.draw(
+                surface,
+                self.run,
+                self.tally,
+                restart=keymap.label(Action.RESTART, self.settings),
+            )
 
     def _draw_banner(self, surface: pygame.Surface) -> None:
         """Announces the stage just entered, over a fight already in progress.
@@ -1136,40 +1225,3 @@ class PlayScene(Scene):
             surface.blit(
                 healed, ((config.INTERNAL_W - healed.get_width()) // 2, top + 38)
             )
-
-    def _draw_result(self, surface: pygame.Surface) -> None:
-        won = self.run.outcome is RunOutcome.WON
-        font = pygame.font.Font(None, 34)
-        small = pygame.font.Font(None, 16)
-
-        banner = font.render(
-            "RUN COMPLETE" if won else "YOU DIED", False,
-            config.GOOD if won else config.BAD,
-        )
-        detail = small.render(
-            f"cleared all {self.run.stage_count} stages" if won
-            else f"stage {self.run.stage_number} of {self.run.stage_count}",
-            False, config.GREY,
-        )
-        # What the run was worth. Nothing carries out of it -- there is no save
-        # file and gold does not persist -- so this is a score, and it is the
-        # only one the game keeps.
-        purse = small.render(f"{self.run.gold_total}g collected", False, config.GOLD)
-        # The restart key is rebindable, so this is asked rather than written
-        # down. Esc is not, which is why it is still a literal.
-        restart = keymap.label(Action.RESTART, self.settings)
-        hint = small.render(
-            f"{restart} for a new run    Esc for the menu", False, config.GREY
-        )
-
-        # A dim wash rather than a solid panel, so the arena stays visible behind
-        # the result -- seeing what killed you is part of the message.
-        wash = pygame.Surface((config.INTERNAL_W, config.VIEWPORT_H), pygame.SRCALPHA)
-        wash.fill((10, 10, 14, 150))
-        surface.blit(wash, (0, 0))
-
-        centre = config.INTERNAL_W // 2
-        surface.blit(banner, (centre - banner.get_width() // 2, config.VIEWPORT_H // 2 - 32))
-        surface.blit(detail, (centre - detail.get_width() // 2, config.VIEWPORT_H // 2 + 2))
-        surface.blit(purse, (centre - purse.get_width() // 2, config.VIEWPORT_H // 2 + 20))
-        surface.blit(hint, (centre - hint.get_width() // 2, config.VIEWPORT_H // 2 + 40))

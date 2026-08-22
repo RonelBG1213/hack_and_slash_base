@@ -30,6 +30,8 @@ from hack_and_slash.scenes.controls import ROWS as ROWS_C
 from hack_and_slash.scenes.controls import ControlsScene
 from hack_and_slash.scenes.menu import ITEMS, MenuScene
 from hack_and_slash.audio.cues import DEFAULT_VOLUME, MAX_VOLUME
+from hack_and_slash.scenes.accessibility import ROWS as ROWS_A
+from hack_and_slash.scenes.accessibility import AccessibilityScene
 from hack_and_slash.scenes.options import ROWS, OptionsScene
 from hack_and_slash.scenes.play import PlayScene
 from hack_and_slash.scenes.select import DIFFICULTY_Y, CharacterSelectScene
@@ -57,6 +59,23 @@ def press(scene, key: int):
 def row_of(action: str) -> int:
     """The index of a Settings row, by id -- `row()` above, for the other screen."""
     return [name for name, _ in ROWS].index(action)
+
+
+def row_of_a(action: str) -> int:
+    """The index of an Accessibility row, by id. Same trick, third screen."""
+    return [name for name, _ in ROWS_A].index(action)
+
+
+def open_accessibility(options):
+    """Walk from a Settings screen to the Accessibility screen behind it.
+
+    A helper rather than three lines repeated, because the walk is the thing
+    several tests are actually asserting on: a row that opens a screen has to
+    *return* it, and a test that reached in and built one directly would pass
+    with the row wired to nothing.
+    """
+    options.index = row_of("accessibility")
+    return press(options, pygame.K_RETURN)
 
 
 #: Where each action sits on the Controls screen. Derived, so re-ordering
@@ -420,13 +439,21 @@ def test_a_corrupt_save_greys_the_row_instead_of_stopping_the_game(atlas) -> Non
 
 # --- the settings screen -----------------------------------------------------
 def test_a_toggle_sticks_across_leaving_and_coming_back(atlas) -> None:
+    """Reached through the Accessibility screen, which is where the toggle went.
+
+    The walk is deliberate rather than incidental: the toggle is two screens
+    from the title now, and both of them have to write on the way out for the
+    preference to survive.
+    """
     settings = Settings()
     scene = OptionsScene(settings, lambda: None)
-    scene.index = [name for name, _ in ROWS].index("screenshake")
+    access = open_accessibility(scene)
+    access.index = row_of_a("screenshake")
 
-    press(scene, pygame.K_RETURN)
+    press(access, pygame.K_RETURN)
     assert settings.screenshake is False
 
+    press(access, pygame.K_ESCAPE)
     scene._leave()
     from hack_and_slash import settings as settings_module
 
@@ -1077,8 +1104,10 @@ def test_a_toggle_set_from_a_paused_fight_is_live_when_it_resumes(atlas) -> None
 
     scene.pause_index = pause_row("settings")
     options = press(scene, pygame.K_RETURN)
-    options.index = row_of("screenshake")
-    press(options, pygame.K_RETURN)
+    access = open_accessibility(options)
+    access.index = row_of_a("screenshake")
+    press(access, pygame.K_RETURN)
+    press(access, pygame.K_ESCAPE)
     press(options, pygame.K_ESCAPE)
 
     assert scene.effects.screenshake is False
@@ -1099,34 +1128,76 @@ def test_a_rebinding_made_from_a_paused_fight_works_in_that_fight(atlas) -> None
     assert scene._read_intent().dodge
 
 
-def test_reapplying_settings_matches_a_scene_built_with_them(atlas) -> None:
-    """The drift guard, and the one assertion here that does not rot.
+#: Preferences that legitimately do not need re-applying to a live scene, each
+#: with the reason. Anything not here must appear in `_reapply_settings`.
+NOT_LIVE = {
+    "scale": "a window size; `OptionsScene._apply_display` calls set_mode itself",
+    "fullscreen": "same -- the window, not the scene",
+    "seed": "read once when the `Run` was built; re-reading it mid-run would "
+            "let a pause menu re-roll the campaign",
+    "bindings": "consumed wholesale by `keymap.keycodes(self.settings)`, so the "
+                "field name does not appear in the source",
+    "reduce_motion": "read live off `self.settings` inside the tick loop, so it "
+                     "is always current and there is nothing to refresh",
+}
 
-    Every field `__init__` derives from `Settings` has to be refreshed on the way
-    back from the options screen. Listing them here would be a second list that
-    can disagree with the first; comparing against a freshly built scene is the
-    same claim with nothing to keep in sync, and it covers the *eighth*
-    preference on the day somebody adds one.
+
+def test_every_preference_is_either_re_applied_or_declared_not_to_be(atlas) -> None:
+    """The assertion with teeth, and the one this file got wrong twice.
+
+    The failure that matters is not "the comparison list is stale" -- it is
+    *somebody adds a row to the options screen and never wires it into
+    `_reapply_settings`*, so changing it from the pause overlay silently does
+    nothing. That happened: the audio pass added `volume` and an earlier version
+    of this test would have passed with it unwired.
+
+    Deriving the check from `_reapply_settings`'s own source cannot catch it
+    either -- delete the line and the check deletes itself. So the check runs the
+    other way round, from `Settings`: every field is re-applied, or it is named
+    in `NOT_LIVE` with a reason. A new preference then forces a decision instead
+    of defaulting to broken.
     """
+    import dataclasses
+    import inspect
+
+    source = inspect.getsource(PlayScene._reapply_settings)
+    for field in dataclasses.fields(Settings):
+        assert field.name in source or field.name in NOT_LIVE, (
+            f"`Settings.{field.name}` is never re-applied by "
+            "`PlayScene._reapply_settings`, so changing it from the pause "
+            f"overlay does nothing. Wire it, or add it to NOT_LIVE with a reason"
+        )
+
+
+def test_reapplying_settings_matches_a_scene_built_with_them(atlas) -> None:
+    """And that re-applying actually lands, for every field that is wired.
+
+    Compared against a freshly built scene over the assignment targets read out
+    of `_reapply_settings` itself, so the two cannot fall out of step. This is
+    the regression half; the test above is the coverage half, and it takes both.
+    """
+    import inspect
+    import re
+    from operator import attrgetter
+
+    source = inspect.getsource(PlayScene._reapply_settings)
+    paths = sorted(set(re.findall(r"self\.([\w.]+)\s*=(?!=)", source)))
+    assert len(paths) >= 5, "the source scrape found almost nothing -- has it moved?"
+
     settings = Settings()
     scene = PlayScene(campaign(), BESTIARY, atlas, settings=settings)
 
     keymap.assign(settings, Action.HEAVY, "v")
-    settings.screenshake = False
-    settings.damage_numbers = False
+    for field, value in vars(settings).items():
+        if isinstance(value, bool):
+            setattr(settings, field, not value)
     scene._reapply_settings()
 
     fresh = PlayScene(campaign(), BESTIARY, atlas, settings=settings)
-    for field in (
-        "keys",
-        "move_keys",
-        "skill_keys",
-        "sheet_exit_keys",
-        "skill_labels",
-    ):
-        assert getattr(scene, field) == getattr(fresh, field), field
-    assert scene.effects.screenshake == fresh.effects.screenshake
-    assert scene.effects.damage_numbers == fresh.effects.damage_numbers
+    for path in paths:
+        assert attrgetter(path)(scene) == attrgetter(path)(fresh), (
+            f"`{path}` was not re-applied on the way back from the options screen"
+        )
 
 
 def test_the_effects_object_survives_the_round_trip(atlas) -> None:
@@ -1235,6 +1306,139 @@ def test_no_settings_row_runs_into_its_own_value(atlas) -> None:
     last_row = screen.ROW_Y + (len(ROWS) - 1) * screen.ROW_H
     assert last_row + 13 <= screen.HINT_Y
     assert screen.HINT_Y + 11 <= config.INTERNAL_H
+
+
+def test_no_accessibility_row_runs_into_its_own_value(atlas) -> None:
+    """The layout, measured with the real fonts. The third screen to need this.
+
+    Also pins the arithmetic the whole move rests on: five rows at the Settings
+    screen's spacing has room to spare, which is what made inheriting that
+    spacing the right call rather than measuring a third one.
+    """
+    from hack_and_slash.scenes import accessibility as screen
+
+    drawn = AccessibilityScene(Settings(), None)
+    for name, label in ROWS_A:
+        right = screen.LABEL_X + drawn.body.size(label)[0]
+        assert right <= screen.VALUE_X, f"'{label}' runs into its value"
+
+        for state in (True, False):
+            setattr(drawn.settings, name, state)
+            text, _ = drawn._value(name)
+            assert screen.VALUE_X + drawn.body.size(text)[0] <= config.INTERNAL_W, (
+                f"the value for '{label}' runs off the right edge"
+            )
+
+    assert screen.row_y(len(ROWS_A) - 1) + 13 <= screen.HINT_Y
+    assert screen.HINT_Y + 11 <= config.INTERNAL_H
+
+
+def test_the_settings_screen_got_shorter_rather_than_tighter(atlas) -> None:
+    """The point of the move, asserted so it cannot be quietly undone.
+
+    Eight rows at `ROW_H 16` cleared the hint by 7px and `docs/roadmap.md`
+    priced the next row at a layout. Moving a mis-filed group out bought the
+    spacing back instead. A future row that goes back to squeezing should have
+    to argue with a failing test rather than with a comment.
+    """
+    from hack_and_slash.scenes import options as screen
+
+    assert screen.ROW_H >= 18, "the settings rows are being squeezed again"
+
+    slack = screen.HINT_Y - (screen.ROW_Y + (len(ROWS) - 1) * screen.ROW_H + 13)
+    assert slack >= 10, f"only {slack}px between the last row and the hint"
+
+    moved = {name for name, _ in ROWS}
+    assert "screenshake" not in moved and "damage_numbers" not in moved, (
+        "the effect toggles are back on Settings -- they belong on Accessibility"
+    )
+
+
+def test_the_accessibility_row_opens_the_screen_and_comes_back(atlas) -> None:
+    """A row that opens a screen has to return it, and the way back has to land
+    on this screen with the cursor where it was left."""
+    settings = Settings()
+    options = OptionsScene(settings, lambda: None)
+    access = open_accessibility(options)
+
+    assert isinstance(access, AccessibilityScene)
+    assert access.settings is settings, "the screen edits a copy, so nothing sticks"
+
+    # Back to the *same instance*, cursor intact -- `OptionsScene._resume`.
+    back = press(access, pygame.K_ESCAPE)
+    assert back is options
+    assert options.index == row_of("accessibility")
+
+
+def test_every_accessibility_row_toggles_and_is_written_on_the_way_out(atlas) -> None:
+    """All five, so a row wired to nothing cannot hide behind the other four."""
+    from hack_and_slash import settings as settings_module
+
+    settings = Settings()
+    for i, (name, _) in enumerate(ROWS_A):
+        before = getattr(settings, name)
+        scene = AccessibilityScene(settings, lambda: None)
+        scene.index = i
+        press(scene, pygame.K_RETURN)
+        assert getattr(settings, name) is not before, f"'{name}' did not toggle"
+
+    press(AccessibilityScene(settings, lambda: None), pygame.K_ESCAPE)
+    written = settings_module.load()
+    for name, _ in ROWS_A:
+        assert getattr(written, name) == getattr(settings, name), (
+            f"'{name}' was not written on the way out"
+        )
+
+
+def test_left_and_right_toggle_an_accessibility_row_too(atlas) -> None:
+    """On a row with two values there is no difference between "next" and "the
+    other one", and a player pressing right expects something to happen."""
+    settings = Settings()
+    scene = AccessibilityScene(settings, lambda: None)
+    scene.index = row_of_a("colourblind")
+
+    press(scene, pygame.K_RIGHT)
+    assert settings.colourblind is True
+    press(scene, pygame.K_LEFT)
+    assert settings.colourblind is False
+
+
+def test_a_palette_chosen_from_a_paused_fight_reaches_what_draws_it(atlas) -> None:
+    """The mid-run path, end to end.
+
+    The bar this screen had to clear is that every row is safe to change with a
+    fight paused behind it. Safe is half of it -- the other half is that it
+    actually applies, or the row is a trap: the player sets it, sees nothing
+    change, and concludes the game is broken rather than the menu.
+    """
+    from hack_and_slash import palette as palette_module
+
+    scene = a_paused_fight(atlas)
+    assert scene.hud.palette is palette_module.SHIPPED
+
+    scene.pause_index = pause_row("settings")
+    options = press(scene, pygame.K_RETURN)
+    access = open_accessibility(options)
+    access.index = row_of_a("colourblind")
+    press(access, pygame.K_RETURN)
+    press(access, pygame.K_ESCAPE)
+    press(options, pygame.K_ESCAPE)
+
+    for holder in (scene.hud, scene.renderer, scene.shop_panel, scene.effects):
+        assert holder.palette is palette_module.COLOURBLIND, (
+            f"{type(holder).__name__} is still drawing the shipped palette"
+        )
+
+
+def test_the_erase_row_is_still_the_only_thing_hidden_mid_run(atlas) -> None:
+    """Every accessibility row is safe with a fight paused behind it, so none of
+    them joins `OUT_OF_RUN_ONLY`. Pinned because the cheap way to make a doubtful
+    row safe is to hide it, and that would be the wrong answer here."""
+    from hack_and_slash.scenes import options as screen
+
+    assert screen.OUT_OF_RUN_ONLY == frozenset({"erase"})
+    in_run = {name for name, _ in screen.rows(in_run=True)}
+    assert "accessibility" in in_run
 
 
 def test_every_controls_row_fits_beside_its_keys(atlas) -> None:

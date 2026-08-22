@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-python -m pytest              # 1305 tests, headless, no window
+python -m pytest              # 1402 tests, headless, no window
 python -m pytest tests/test_loot.py
 python main.py --smoke        # pixel fidelity: every sprite upscales with hard edges
 ```
@@ -53,9 +53,9 @@ That only matters for the handful of render tests; everything under `core/` and
 | File | Tests | What it guards |
 | --- | --- | --- |
 | `test_playthrough.py` | 415 | the [balance brackets](balance.md) and both class×stage grids |
-| `test_render.py` | 122 | drawing, the HUD, the five panels, the pause overlay, the input path including rebound keys, and **that a fight actually reaches the speaker** — headless |
+| `test_render.py` | 148 | drawing, the HUD, the six panels, the pause overlay, the run-end summary, the input path including rebound keys, and **that a fight actually reaches the speaker** — headless |
 | `test_rooms.py` | 86 | the reward rooms: which one you get, how it turns, and what stands in the middle |
-| `test_menu.py` | 76 | the six menu rows, the autosave, the options and Controls screens, pausing a fight, and every column layout |
+| `test_menu.py` | 84 | the six menu rows, the autosave, the options and Controls screens, pausing a fight, **that every preference is re-applied or declared not to be**, and every column layout |
 | `test_equipment.py` | 36 | the twelve pieces, the rarity multiplier, and **the two-attribute ceiling** |
 | `test_entities.py` | 35 | content validity: levels, boss weapon order, sprite scale |
 | `test_run.py` | 34 | carry-over: health, gold, banking across stages, and that a promotion survives one |
@@ -77,6 +77,7 @@ That only matters for the handful of render tests; everything under `core/` and
 | `test_attributes.py` | 17 | the attribute block, and **that it moved nothing** |
 | `test_combat.py` | 16 | hit resolution and damage rolls |
 | `test_campaign.py` | 15 | act structure, stage ordering, playability |
+| `test_tally.py` | 28 | **that the run summary's four derived numbers are not miscounted** -- no double-counted crits, no trap damage in what the hero dealt -- and that counting cannot change a fight |
 | `test_settings.py` | 17 | preferences and the profile, and that neither can stop the game starting |
 | `test_effects.py` | 14 | that the feel pass changes nothing, whichever way its toggles are set |
 | `test_level.py` | 13 | tiles, solidity, spawns |

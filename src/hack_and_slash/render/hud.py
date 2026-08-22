@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pygame
 
-from .. import config
+from .. import config, palette as palette_module
 from ..game import skills
 from ..game.entities import Entity
 from ..game.world import World
@@ -64,9 +64,19 @@ PIP_ACTIVE = (236, 190, 110)
 
 
 class Hud:
-    def __init__(self) -> None:
+    def __init__(self, colours: palette_module.Palette | None = None) -> None:
         self.font = pygame.font.Font(None, 16)
         self.small = pygame.font.Font(None, 13)
+
+        #: The colours that mean something. Defaulted and settable, the shape
+        #: `Effects.screenshake` already has, so every caller that predates the
+        #: accessibility screen draws exactly what it drew.
+        self.palette = colours or palette_module.SHIPPED
+
+        #: Holds the danger colour steady instead of alternating it. The bar is
+        #: the only thing in the game that flashes, so this flag lives here and
+        #: not on a shared object.
+        self.reduce_flashing = False
 
     def draw(
         self,
@@ -102,13 +112,21 @@ class Hud:
         pygame.draw.rect(surface, (14, 15, 20), (BAR_X - 1, y - 1, BAR_W + 2, BAR_H + 2))
         pygame.draw.rect(surface, (44, 26, 30), (BAR_X, y, BAR_W, BAR_H))
 
-        color = config.GOOD
+        color = self.palette.good
         if fraction <= DANGER:
             # Pulsing, not just red: at a glance in a crowded fight, motion is
             # what gets noticed.
-            color = config.BAD if (tick // 12) % 2 == 0 else (240, 140, 130)
+            #
+            # **Unless the player asked it not to.** Two and a half hertz is
+            # exactly the kind of flicker an accessibility option exists to
+            # switch off, and switching it off costs no information: the
+            # `hp/max_hp` label three lines down already says the number, and
+            # the bar is still `bad` and still short. What goes is the motion.
+            color = self.palette.bad
+            if not self.reduce_flashing and (tick // 12) % 2:
+                color = self.palette.bad_pulse
         elif fraction <= 0.6:
-            color = config.ACCENT
+            color = self.palette.caution
 
         width = int(BAR_W * fraction)
         if width > 0:
@@ -258,7 +276,7 @@ class Hud:
             level = self.small.render(f"Lv {run.hero_level}", False, config.ACCENT)
             surface.blit(level, (BAR_X + label.get_width() + 8, top + BAR_Y_OFFSET + 2))
             if run.unspent_points:
-                pip = self.small.render("+", False, config.GOOD)
+                pip = self.small.render("+", False, self.palette.good)
                 surface.blit(
                     pip,
                     (
@@ -273,7 +291,9 @@ class Hud:
     ) -> None:
         left = len(world.enemies())
         text = "stage clear" if left == 0 else f"{left} left"
-        label = self.font.render(text, False, config.ACCENT if left else config.GOOD)
+        label = self.font.render(
+            text, False, config.ACCENT if left else self.palette.good
+        )
         right = config.INTERNAL_W - 8
         surface.blit(
             label, (right - label.get_width(), top + BAR_Y_OFFSET - BAR_H - 2)
@@ -307,7 +327,7 @@ class Hud:
         pygame.draw.rect(surface, (52, 26, 30), (left, top, width, 4))
         filled = int(width * boss.health_fraction)
         if filled > 0:
-            pygame.draw.rect(surface, config.BAD, (left, top, filled, 4))
+            pygame.draw.rect(surface, self.palette.bad, (left, top, filled, 4))
 
         label = self.small.render(boss.type.name.upper(), False, config.WHITE)
         surface.blit(label, ((config.INTERNAL_W - label.get_width()) // 2, top + 6))

@@ -21,16 +21,17 @@ src/hack_and_slash/
   render/   atlas, camera, renderer, HUD, effects, shop and job panels
   audio/    cues (which noise an event asks for)      <- cues.py has no pygame
             bank (the mixer and the files)
-  scenes/   menu, select, play, options, controls, keymap, achievements,
-            unlockables, smoke
+  scenes/   menu, select, play, options, controls, accessibility, keymap,
+            achievements, unlockables, smoke
   settings.py  the player's preferences                            <- no pygame
   bindings.py  which action a key asks for                         <- no pygame
+  palette.py   the colours that carry meaning                      <- no pygame
 data/       entities.json, weapons.json, loot.json   -- content, not code
 levels/     stage1..50.json, campaign.json           -- generated
 assets/     sprites.png, sfx/*.wav                   -- generated
 state/      save.json, settings.json, profile.json   -- written while playing
 tools/      art and sound generators, level builder, balance sweep, screenshots
-tests/      1305 tests, all headless
+tests/      1327 tests, all headless
 ```
 
 | Module | What it is |
@@ -45,6 +46,7 @@ tests/      1305 tests, all headless
 | `game/profile.py` | Four lifetime counters, and the only thing in the project that outlives a run |
 | `settings.py` | Window, effect toggles, seed, key bindings. Beside `config.py` rather than in `render/` because the window size is read *before* there is a display to ask |
 | `bindings.py` | The eleven things a player can ask for, and the key names that ship asking them. Pure, as a consequence of `settings.py` being pure — see [the Intent seam](#which-key-and-where-that-lives) |
+| `palette.py` | The colours that answer a question by hue alone — the health ladder, the damage numbers, the rarity tiers — and the one alternate set of them the accessibility row picks. **Not the whole palette**: `config.py` keeps the decoration, which separates on lightness and needs no swapping. Pure, for `bindings.py`'s reason and to keep the shipped set comparable against `config` in a headless test |
 | `audio/cues.py` | Which noise an event asks for. No pygame, so the decision is testable headlessly and provably cannot reach a fight — `render/effects.py`'s rule, one layer along |
 | `audio/bank.py` | The mixer and the WAVs. The one loader in the project that never raises: no audio device is a quiet game, not a dead one |
 | `scenes/keymap.py` | The only place a key *name* becomes a keycode, plus the rules about what may be bound. Not a `Scene`, like `scenes/smoke.py` |

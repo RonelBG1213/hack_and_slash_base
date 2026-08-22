@@ -72,15 +72,31 @@ class, the health carried in and what the run has banked; the arena itself is
 stage that was saved rather than one that resembles it. There is deliberately no
 mid-fight save — see `src/hack_and_slash/game/save.py` for why.
 
-**Settings** covers window scale and fullscreen, screenshake, damage numbers,
-**sound volume**, the seed for the next run, erasing the save and profile, and a
-**Controls** row that opens the key bindings. Volume is a 0-10 dial: left and
+**Settings** covers window scale and fullscreen, **sound volume**, the seed for
+the next run, erasing the save and profile, and two rows that open a screen of
+their own — **Accessibility** and **Controls**. Volume is a 0-10 dial: left and
 right move it, Enter mutes and a second Enter puts it back where it was, and the
 row reads `off` at zero. It is reachable from the pause overlay as well as from
 here; the erase row is the one thing it does not offer mid-run. Nothing on that screen can change how a fight resolves,
 which is the line it is drawn on: difficulty is a balance decision and balance
 decisions live in `data/` where they get swept. Which key swings is not how hard
 the swing lands, so the bindings sit on the right side of that line.
+
+**Accessibility** is five toggles. **Colourblind** swaps the colours that carry
+meaning — the health ladder, the enemy pips, the damage numbers and the rarity
+tiers — for a set that stays readable without red-green vision; nothing else on
+screen changes. **Reduce flashing** holds the low-health bar steady instead of
+pulsing it, and stops the character select's prompt blinking. **Reduce motion**
+skips the freeze a landed blow puts on the frame, which costs no ticks: the
+freeze never advanced the world, so the fight plays out identically either way.
+**Screenshake** and **Damage numbers** moved here from Settings, which is where
+they should have been. Every row is safe to change with a fight paused behind it.
+
+There is no text scale and no assist mode, and both are decisions rather than
+gaps — `docs/limits.md` gives the reasoning for each. The short version: the game
+draws into a 384x216 surface with no room for larger glyphs, and the window scale
+row already upscales every one of them; and difficulty is the assist mechanism,
+chosen on the character select where a balance decision belongs.
 
 **Controls** rebinds the eleven gameplay keys — the four directions, the four
 attacks, the roll, the character sheet and restart. Up and down to choose, Enter
@@ -143,6 +159,13 @@ right click rolls, alongside whatever keys those actions are bound to.
 | `1` `2` | Choose a path, on the promotion screen after stage twenty |
 | Enter / Space / Esc | Dismiss the stall, the shrine or the character sheet |
 
+**When a run ends** — however it ends — the arena stops and a summary takes the
+screen: the verdict, the class and the branch it took, how deep you got and how
+long the fighting took, gold left, kills, damage dealt and taken, the attributes
+the run built, and everything it bought. Gear is counted rather than named, and
+a run you loaded from a save counts only the session you played — both for
+reasons in [Limits](docs/limits.md#what-the-run-summary-cannot-say).
+
 **Esc pauses the fight** rather than ending it. The world stops where it is —
 nothing is banked, so resuming picks up on the tick it stopped — and the overlay
 offers Resume, Settings and Quit to menu. Quitting keeps whatever the autosave
@@ -150,10 +173,10 @@ holds, which is the start of the room you were in, and the Quit row says which
 stage that is. Nothing is written when you pause or quit: a save is still only
 ever taken on the tick a room begins.
 
-Settings from the pause menu is the real one, not a copy — including Controls, so
-a binding that is wrong can be fixed in the fight that revealed it. The only row
-missing there is **Erase saved run**, which does not mean anything while you are
-playing the run it would erase.
+Settings from the pause menu is the real one, not a copy — including Controls and
+Accessibility, so a binding that is wrong, or a palette that is unreadable, can be
+fixed in the fight that revealed it. The only row missing there is **Erase saved
+run**, which does not mean anything while you are playing the run it would erase.
 
 The second table is fixed because every row in it is how you reach a screen or
 leave one. A swing bound to Escape is a player who cannot get out of the arena;

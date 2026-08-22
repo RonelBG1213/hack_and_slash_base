@@ -13,6 +13,8 @@ somebody tidying up, so it is asserted rather than commented.
 
 from __future__ import annotations
 
+import dataclasses
+
 import json
 
 from hack_and_slash import settings as settings_module
@@ -164,6 +166,57 @@ def test_a_volume_outside_the_dial_is_clamped_not_dropped(tmp_path) -> None:
     # Still an int field, so the coercion above it still applies.
     path.write_text('{"volume": "loud"}', encoding="utf-8")
     assert settings_module.load(path).volume == DEFAULT_VOLUME
+
+
+def test_the_three_accessibility_flags_ship_off_and_survive_a_round_trip(
+    tmp_path,
+) -> None:
+    """Off is the game as it shipped, and that is the `AUTO_SCALE` rule again.
+
+    A player who has never opened the screen has expressed no opinion, and
+    recording one for them is how a preferences file quietly outvotes the
+    program. Each also has to survive the trip: a bool field missing from the
+    coercion branch in `load` is dropped on *every* load and falls back forever,
+    with no error and no failing test anywhere else.
+    """
+    fresh = Settings()
+    assert fresh.colourblind is False
+    assert fresh.reduce_flashing is False
+    assert fresh.reduce_motion is False
+
+    path = tmp_path / "settings.json"
+    settings_module.save(
+        Settings(colourblind=True, reduce_flashing=True, reduce_motion=True), path
+    )
+    back = settings_module.load(path)
+    assert back.colourblind is True
+    assert back.reduce_flashing is True
+    assert back.reduce_motion is True
+
+
+def test_every_bool_field_is_one_the_loader_will_accept() -> None:
+    """The reason `BOOL_FIELDS` is derived rather than written down.
+
+    This is the test that would have caught the bug the derivation prevents, and
+    it is worth keeping even so: a field added to the dataclass and forgotten in
+    `load` costs nothing at import, raises nothing at runtime, and shows up only
+    as a row that will not stay set between sessions.
+    """
+    declared = {f.name for f in dataclasses.fields(Settings) if f.type == "bool"}
+    assert declared == set(settings_module.BOOL_FIELDS)
+    assert declared, "no bool fields found -- the annotation check has rotted"
+
+
+def test_a_flag_from_a_build_that_did_not_have_it_keeps_its_default(tmp_path) -> None:
+    """An older `settings.json` predates all three rows and must still load."""
+    path = tmp_path / "settings.json"
+    path.write_text('{"volume": 5, "screenshake": false}', encoding="utf-8")
+
+    loaded = settings_module.load(path)
+    assert loaded.volume == 5
+    assert loaded.screenshake is False
+    assert loaded.colourblind is False
+    assert loaded.reduce_motion is False
 
 
 def test_the_window_follows_the_scale() -> None:

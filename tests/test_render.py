@@ -11,9 +11,11 @@ from __future__ import annotations
 import pygame
 import pytest
 
-from hack_and_slash import config
+from hack_and_slash import config, palette as palette_module
 from hack_and_slash.bindings import Action
 from hack_and_slash.core import campaign_io
+from dataclasses import replace
+
 from hack_and_slash.core.vec2 import Vec2
 from hack_and_slash.game import skills
 from hack_and_slash.game.entities import ActionState
@@ -22,10 +24,12 @@ from hack_and_slash.game.sim import step
 from hack_and_slash.render.atlas import load as load_atlas
 from hack_and_slash.render.effects import Effects
 from hack_and_slash.render.hud import PIP_ACTIVE, Hud
+from hack_and_slash.render import result_panel
 from hack_and_slash.render.pause_panel import ROWS as PAUSE_ROWS
 from hack_and_slash.render.renderer import Renderer
 from hack_and_slash.scenes import keymap, smoke
 from hack_and_slash.scenes.menu import MenuScene
+from hack_and_slash.game import profile, save
 from hack_and_slash.game.run import RunOutcome
 from hack_and_slash.scenes.play import BANNER_FRAMES, PlayScene
 from hack_and_slash.scenes.select import CharacterSelectScene
@@ -245,6 +249,75 @@ def test_the_hud_draws_the_danger_state(atlas) -> None:
     for tick in (0, 12):
         Hud().draw(surface, world, tick=tick)
     assert not is_blank(surface)
+
+
+def test_the_hud_draws_the_danger_state_in_either_palette(atlas) -> None:
+    """Both phases, both palettes. The bar is the most colour-dependent thing
+    in the game and the alternate set has to survive the same four draws."""
+    world = make_world()
+    world.hero.hp = 5
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    for colours in palette_module.BY_NAME.values():
+        for tick in (0, 12):
+            Hud(colours).draw(surface, world, tick=tick)
+        assert not is_blank(surface), f"{colours.name} drew nothing"
+
+
+def _bar_frame(hud, world, tick):
+    """One HUD frame as bytes, so two of them can be compared exactly."""
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    hud.draw(surface, world, tick=tick)
+    return pygame.image.tobytes(surface, "RGB")
+
+
+def test_the_health_bar_stops_pulsing_when_flashing_is_reduced(atlas) -> None:
+    """The row has to do the thing it names, and only that thing.
+
+    Two frames twelve ticks apart is exactly one phase of the pulse, so they
+    differ with the flag off and must be identical with it on. Asserting both
+    directions matters more than usual here: a flag that silently did nothing
+    would pass every other test in this file, and the player it exists for is
+    the one least able to tell.
+    """
+    world = make_world()
+    world.hero.hp = 5
+
+    pulsing = Hud()
+    assert _bar_frame(pulsing, world, 0) != _bar_frame(pulsing, world, 12), (
+        "the danger bar is not pulsing, so this test proves nothing"
+    )
+
+    steady = Hud()
+    steady.reduce_flashing = True
+    assert _bar_frame(steady, world, 0) == _bar_frame(steady, world, 12), (
+        "the bar still alternates with flashing reduced"
+    )
+
+    # And it holds on `bad` rather than on the pale half -- the bar still has to
+    # read as danger, which is the information the row may not cost.
+    assert _bar_frame(steady, world, 0) == _bar_frame(pulsing, world, 0)
+
+
+def test_the_character_select_prompt_stops_blinking_too(atlas) -> None:
+    """The game's other flash, and the reason the grep was worth running.
+
+    A row that says "reduce flashing" and leaves a 1Hz blink running on the
+    screen every run starts from is a row that does not mean what it says.
+    """
+    def frame(settings, tick):
+        scene = CharacterSelectScene(
+            campaign(), BESTIARY, atlas, on_exit=lambda: None, settings=settings
+        )
+        scene.tick = tick
+        surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+        scene.draw(surface)
+        return pygame.image.tobytes(surface, "RGB")
+
+    blinking = Settings()
+    assert frame(blinking, 0) != frame(blinking, 30), "the prompt is not blinking"
+
+    steady = Settings(reduce_flashing=True)
+    assert frame(steady, 0) == frame(steady, 30), "the prompt still blinks"
 
 
 def test_the_hud_draws_the_skill_pips_for_every_class(atlas) -> None:
@@ -514,6 +587,77 @@ def test_a_dodge_survives_hitstop(atlas) -> None:
     assert scene.world.hero.state is ActionState.DODGING, "the roll never came out"
 
 
+def _run_to_tick(scene, target: int, frames: int = 4000):
+    """Drive a scene until its world reaches `target` ticks, and say what it saw.
+
+    Frame-driven rather than tick-driven, deliberately: the thing under test is
+    what a *frame* does with a freeze, so a helper that stepped the sim directly
+    would step around the code it is meant to exercise.
+    """
+    for _ in range(frames):
+        if scene.world.tick >= target:
+            break
+        scene.update(config.DT)
+    return (
+        scene.world.tick,
+        [(e.id, e.pos, e.hp, e.state) for e in scene.world.entities],
+    )
+
+
+def test_reducing_motion_skips_the_freeze_without_skipping_a_tick(atlas) -> None:
+    """The one accessibility flag that is not safe by the events argument.
+
+    Every other row here is fed by events the sim emits and never reads back.
+    This one gates a line in `PlayScene.update` itself -- so the guarantee has to
+    be made rather than cited, and this is where it is made.
+
+    What makes it safe is that `freeze` **drains without stepping**: the frames
+    it costs are frames in which the world did not advance, which is why
+    `sim.step` clears `world.hitstop` at the top of a tick rather than counting
+    it down itself. So the two runs reach the same tick at different *wall*
+    times and must be in identical states when they get there.
+
+    Note what is deliberately *not* asserted: that both take the same number of
+    frames. They must not -- skipping the freeze is the whole feature.
+    """
+    TARGET = 240
+
+    def scene_with(reduce_motion: bool):
+        scene = PlayScene(
+            campaign(), BESTIARY, atlas, settings=Settings(reduce_motion=reduce_motion)
+        )
+        # Close enough to be hit immediately: hitstop only happens on a connect,
+        # and a test of the freeze that never froze would pass for free.
+        add_enemy(scene.world, "grunt", scene.world.hero.pos + Vec2(14, 0))
+        return scene
+
+    frozen = scene_with(False)
+    fluid = scene_with(True)
+
+    # The premise, asserted rather than assumed -- see the note above.
+    seen_freeze = False
+    for _ in range(4000):
+        if frozen.world.tick >= TARGET:
+            break
+        frozen.update(config.DT)
+        seen_freeze = seen_freeze or frozen.freeze > 0
+    assert seen_freeze, "no hit landed, so nothing ever froze and this proves nothing"
+
+    frozen_state = (
+        frozen.world.tick,
+        [(e.id, e.pos, e.hp, e.state) for e in frozen.world.entities],
+    )
+    fluid_state = _run_to_tick(fluid, TARGET)
+
+    assert fluid_state == frozen_state, "reducing motion changed the fight"
+
+    # And the flag does the thing it names.
+    assert fluid.freeze == 0
+    for _ in range(200):
+        fluid.update(config.DT)
+        assert fluid.freeze == 0, "the world froze with motion reduced"
+
+
 def test_a_dodge_pressed_while_staggered_inside_hitstop_still_comes_out(atlas) -> None:
     """The case the buffer exists for, and the one that made a one-tick
     delivery worthless.
@@ -712,6 +856,51 @@ def test_the_shop_panel_draws_in_every_state(atlas) -> None:
     assert [g.id for g in shop.available(scene.run)] == ["poultice"], (
         "the stall drew rows that can never be bought again"
     )
+
+
+def test_the_stall_rarity_ladder_follows_the_palette(atlas) -> None:
+    """The shop keeps its own ladder, and it still has to move.
+
+    Two rungs carry a red-green distinction and only those two change; grey and
+    gold separate on lightness and are the same colour in both palettes. Pinned
+    at that granularity because the easy mistakes here are opposite ones --
+    routing nothing through the palette, and routing the whole table through it
+    and quietly restyling a screen this change was not about.
+    """
+    from hack_and_slash.game import loot
+    from hack_and_slash.render.shop_panel import rarity_colours
+
+    shipped = rarity_colours(palette_module.SHIPPED)
+    alternate = rarity_colours(palette_module.COLOURBLIND)
+
+    moved = {r for r in loot.Rarity if shipped[r] != alternate[r]}
+    assert moved == {loot.Rarity.UNCOMMON, loot.Rarity.RARE}, (
+        f"the stall ladder moved {sorted(r.value for r in moved)}"
+    )
+
+    # And the shipped table is still the one the shop has always drawn.
+    assert shipped[loot.Rarity.UNCOMMON] == config.GOOD
+    assert shipped[loot.Rarity.RARE] == config.ACCENT
+    assert shipped[loot.Rarity.COMMON] == config.GREY
+    assert shipped[loot.Rarity.EPIC] == shipped[loot.Rarity.LEGENDARY] == config.GOLD
+
+
+def test_the_shop_panel_draws_under_either_palette(atlas) -> None:
+    """Setting a palette rebuilds the table it decides, so the panel cannot be
+    left drawing one palette's rows in another's colours."""
+    from hack_and_slash.game.loot import Rarity
+
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.shopping = True
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+
+    for colours in palette_module.BY_NAME.values():
+        scene.shop_panel.palette = colours
+        assert scene.shop_panel._rarity[Rarity.UNCOMMON] == colours.good, (
+            "the rarity table did not follow the palette that was set"
+        )
+        scene.draw(surface)
+        assert not is_blank(surface), f"{colours.name} drew nothing"
 
 
 def test_the_shop_pauses_the_world_and_swallows_the_controls(atlas) -> None:
@@ -2055,6 +2244,330 @@ def test_every_pause_row_fits_beside_its_note(atlas) -> None:
         "the hint line is drawn under the HUD"
     )
     assert drawn.small.size(panel.HINT)[0] <= config.INTERNAL_W
+
+
+# --- the run-end summary -----------------------------------------------------
+def dead(atlas, **kwargs) -> PlayScene:
+    """A scene whose run has ended, with a tick actually run through it."""
+    scene = PlayScene(campaign(), BESTIARY, atlas, **kwargs)
+    scene.update(1 / 60)
+    scene.world.hero.hp = 0
+    scene.update(1 / 60)
+    assert scene.run.is_over, "the hero did not die"
+    return scene
+
+
+def test_the_world_stops_when_the_run_ends(atlas) -> None:
+    """It did not before, and the summary is what makes that visible.
+
+    The end block sits inside the tick loop, so every later frame used to run
+    `update` in full: enemies kept moving, and on a won run the hero was alive
+    and could still walk and swing behind the wash. With numbers on screen the
+    kill count would climb while the player read it.
+
+    Sibling of `test_no_real_seconds_are_banked_behind_a_panel`, which makes the
+    same two assertions for the five modal flags. There is no resume clause here
+    because a run cannot be un-ended.
+    """
+    scene = dead(atlas)
+    banked, tick = scene.accumulator._banked, scene.world.tick
+
+    scene.update(5.0)
+
+    assert scene.accumulator._banked == banked, "real seconds were banked"
+    assert scene.world.tick == tick, "the world was stepped after the run ended"
+
+
+def test_the_tally_stops_when_the_run_ends(atlas) -> None:
+    """The player-visible half of the test above."""
+    scene = dead(atlas)
+    before = (scene.tally.kills, scene.tally.dealt, scene.tally.taken, scene.tally.ticks)
+
+    for _ in range(30):
+        scene.update(1 / 60)
+
+    assert (
+        scene.tally.kills,
+        scene.tally.dealt,
+        scene.tally.taken,
+        scene.tally.ticks,
+    ) == before
+
+
+def test_effects_keep_ticking_behind_the_result(atlas) -> None:
+    """The freeze is a guard, not a `return`, and this is why.
+
+    `Effects.tick` is what decays `shake`, and `shake_offset` draws a fresh nudge
+    every frame while it is non-zero. Stop calling it with shake still live and
+    the viewport jitters under the summary forever, with the last damage numbers
+    hanging in the air. This test fails on the tempting top-of-`update` return.
+    """
+    scene = dead(atlas)
+    scene.effects.shake = 5.0
+
+    for _ in range(30):
+        scene.update(1 / 60)
+
+    assert scene.effects.shake == 0.0, "the shake never decayed behind the result"
+    assert scene.effects.numbers == [], "damage numbers hung in the air"
+
+
+def test_the_banner_still_counts_down_behind_the_result(atlas) -> None:
+    """A run can be lost inside the 110 frames after a transition."""
+    scene = dead(atlas)
+    scene.banner = 60
+
+    for _ in range(10):
+        scene.update(1 / 60)
+
+    assert scene.banner == 50
+
+
+def test_ending_a_run_still_deletes_the_save_and_records_the_profile(atlas) -> None:
+    """`_finish` is hoisted above the guard, so the guard can never skip it.
+
+    Driven with `run.outcome` set by hand and no tick ever run, which is the
+    case the old in-loop placement could not have handled: the loop also breaks
+    on a prop panel and on `just_advanced` before it reaches the `is_over` check.
+    """
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.update(1 / 60)
+    assert save.read() is not None
+
+    scene.run.outcome = RunOutcome.LOST
+    scene.update(1 / 60)
+
+    assert scene._ended
+    assert save.read() is None
+
+
+def test_the_profile_is_recorded_once_however_long_the_screen_is_left_up(
+    atlas,
+) -> None:
+    """The `_ended` guard, which has never had a test.
+
+    `record_end` maxes `best_gold` and increments `runs_won`; firing it per frame
+    on a screen nobody dismisses would inflate the win count without bound.
+    """
+    scene = PlayScene(campaign(), BESTIARY, atlas, start_stage=len(campaign()) - 1)
+    scene.update(1.0)
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    assert scene.run.outcome is RunOutcome.WON
+
+    for _ in range(60):
+        scene.update(1 / 60)
+
+    assert profile.load().runs_won == 1
+
+
+def test_the_sheet_cannot_be_opened_over_the_result(atlas) -> None:
+    """It could, and it drew underneath the wash. The summary already shows the
+    attributes the sheet would, and the death screen has two answers, both
+    printed on it."""
+    scene = dead(atlas)
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_i))
+    assert not scene.inspecting
+
+
+def test_the_tally_survives_a_stage_boundary(atlas) -> None:
+    """`effects` and `cues` are cleared on a transition; a run total is not."""
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.update(1 / 60)
+    scene.tally.kills = 7
+
+    scene = out_through_a_door(cleared_scene(atlas, scene))
+    assert scene.tally.kills == 7
+
+
+def cleared_scene(atlas, scene):
+    for enemy in scene.world.enemies():
+        enemy.hp = 0
+    scene.update(1.0)
+    return scene
+
+
+# --- what the summary may and may not claim ----------------------------------
+def test_the_summary_does_not_claim_gold_it_spent(atlas) -> None:
+    """`gold_total` is what is *left*: buying subtracts from `run.gold`.
+
+    The old screen said "collected", which was wrong on every run that spent
+    anything. Gold collected is not derivable -- chest gold goes straight into
+    `run.gold` and its PROP event carries no amount -- so the honest fix is the
+    label, not an invented figure.
+    """
+    scene = dead(atlas)
+    labels = [label for label, _ in result_panel.stats(scene.run, scene.tally)]
+
+    assert "Gold left" in labels
+    assert not any("collected" in label for label in labels)
+
+
+def test_purchases_never_print_a_raw_key(atlas) -> None:
+    scene = dead(atlas)
+    scene.run.purchases["eq:12:1"] = 1
+    scene.run.purchases["eq:20:0"] = 1
+
+    line = result_panel.purchase_line(scene.run)
+    assert "eq:" not in line
+    assert "2 pieces of gear" in line
+
+
+def test_one_piece_of_gear_is_singular(atlas) -> None:
+    scene = dead(atlas)
+    scene.run.purchases["eq:12:1"] = 1
+
+    assert "1 piece of gear" in result_panel.purchase_line(scene.run)
+
+
+def test_buying_nothing_says_so(atlas) -> None:
+    """An empty cell reads as a panel that failed to draw."""
+    scene = dead(atlas)
+
+    assert result_panel.purchase_line(scene.run) == "nothing"
+
+
+def test_goods_are_named_and_counted(atlas) -> None:
+    from hack_and_slash.game import shop
+
+    scene = dead(atlas)
+    good = shop.stock()[0]
+    scene.run.purchases[good.id] = 3
+
+    assert f"{good.name} x3" in result_panel.purchase_line(scene.run)
+
+
+def test_a_resumed_run_admits_its_clock_is_partial(atlas) -> None:
+    """The tally is not in the save file, so a loaded run has counted only this
+    session. Saying so beats quietly under-reporting a campaign."""
+    fresh = dead(atlas)
+    assert "this session" not in result_panel.depth_line(fresh.run, fresh.tally)
+
+    fresh.tally.partial = True
+    assert "this session" in result_panel.depth_line(fresh.run, fresh.tally)
+
+
+def test_the_earned_line_speaks_the_panels_vocabulary(atlas) -> None:
+    """Through `level_panel.LABELS` and `format_value`, never a third copy.
+
+    That function's docstring warns a third vocabulary inside `render/` "would be
+    the one that starts disagreeing" -- the internals are per-mille, so a Dodge
+    of 250 has to read 25% here exactly as it does on the character sheet.
+    """
+    from hack_and_slash.render.level_panel import format_value
+
+    scene = dead(atlas)
+    scene.run.earned = replace(scene.run.earned, evasion=250)
+
+    lines = result_panel.earned_lines(scene.run)
+    assert f"Dodge +{format_value('evasion', 250)}" in " ".join(lines)
+
+
+def test_a_run_that_gained_nothing_says_so(atlas) -> None:
+    scene = dead(atlas)
+    assert result_panel.earned_lines(scene.run) == ("no attributes gained",)
+
+
+# --- it draws, and it fits ---------------------------------------------------
+def maximal(scene) -> PlayScene:
+    """The tallest and widest the summary can ever be asked to draw."""
+    from hack_and_slash.game import shop
+
+    scene.run.earned = replace(
+        scene.run.earned,
+        max_hp=240, damage=99, defense=99, crit_chance=999,
+        crit_damage=999, evasion=999, regen=99, move_speed=999,
+    )
+    for good in shop.stock():
+        scene.run.purchases[good.id] = 9
+    for i in range(12):
+        scene.run.purchases[f"eq:{i}:1"] = 1
+    scene.tally.dealt = 999_999
+    scene.tally.taken = 999_999
+    scene.tally.kills = 9_999
+    scene.tally.ticks = 99 * 60 * config.TICKS_PER_SEC
+    scene.run.gold = 999_999
+    # Promoted, so `who()` renders the two-name form. Without this the fixture
+    # never exercises the branch that separates a class from its promotion --
+    # which is where a right arrow shipped as a filled box in the first draft.
+    scene.run.job_id = "dark_knight"
+    return scene
+
+
+def test_the_result_panel_fits_above_the_hud(atlas) -> None:
+    """Measured on the worst case it can be asked to draw, not a typical one.
+
+    `level_panel.py` records the exact failure this guards: a fit test that
+    measured one row short passed while pixels overlapped. Every line is
+    measured, and the hint is the one that may never be covered -- it is how the
+    player leaves the screen.
+    """
+    scene = maximal(dead(atlas))
+    panel = result_panel.ResultPanel()
+
+    lines = [
+        *result_panel.earned_lines(scene.run),
+        *result_panel._wrap(result_panel.purchase_line(scene.run).split("   ")),
+    ]
+    assert len(result_panel.earned_lines(scene.run)) <= 2, "the build took a third line"
+
+    lowest = result_panel.BOUGHT_Y + (2 - 1) * result_panel.WRAP_H
+    assert lowest + 8 <= result_panel.hint_y(), "a wrapped line runs into the hint"
+    assert result_panel.hint_y() + 8 <= config.VIEWPORT_H, "the hint is under the HUD"
+    assert result_panel.TITLE_Y + 20 <= result_panel.WHO_Y
+
+    for line in lines:
+        assert panel.small.size(line)[0] <= config.INTERNAL_W, f"{line!r} runs off"
+
+
+def test_every_string_the_summary_draws_is_ascii(atlas) -> None:
+    """`pygame.font.Font(None, ...)` has no glyph for U+2192 and draws a filled
+    box. A right arrow between a class and its promotion shipped as tofu in the
+    first draft of this panel, and it is invisible in a headless suite."""
+    scene = maximal(dead(atlas))
+    drawn = [
+        result_panel.verdict(scene.run)[0],
+        result_panel.who(scene.run),
+        result_panel.depth_line(scene.run, scene.tally),
+        result_panel.purchase_line(scene.run),
+        *result_panel.earned_lines(scene.run),
+        *[f"{label}{value}" for label, value in result_panel.stats(scene.run, scene.tally)],
+    ]
+    for line in drawn:
+        assert line.isascii(), f"{line!r} will draw as boxes"
+
+
+def test_the_result_draws_with_no_hero_on_the_floor(atlas) -> None:
+    """`sim._settle` culls the corpse, so the summary runs with `world.hero`
+    None. It works because `Run.hero_type` reads the bestiary rather than the
+    body -- pinned here so that stays true."""
+    scene = dead(atlas)
+    for _ in range(5):
+        scene.update(1 / 60)
+    assert scene.world.hero is None
+
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    scene.draw(surface)
+    assert not is_blank(surface)
+
+
+def test_the_result_wash_leaves_the_hud_lit(atlas) -> None:
+    """`VIEWPORT_H` and not `INTERNAL_H`, as under every other panel -- the
+    health bar and the purse stay readable while you decide whether to go again."""
+    scene = maximal(dead(atlas))
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+
+    scene.renderer.draw(
+        surface.subsurface((0, 0, config.INTERNAL_W, config.VIEWPORT_H)),
+        scene.world, scene.camera, scene.effects,
+    )
+    scene.hud.draw(surface, scene.world, scene.run, 0)
+    before = surface.get_at((8, config.VIEWPORT_H + 8))
+
+    scene.draw(surface)
+    assert surface.get_at((8, config.VIEWPORT_H + 8)) == before, "the wash covered the HUD"
 
 
 def test_the_hero_panel_cannot_open_over_a_decision(atlas) -> None:

@@ -12,6 +12,8 @@ from hack_and_slash.core.vec2 import Vec2
 from hack_and_slash.game import intent as intents
 from hack_and_slash.game.events import Event, EventKind
 from hack_and_slash.game.sim import step
+from hack_and_slash import config, palette as palette_module
+from hack_and_slash.game import loot
 from hack_and_slash.render.effects import NUMBER_LIFETIME, Effects
 
 from .helpers import add_enemy, make_world
@@ -62,13 +64,19 @@ def test_a_fight_resolves_identically_whichever_way_the_toggles_are_set() -> Non
 
     for screenshake in (True, False):
         for numbers in (True, False):
-            decorated = fight(
-                seed=31337,
-                effects=Effects(screenshake=screenshake, damage_numbers=numbers),
-            )
-            assert plain == decorated, (
-                f"screenshake={screenshake}, damage_numbers={numbers} changed the fight"
-            )
+            for colours in palette_module.BY_NAME.values():
+                decorated = fight(
+                    seed=31337,
+                    effects=Effects(
+                        screenshake=screenshake,
+                        damage_numbers=numbers,
+                        palette=colours,
+                    ),
+                )
+                assert plain == decorated, (
+                    f"screenshake={screenshake}, damage_numbers={numbers}, "
+                    f"palette={colours.name} changed the fight"
+                )
 
 
 def test_the_toggles_actually_turn_the_thing_off() -> None:
@@ -204,3 +212,100 @@ def test_a_quiet_tick_shakes_not_at_all() -> None:
     effects = Effects()
     effects.feed([])
     assert effects.shake_offset().is_zero()
+
+
+# --- the palette -------------------------------------------------------------
+def test_the_shipped_palette_is_the_game_as_it_draws_today() -> None:
+    """`SHIPPED` is not "a sensible default", it is the old colours.
+
+    Asserted field by field against `config` rather than against written-down
+    numbers, so the failure mode this is really guarding fails loudly: somebody
+    tunes `config.BAD`, forgets this module exists, and the accessibility row's
+    "off" position quietly starts meaning last month's red. There is no other
+    signal for that -- the game still draws, and every screenshot still looks
+    plausible.
+    """
+    shipped = palette_module.SHIPPED
+    assert shipped.good == config.GOOD
+    assert shipped.caution == config.ACCENT
+    assert shipped.bad == config.BAD
+    assert shipped.rarity == config.RARITY_COLORS
+
+    # The two that were literals inside `_add_number` before they moved here.
+    # Written down because there is nothing in `config` to compare them to --
+    # which is the argument for their having moved.
+    assert shipped.hurt_number == (232, 106, 96)
+    assert shipped.dealt_number == (240, 236, 220)
+    assert shipped.bad_pulse == (240, 140, 130)
+
+
+def test_every_rarity_is_named_in_both_palettes() -> None:
+    """A tier added to `data/loot.json` is one entry in each palette.
+
+    The renderer indexes `palette.rarity` directly when it tints a relic -- there
+    is no `.get` there, because a rarity the palette cannot colour is a content
+    bug and not something to paper over on the floor of stage 30.
+    """
+    for colours in palette_module.BY_NAME.values():
+        missing = [r.value for r in loot.Rarity if r.value not in colours.rarity]
+        assert not missing, f"{colours.name} names no colour for {missing}"
+
+
+def test_no_two_meanings_share_a_colour_in_either_palette() -> None:
+    """The health ladder has to be three steps, not two and a repeat.
+
+    Cheap, and it catches the one mistake that is invisible in every other test
+    here: a palette can be perfectly self-consistent, draw without raising, and
+    still answer "how badly am I hurt" with one colour for two of the answers.
+    """
+    for colours in palette_module.BY_NAME.values():
+        ladder = (colours.good, colours.caution, colours.bad)
+        assert len(set(ladder)) == 3, f"{colours.name}'s health ladder repeats a colour"
+
+        assert colours.hurt_number != colours.dealt_number, (
+            f"{colours.name} cannot say whether a hit was the player's"
+        )
+        assert len(set(colours.rarity.values())) == len(colours.rarity), (
+            f"{colours.name}'s rarity ladder repeats a colour"
+        )
+
+
+def test_the_alternate_palette_actually_moves_the_colours_that_matter() -> None:
+    """The other half, and the one a "colourblind mode" most often fails.
+
+    A row that is wired end to end and resolves to the same greens is the exact
+    shape of an accessibility feature that ships and helps nobody.
+    """
+    shipped, alternate = palette_module.SHIPPED, palette_module.COLOURBLIND
+
+    for name in ("good", "caution", "bad", "bad_pulse", "hurt_number"):
+        assert getattr(shipped, name) != getattr(alternate, name), (
+            f"{name} is the same colour in both palettes"
+        )
+
+
+def test_a_palette_is_chosen_by_the_setting_and_not_by_the_caller() -> None:
+    """One translation from the bool, so four render objects cannot disagree."""
+    assert palette_module.for_settings(False) is palette_module.SHIPPED
+    assert palette_module.for_settings(True) is palette_module.COLOURBLIND
+
+
+def test_the_numbers_are_drawn_in_the_palette_they_were_given() -> None:
+    """The wiring, checked at the one place a palette becomes a pixel."""
+    from hack_and_slash.core.vec2 import Vec2 as V
+
+    for colours in palette_module.BY_NAME.values():
+        fx = Effects(palette=colours)
+        fx.feed(
+            [
+                Event(EventKind.HIT, V(0, 0), 1, amount=9, is_hero=True),
+                Event(EventKind.HIT, V(0, 0), 2, amount=4, is_hero=False),
+                Event(EventKind.PICKUP, V(0, 0), 3, amount=12, rarity="epic"),
+            ]
+        )
+        drawn = [n.color for n in fx.numbers]
+        assert drawn == [
+            colours.hurt_number,
+            colours.dealt_number,
+            colours.rarity["epic"],
+        ], f"{colours.name} drew {drawn}"

@@ -36,7 +36,7 @@ list of absences: the systems depth is already past what most projects on that
 shelf ship with. Five classes forking into ten, thirty-five distinct attacks,
 ten bosses, six enemy archetypes with nine variants, an eight-attribute layer,
 a twelve-piece gear pool, hazards, four seeded RNG streams and a headless suite
-of ~1,305 tests holding a measured balance grid. **The gaps below are product
+of ~1,402 tests holding a measured balance grid. **The gaps below are product
 gaps, not engineering ones**, and that is a much better problem to have than the
 reverse.
 
@@ -70,10 +70,12 @@ call would come back empty — and plays them once per *frame* beside
 down to one play per cue. Settings → Sound volume is a 0–10 dial that mutes on
 Enter and applies mid-run through the pause overlay.
 
-What it is not: there is **no music**, no boss or victory stinger, no UI sound
-on a menu row, and no positional audio — `bank.play` takes one global level and
-a cue sounds the same wherever it happened. Those are the next things here, and
-none of them is on the critical path the way silence was.
+What it is not, and [Limits](limits.md#no-music-and-no-sound-that-is-not-a-cue)
+now carries the same list from the other side: there is **no music**, no boss or
+victory stinger, no UI sound on a menu row, and no positional audio —
+`bank.play` takes one global level and a cue sounds the same wherever it
+happened. Those are the next things here, and none of them is on the critical
+path the way silence was.
 
 The reason it was worth doing first is unchanged, and worth keeping written
 down. The whole combat feel layer — hitstop, knockback, screenshake, damage
@@ -101,7 +103,10 @@ game has proved worth dressing.
 
 No packaging, no icon, no installer, and — by decision — no build step. The
 [README](../README.md#quick-start) start path is a virtualenv, a `pip install`
-and three generator scripts before `python main.py`.
+and four generator scripts before `python main.py` — it was three until
+`gen_sfx.py` joined `gen_art.py`, `make_level.py` and `make_rooms.py`, which is
+the same growth [item 3 of the order](#the-order) prices from the packaging
+side.
 
 That is a correct and deliberate development setup. It is not a distribution.
 The audience for this genre does not have Python 3.14, and the pygame-ce caveat
@@ -274,10 +279,10 @@ simply absent.
 | --- | --- | --- |
 | ~~**Key rebinding**~~ | **Shipped.** Settings → Controls rebinds the eleven gameplay keys; menu keys, the panel digits and the mouse buttons are fixed by decision and [Limits](limits.md#only-the-gameplay-keys-rebind) records why | Was an accessibility baseline. It also built `bindings.Action`, which is the list [controller support](#no-controller) now binds to rather than inventing |
 | ~~**In-fight pause**~~ | **Shipped.** `Esc` opens Resume / Settings / Quit to menu; the Quit row names the stage the autosave keeps. It writes nothing — **this did not buy [suspend-and-quit](#what-players-will-file-as-bugs), which is still the row below** | It also made the options screen reachable mid-run, which is where a wrong key binding is actually discovered. [Limits](limits.md#pause-writes-nothing) records what it deliberately is not |
-| **Accessibility options** | Screenshake and damage numbers toggle on the Settings screen | No colourblind palette, no text scale, no assist mode. The difficulty tiers are a start and every one but Normal is [untuned](limits.md#three-of-the-four-difficulty-tiers-are-unmeasured) |
-| **Localisation** | Strings are hardcoded in `scenes/` and `render/` | Cheap now as a string table, expensive later as a refactor across nine render modules |
+| ~~**Accessibility options**~~ | **Shipped, in part.** Settings → Accessibility is five rows: colourblind palette, reduce flashing, reduce motion, and the two effect toggles that moved there from Settings. `palette.py` holds the two colour sets and `limits.md` records the two refusals | The row predicted the ninth row would cost a layout. It did — but a *smaller* one than priced, because two of the eight rows were accessibility settings on the wrong screen: moving them out took Settings to seven rows and put `ROW_H` back **up**, 16 → 18, the first time that number has moved in that direction. **Text scale and assist mode were refused rather than deferred**, each for a reason that is now written down ([no text scale](limits.md#no-text-scale), [no assist mode](limits.md#no-assist-mode)). What is left of this row is the honest remainder: the difficulty tiers are the assist mechanism and three of the four are still [untuned](limits.md#three-of-the-four-difficulty-tiers-are-unmeasured) |
+| **Localisation** | Strings are hardcoded in `scenes/` and `render/` | Cheap now as a string table, expensive later as a refactor across **ten** render modules and ten scenes. It was nine when this row was written; the pause overlay added `render/pause_panel.py`. The price of this one goes up with every screen that ships |
 | **Suspend mid-fight** | One autosave slot, written on the tick a stage begins. `game/save.py` [argues the refusal](../README.md#the-main-menu) | The argument is about *save scumming* and holds. Handheld play needs suspend-and-quit, which is a different feature and is compatible with it. **The pause overlay above did not deliver it** and was deliberately built not to: quitting from pause keeps the room you started, not the fight you were in |
-| **Run-end summary** | A four-line wash over the arena (`play.py`, `_draw_result`): the verdict, the depth, the purse, the restart hint | It is the screen the genre uses to convert a loss into another attempt. **Half the numbers are free and half do not exist.** Free on `Run`: the build (`earned`), the class and its promotion (`hero_type_id`, `job_id`), everything bought (`purchases`), the tier, the seed. Absent everywhere: damage dealt or taken, kills, and elapsed time — `World.tick` is rebuilt per arena *and* per reward room, so there is no run-wide clock to read |
+| ~~**Run-end summary**~~ | **Shipped.** `render/result_panel.py`: the verdict, the class and its promotion, the depth and the clock, gold left, kills, damage dealt and taken, the build that was assembled and everything bought | The four numbers that did not exist are now derived from the event stream by `render/tally.py`, a third consumer beside the feel pass and the audio pass — no file under `game/` changed and the sweep never drains events, so the grid could not move. **The unlocks half of [order item 4](#the-order) is still open.** [Limits](limits.md#the-result-screen-is-a-full-stop-now) records the wash decision it overturned and the two things the screen cannot honestly say |
 | **Daily seeded run and leaderboard** | Absent | **The expensive half is already built.** Exact seeded determinism is the property this project has defended hardest; a daily seed is a date-derived integer through the same door `--seed` uses |
 | **Tutorial** | Absent | Fifteen attacks across four slots, eight attributes, four room types and a compulsory fork, all introduced by a controls table |
 
@@ -344,7 +349,7 @@ The honest first instrument for all three is hands on a keyboard, not
    build. Nothing above this line reaches anyone without it — and note the
    build now has a fourth generator to run, since `assets/sfx/` is gitignored
    exactly as `assets/sprites.png` is.
-4. **Run-end summary, then the first unlocks** — access only, never stats, per
+4. ~~**Run-end summary**~~, **then the first unlocks** — access only, never stats, per
    [Nothing survives a run](#nothing-survives-a-run). Turns four dead counters
    into a reason to press New Game.
 5. **Elite affixes, then status effects.** Variety and build texture on content
@@ -361,10 +366,14 @@ anyone arrives.
 
 > [!NOTE]
 > **The suite is not a green gate right now, and the baseline is now written
-> down.** Four run-bracket failures stand on `main` at `929b32e`, with no
-> xfails outstanding anywhere in the project; they are
+> down.** Four run-bracket failures stand on `main`, with no xfails outstanding
+> anywhere in the project; they are
 > [named in Testing](testing.md#none-currently-recorded) so a red run can be
-> attributed in seconds rather than re-derived. The per-stage grid is clean and
+> attributed in seconds rather than re-derived. **Re-confirmed at `af09d65`** by
+> running those four ids again: the same four, failing the same way — the priest
+> still finishing 2 of 3 — so neither the audio wiring nor the difficulty work
+> since `929b32e` moved the bracket. Testing still records the earlier
+> confirmation at `929b32e`, which is the older of the two readings. The per-stage grid is clean and
 > is the thing that must stay clean. Note that
 > [`test_playthrough.py` takes tens of minutes](testing.md), so the fast gate is
 > the edit loop and the full suite is the commit.

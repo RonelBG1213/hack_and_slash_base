@@ -16,7 +16,7 @@ import math
 
 import pygame
 
-from .. import config
+from .. import config, palette as palette_module
 from ..core.level import REWARD_PROP
 from ..core.vec2 import Vec2, from_angle
 from ..game.entities import ActionState, Entity
@@ -40,9 +40,15 @@ TELEGRAPH_LENGTH = 60
 
 
 class Renderer:
-    def __init__(self, atlas: Atlas) -> None:
+    def __init__(self, atlas: Atlas, colours: palette_module.Palette | None = None) -> None:
         self.atlas = atlas
         self.font = pygame.font.Font(None, 13)
+
+        #: The colours that mean something, in the two places this module draws
+        #: one: the tint on a relic, which is the whole difference between five
+        #: rarities, and the pip over a hurt enemy. Defaulted and settable, the
+        #: shape `Effects.screenshake` already has.
+        self.palette = colours or palette_module.SHIPPED
 
     def draw(
         self,
@@ -272,7 +278,7 @@ class Renderer:
             sprite = self.atlas[pickup.sprite]
             if pickup.rarity is not None:
                 sprite = self.atlas.shaded(
-                    pickup.sprite, config.RARITY_COLORS[pickup.rarity.value]
+                    pickup.sprite, self.palette.rarity[pickup.rarity.value]
                 )
             sx, sy = camera.to_screen(pickup.pos)
             surface.blit(sprite, (sx - sprite.get_width() // 2, sy - sprite.get_height() // 2))
@@ -361,7 +367,9 @@ class Renderer:
         left, top = sx - width // 2, sy - 12
         pygame.draw.rect(surface, (20, 20, 26), (left, top, width, 2))
         pygame.draw.rect(
-            surface, config.BAD, (left, top, int(width * entity.health_fraction), 2)
+            surface,
+            self.palette.bad,
+            (left, top, int(width * entity.health_fraction), 2),
         )
 
     # --- attacks -------------------------------------------------------------
