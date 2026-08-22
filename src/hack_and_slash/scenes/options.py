@@ -76,6 +76,32 @@ ROWS = (
 #: fourth toggle is one entry in `ROWS` and one name here.
 TOGGLES = frozenset({"fullscreen", "screenshake", "damage_numbers"})
 
+#: Rows that only mean anything from the title screen.
+#:
+#: The pause overlay made this screen reachable from inside a run, and "Erase
+#: saved run" does not survive the trip: `save.delete()` is undone at the next
+#: stage boundary, where `_needs_save` re-arms and the autosave writes the file
+#: back, and `profile.reset()` leaves `runs_started` at zero while a run is
+#: still going -- so the `record_end` at the end of it counts a win against a
+#: scoreboard that never saw it begin.
+#:
+#: The row's own comment already contains the argument: it is "one idea --
+#: 'forget that I played this'", which is not an idea that applies while you are
+#: playing it.
+OUT_OF_RUN_ONLY = frozenset({"erase"})
+
+
+def rows(in_run: bool = False) -> tuple[tuple[str, str], ...]:
+    """The rows to draw and to take keys for.
+
+    One list, read by both, for the reason `shop_panel.rows` is one list: a row
+    and the thing it does may never come from two places that can disagree about
+    how many there are.
+    """
+    if not in_run:
+        return ROWS
+    return tuple(row for row in ROWS if row[0] not in OUT_OF_RUN_ONLY)
+
 #: What each key does, as `(key, action)`. Moved here from the title screen
 #: unchanged. Prose rather than key names on the right -- "dodge roll" is what
 #: the player is looking for and `space` is the answer, not the question.
@@ -108,10 +134,14 @@ HINT_Y = 186
 
 
 class OptionsScene(Scene):
-    def __init__(self, settings: Settings, on_exit) -> None:
+    def __init__(self, settings: Settings, on_exit, in_run: bool = False) -> None:
         #: Held, not copied. See the note in `menu._activate`.
         self.settings = settings
         self.on_exit = on_exit
+
+        #: The rows this visit offers. Defaulted, so every existing caller --
+        #: the title screen -- gets the whole list it always had.
+        self.rows = rows(in_run)
 
         self.title = pygame.font.Font(None, 30)
         self.body = pygame.font.Font(None, 17)
@@ -151,21 +181,21 @@ class OptionsScene(Scene):
             # rather than swallowed, because a row that opens a screen is the
             # one thing this handler could not do before.
             return self._activate()
-        elif ROWS[self.index][0] == "seed":
+        elif self.rows[self.index][0] == "seed":
             # Typing only reaches the seed row, so no other row has to defend
             # itself against a digit.
             self._type_seed(event)
         return None
 
     def _move(self, step: int) -> None:
-        self.index = (self.index + step) % len(ROWS)
+        self.index = (self.index + step) % len(self.rows)
         # Moving off the erase row disarms it. A player who navigated away has
         # said no as clearly as one who pressed Escape.
         self.confirming = False
 
     def _nudge(self, step: int) -> None:
         """Left and right on the two rows that have more than two values."""
-        row = ROWS[self.index][0]
+        row = self.rows[self.index][0]
         self.confirming = False
 
         if row == "scale":
@@ -192,7 +222,7 @@ class OptionsScene(Scene):
             self._activate()
 
     def _activate(self) -> Optional[Scene]:
-        row = ROWS[self.index][0]
+        row = self.rows[self.index][0]
 
         if row == "controls":
             # The bindings are written by that screen on its own way out, and
@@ -288,7 +318,7 @@ class OptionsScene(Scene):
         title = self.title.render("SETTINGS", False, config.ACCENT)
         surface.blit(title, ((config.INTERNAL_W - title.get_width()) // 2, TITLE_Y))
 
-        for i, (row, label) in enumerate(ROWS):
+        for i, (row, label) in enumerate(self.rows):
             y = ROW_Y + i * ROW_H
             selected = i == self.index
 

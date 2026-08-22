@@ -36,7 +36,7 @@ list of absences: the systems depth is already past what most projects on that
 shelf ship with. Five classes forking into ten, thirty-five distinct attacks,
 ten bosses, six enemy archetypes with nine variants, an eight-attribute layer,
 a twelve-piece gear pool, hazards, four seeded RNG streams and a headless suite
-of ~1,235 tests holding a measured balance grid. **The gaps below are product
+of ~1,293 tests holding a measured balance grid. **The gaps below are product
 gaps, not engineering ones**, and that is a much better problem to have than the
 reverse.
 
@@ -258,10 +258,10 @@ simply absent.
 | | Where it stands | Why it matters |
 | --- | --- | --- |
 | ~~**Key rebinding**~~ | **Shipped.** Settings → Controls rebinds the eleven gameplay keys; menu keys, the panel digits and the mouse buttons are fixed by decision and [Limits](limits.md#only-the-gameplay-keys-rebind) records why | Was an accessibility baseline. It also built `bindings.Action`, which is the list [controller support](#no-controller) now binds to rather than inventing |
-| **In-fight pause** | `Esc` leaves to the menu; there is no resume overlay | Every player will press it once expecting a pause and lose their run |
+| ~~**In-fight pause**~~ | **Shipped.** `Esc` opens Resume / Settings / Quit to menu; the Quit row names the stage the autosave keeps. It writes nothing — **this did not buy [suspend-and-quit](#what-players-will-file-as-bugs), which is still the row below** | It also made the options screen reachable mid-run, which is where a wrong key binding is actually discovered. [Limits](limits.md#pause-writes-nothing) records what it deliberately is not |
 | **Accessibility options** | Screenshake and damage numbers toggle on the Settings screen | No colourblind palette, no text scale, no assist mode. The difficulty tiers are a start and every one but Normal is [untuned](limits.md#two-of-the-three-difficulty-tiers-are-unmeasured) |
 | **Localisation** | Strings are hardcoded in `scenes/` and `render/` | Cheap now as a string table, expensive later as a refactor across nine render modules |
-| **Suspend mid-fight** | One autosave slot, written on the tick a stage begins. `game/save.py` [argues the refusal](../README.md#the-main-menu) | The argument is about *save scumming* and holds. Handheld play needs suspend-and-quit, which is a different feature and is compatible with it |
+| **Suspend mid-fight** | One autosave slot, written on the tick a stage begins. `game/save.py` [argues the refusal](../README.md#the-main-menu) | The argument is about *save scumming* and holds. Handheld play needs suspend-and-quit, which is a different feature and is compatible with it. **The pause overlay above did not deliver it** and was deliberately built not to: quitting from pause keeps the room you started, not the fight you were in |
 | **Run-end summary** | The death screen ends the run | The build recap, the depth, the damage, the time. It is the screen the genre uses to convert a loss into another attempt, and the numbers are all already on `Run` |
 | **Daily seeded run and leaderboard** | Absent | **The expensive half is already built.** Exact seeded determinism is the property this project has defended hardest; a daily seed is a date-derived integer through the same door `--seed` uses |
 | **Tutorial** | Absent | Fifteen attacks across four slots, eight attributes, four room types and a compulsory fork, all introduced by a controls table |

@@ -22,10 +22,12 @@ from hack_and_slash.game.sim import step
 from hack_and_slash.render.atlas import load as load_atlas
 from hack_and_slash.render.effects import Effects
 from hack_and_slash.render.hud import PIP_ACTIVE, Hud
+from hack_and_slash.render.pause_panel import ROWS as PAUSE_ROWS
 from hack_and_slash.render.renderer import Renderer
 from hack_and_slash.scenes import keymap, smoke
 from hack_and_slash.scenes.menu import MenuScene
-from hack_and_slash.scenes.play import PlayScene
+from hack_and_slash.game.run import RunOutcome
+from hack_and_slash.scenes.play import BANNER_FRAMES, PlayScene
 from hack_and_slash.scenes.select import CharacterSelectScene
 from hack_and_slash.settings import Settings
 
@@ -1783,9 +1785,276 @@ def test_escape_closes_the_hero_panel_rather_than_leaving_the_run(atlas) -> None
     assert result is None and not left, "Escape left the run from behind the sheet"
     assert not scene.inspecting
 
-    # And still means the menu once the sheet is shut.
+    # And once the sheet is shut it pauses rather than leaving. It used to mean
+    # the menu here, on one press; the menu is now a row on the overlay.
     onward = scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
-    assert onward == "menu"
+    assert onward is None and not left, "Escape still left the run in one press"
+    assert scene.paused
+
+
+# --- the pause overlay -------------------------------------------------------
+def paused(atlas, **kwargs) -> PlayScene:
+    scene = PlayScene(campaign(), BESTIARY, atlas, **kwargs)
+    scene.update(1 / 60)  # one live frame, so the world is genuinely running
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
+    assert scene.paused, "Escape did not pause"
+    return scene
+
+
+def test_a_fight_never_begins_paused(atlas) -> None:
+    """One line, and it is the whole "the recorded grid is untouched" argument.
+
+    `tools/balance.py` and `autoplay` drive `sim.step` and never build a scene,
+    and `tests/test_playthrough.py` imports nothing from `scenes/` -- so the only
+    way this feature could reach a measured number is by a constructor that
+    started a fight already stopped. `tools/screenshot.py` builds one too.
+    """
+    assert PlayScene(campaign(), BESTIARY, atlas).paused is False
+    assert PlayScene(campaign(), BESTIARY, atlas).restarted().paused is False
+
+
+def test_escape_pauses_instead_of_leaving_the_run(atlas) -> None:
+    """The whole feature, in the one press it exists to reinterpret.
+
+    Escape used to call `on_exit` here and drop the scene on the floor. Every
+    player presses it once expecting a pause.
+    """
+    left = []
+    scene = PlayScene(
+        campaign(), BESTIARY, atlas, on_exit=lambda: left.append(True) or "menu"
+    )
+
+    result = scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
+    assert result is None and not left, "Escape still left the run"
+    assert scene.paused
+
+
+def test_escape_resumes_a_paused_fight(atlas) -> None:
+    """It toggles. The one press a player is certain to make is the one that
+    got them here, so it has to be the one that gets them out."""
+    scene = paused(atlas)
+
+    assert scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)) is None
+    assert not scene.paused
+
+
+def test_the_resume_row_resumes(atlas) -> None:
+    scene = paused(atlas)
+    scene.pause_index = [row for row, _ in PAUSE_ROWS].index("resume")
+
+    assert scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)) is None
+    assert not scene.paused
+
+
+def test_the_quit_row_leaves_exactly_the_way_escape_used_to(atlas) -> None:
+    scene = paused(atlas, on_exit=lambda: "menu")
+    scene.pause_index = [row for row, _ in PAUSE_ROWS].index("quit")
+
+    assert scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)) == "menu"
+
+
+def test_quitting_with_nowhere_to_go_resumes_rather_than_stranding(atlas) -> None:
+    """`on_exit=None` is not hypothetical -- the tools and most of this file
+    build a scene without one. Leaving the overlay up over a scene nobody can
+    leave is the one way this feature could trap somebody."""
+    scene = paused(atlas)
+    scene.pause_index = [row for row, _ in PAUSE_ROWS].index("quit")
+
+    assert scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)) is None
+    assert not scene.paused
+
+
+def test_the_restart_key_is_swallowed_while_paused(atlas) -> None:
+    """Restart stays on its own key, which means the overlay does not take it.
+
+    A row that threw away a fifty-stage run on one Enter is the hazard this
+    overlay exists to remove, not one to add to it.
+    """
+    scene = paused(atlas)
+
+    assert scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_r)) is None
+    assert scene.paused
+
+
+def test_escape_on_the_death_screen_still_leaves(atlas) -> None:
+    """The guard, and the reason it exists.
+
+    `handle_event` has no `run.is_over` check of its own -- the death screen is
+    drawn from the same arena branch that takes keys. Without this the overlay
+    would open over the result and take away the only way off it, and its Quit
+    row would name a save file that `_settle` has already deleted.
+    """
+    scene = PlayScene(campaign(), BESTIARY, atlas, on_exit=lambda: "menu")
+    scene.run.outcome = RunOutcome.LOST
+    assert scene.run.is_over
+
+    assert scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)) == "menu"
+    assert not scene.paused, "the overlay opened over the death screen"
+
+
+def test_the_cursor_wraps_both_ways(atlas) -> None:
+    scene = paused(atlas)
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_UP))
+    assert scene.pause_index == len(PAUSE_ROWS) - 1
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_DOWN))
+    assert scene.pause_index == 0
+
+
+# --- what "paused" actually means --------------------------------------------
+@pytest.mark.parametrize(
+    "flag", ["paused", "shopping", "promoting", "levelling", "inspecting"]
+)
+def test_no_real_seconds_are_banked_behind_a_panel(atlas, flag) -> None:
+    """The claim `update` has made in prose since it was written, asserted.
+
+    Reaching into `Accumulator._banked` on purpose. The observable symptom of
+    getting this wrong is a fight that fast-forwards the instant a panel closes,
+    and `MAX_FRAME_TIME` bounds it to fifteen ticks -- small enough to be missed
+    in play, and impossible to catch from `world.tick` alone, because a scene
+    that banked the time and paid it out later looks identical until it does.
+
+    Parametrised over all five because the four that predate the overlay have
+    never been checked either.
+    """
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.update(1 / 60)
+    setattr(scene, flag, True)
+
+    banked, tick = scene.accumulator._banked, scene.world.tick
+    scene.update(5.0)
+
+    assert scene.accumulator._banked == banked, "real seconds were banked"
+    assert scene.world.tick == tick, "the world was stepped"
+
+    setattr(scene, flag, False)
+    scene.update(config.DT)
+    assert scene.world.tick == tick + 1, "the banked seconds arrived late"
+
+
+def test_pausing_drops_a_buffered_dodge(atlas) -> None:
+    """Free -- it is the guard being extended, not new code -- but it is the
+    behaviour that stops a roll coming out into a room the player cannot see."""
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
+    assert scene._dodge_buffer > 0
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
+    scene.update(1 / 60)
+    assert scene._dodge_buffer == 0
+
+
+def test_hitstop_survives_a_pause(atlas) -> None:
+    """Correct only by where the counter lives, so it is worth pinning.
+
+    `freeze` is decremented *inside* the tick loop, which the guard returns
+    before -- so a pause holds it rather than draining it, and the hit the
+    player was in the middle of feeling still lands with its full weight.
+    """
+    scene = paused(atlas)
+    scene.freeze = 5
+
+    for _ in range(10):
+        scene.update(1 / 60)
+    assert scene.freeze == 5, "hitstop drained behind the overlay"
+
+    scene.paused = False
+    scene.update(config.DT)
+    assert scene.freeze == 4
+
+
+def test_the_banner_does_not_count_down_behind_the_overlay(atlas) -> None:
+    scene = paused(atlas)
+    scene.banner = 60
+
+    scene.update(1.0)
+    assert scene.banner == 60
+
+
+def test_no_panel_can_open_while_paused(atlas) -> None:
+    """The invariant the handler ordering documents, checked from the other end.
+
+    `_open_panels_for_props` runs inside the tick loop, which the guard returns
+    before -- so a hero standing on a stall cannot have it open behind a pause.
+    """
+    scene = paused(atlas)
+    asked = []
+    scene._open_panels_for_props = lambda: asked.append(True) or False
+
+    scene.update(1.0)
+    assert not asked, "a panel was offered behind the overlay"
+    assert not (scene.shopping or scene.levelling or scene.promoting)
+
+
+@pytest.mark.parametrize("panel", ["shopping", "levelling", "promoting", "inspecting"])
+def test_escape_does_not_pause_from_behind_a_panel(atlas, panel) -> None:
+    """Each of the four already answers Escape, and none of those answers moved.
+
+    The promotion panel is the one that matters: it deliberately has no exit key
+    at all, and a pause overlay reachable from it would be a way to walk out of
+    the fork with the run intact.
+    """
+    scene = PlayScene(campaign(), BESTIARY, atlas, on_exit=lambda: "menu")
+    setattr(scene, panel, True)
+
+    assert scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)) is None
+    assert not scene.paused, f"Escape paused from behind the {panel} panel"
+
+    if panel == "promoting":
+        assert scene.promoting, "Escape dismissed the promotion panel"
+
+
+# --- the overlay on screen ---------------------------------------------------
+def test_the_overlay_draws_something(atlas) -> None:
+    scene = paused(atlas)
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    scene.draw(surface)
+    assert not is_blank(surface)
+
+
+def test_the_banner_never_draws_behind_the_overlay(atlas) -> None:
+    """Same trade the four panels make, and pinned the same way.
+
+    Compared pixel for pixel rather than by stubbing, because the overlay is a
+    leading `elif` and the failure mode is the banner's text bleeding through
+    the wash rather than a call that did or did not happen.
+    """
+    scene = paused(atlas)
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+
+    scene.banner = BANNER_FRAMES
+    scene.draw(surface)
+    with_banner = pygame.image.tobytes(surface, "RGB")
+
+    scene.banner = 0
+    scene.draw(surface)
+    assert pygame.image.tobytes(surface, "RGB") == with_banner
+
+
+def test_every_pause_row_fits_beside_its_note(atlas) -> None:
+    """Measured with the panel's own fonts, in the shape the other panels use.
+
+    The note is the half that grows: `kept()` carries a stage number, and the
+    campaign is fifty stages long now where it was twenty twice before.
+    """
+    from hack_and_slash.render import pause_panel as panel
+
+    drawn = panel.PausePanel()
+    for i, (row, label) in enumerate(panel.ROWS):
+        assert panel.ROW_X + drawn.font.size(label)[0] <= panel.NOTE_X, (
+            f"'{label}' runs into its note"
+        )
+        assert panel.row_y(i) + 11 <= panel.hint_y(len(panel.ROWS)), (
+            f"'{label}' is drawn through the hint"
+        )
+
+    widest = max(f"keeps stage {n}" for n in (1, 50))
+    assert panel.NOTE_X + drawn.small.size(widest)[0] <= config.INTERNAL_W
+    assert panel.TITLE_Y + 17 <= panel.ROW_Y, "the title is drawn over the first row"
+    assert panel.hint_y(len(panel.ROWS)) + 8 <= config.VIEWPORT_H, (
+        "the hint line is drawn under the HUD"
+    )
+    assert drawn.small.size(panel.HINT)[0] <= config.INTERNAL_W
 
 
 def test_the_hero_panel_cannot_open_over_a_decision(atlas) -> None:

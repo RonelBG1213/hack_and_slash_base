@@ -207,6 +207,52 @@ the same cell layout to swap in real art — see [Content](content.md#tools).
 Nothing here would have to change to add it; hits already emit events with
 everything a sound cue needs.
 
+### Pause writes nothing
+
+`Esc` stops the world and offers Resume, Settings and Quit to menu. **Quitting
+does exactly what `Esc` did before the overlay existed**: it returns to the menu
+having written and deleted nothing, so what survives is the autosave taken on the
+tick the current room began.
+
+That is a decision, not an omission. Writing a save at the moment a player
+happens to press pause is **Suspend mid-fight**, which is a separate feature and
+one `game/save.py` argues about at length: a snapshot is only a complete
+description of a run *before* `sim.step` has run once on that world, and a
+mid-fight one would mean serialising every entity position, every cooldown, every
+projectile and the state of three `Random`s — welding the save format to the
+sim's internals so that every change to a fight becomes a change to the format.
+
+So the overlay's Quit row states what it keeps, in place, rather than implying it
+keeps everything. The number it prints is asserted against a real `save.read()`
+rather than written down, because a promise about a file is worth what the file
+says.
+
+> [!NOTE]
+> **The pause overlay is unreachable from the promotion panel, and that is the
+> point.** `Esc` is read only from the arena branch; the fork swallows it, as it
+> swallows every key but `1` and `2`. A pause menu reachable from there would be
+> a way to walk out of a choice that half the campaign is tuned around — see the
+> no-exit-key note in `scenes/play.py`. The same holds for the shop, the shrine
+> and the sheet, each of which already answers `Esc` its own way.
+
+### The options screen is now reachable mid-run
+
+A consequence of pause, and worth recording because it tightens a rule rather
+than relaxing one. `scenes/options.py` says none of its rows may change how a
+fight resolves, and calls that "the line this screen is drawn on". Until now that
+line only had to hold *between* runs. It is now load-bearing **during** one.
+
+Two things follow. **The seed row is safe by where the seed is read**, not by
+anything the pause path does — `Run` takes its seed at construction and
+`_stage_seed` derives from `run.seed` — so a refactor reading `settings.seed` at
+stage entry would let a player re-roll act VIII from a pause menu. There is a
+test pinning it for that reason. And **the erase row is hidden mid-run**: it
+deletes a save the next stage boundary immediately rewrites, and resets a profile
+that the end of the run then reports into.
+
+Anything added to that screen from now on has to be safe to change with a fight
+paused behind it.
+
 ### Only the gameplay keys rebind
 
 The eleven actions in `bindings.py` can be moved on Settings → Controls. Four

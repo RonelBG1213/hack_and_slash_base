@@ -317,4 +317,17 @@ than a scene of its own. A shop scene would have to hand a live `Run` back to a
 
 While the shop is open the world is not stepped **and the accumulator is not
 fed**. Banking real seconds behind a panel would fast-forward the first moments of
-the next stage the instant it closed.
+the next stage the instant it closed. `Accumulator.ticks_for` is the only thing
+that ever banks time, and `update` returns before reaching it — so "paused" is not
+a state the scene maintains, it is a call it does not make. There are five such
+states now: the shop, the fork, the shrine, the character sheet and the pause
+overlay.
+
+The pause overlay is the one case where a `PlayScene` is left and **returned to
+alive**. Its Settings row hands out an `OptionsScene` whose `on_exit` gives the
+live scene back, rather than the rebuild every other route home performs. That is
+safe only because the scene is paused on both sides of the trip — no time passes
+and no tick is owed — and it is what makes a wrong key binding fixable in the
+fight that revealed it. The cost is that everything a scene derives from
+`Settings` has to be re-derivable: `PlayScene._reapply_settings` is that one
+method, called from `__init__` too so the two cannot drift.

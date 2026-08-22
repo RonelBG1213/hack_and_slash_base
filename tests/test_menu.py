@@ -23,6 +23,8 @@ from hack_and_slash.core import campaign_io
 from hack_and_slash.game import difficulty, jobs, profile, save
 from hack_and_slash.game.run import Run
 from hack_and_slash.scenes.achievements import AchievementsScene
+from hack_and_slash.render import pause_panel
+from hack_and_slash.render.pause_panel import ROWS as PAUSE_ROWS
 from hack_and_slash.scenes import keymap
 from hack_and_slash.scenes.controls import ROWS as ROWS_C
 from hack_and_slash.scenes.controls import ControlsScene
@@ -888,6 +890,223 @@ def test_the_screen_draws_something(atlas, display) -> None:
     surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
     controls().draw(surface)
     assert not is_blank(surface)
+
+
+# --- pausing a fight ---------------------------------------------------------
+def pause_row(action: str) -> int:
+    return [row for row, _ in PAUSE_ROWS].index(action)
+
+
+def a_paused_fight(atlas, **kwargs) -> PlayScene:
+    scene = PlayScene(campaign(), BESTIARY, atlas, **kwargs)
+    scene.update(1 / 60)
+    press(scene, pygame.K_ESCAPE)
+    assert scene.paused
+    return scene
+
+
+def test_pausing_and_quitting_write_nothing_new(atlas) -> None:
+    """The whole of "this is not Suspend mid-fight".
+
+    Quitting from the overlay does exactly what Escape did before it existed:
+    the autosave from the start of the room is what survives, because nothing
+    here writes a snapshot of a fight in progress. `game/save.py` argues that
+    refusal at length and this feature does not reopen it.
+
+    The profile must not move either. `RunOutcome` has no ABANDONED member, so
+    `record_end` on a run that is still resumable would `max` its purse into
+    `best_gold` and count it a second time when it is later loaded and finished.
+    """
+    scene = a_paused_fight(atlas, on_exit=lambda: "menu")
+    scene.update(1 / 60)
+
+    before_save = save.read()
+    before_profile = profile.load()
+
+    scene.pause_index = pause_row("quit")
+    assert press(scene, pygame.K_RETURN) == "menu"
+
+    assert save.read() == before_save, "quitting rewrote the save"
+    assert profile.load() == before_profile, "quitting moved the scoreboard"
+
+
+def test_the_save_is_written_before_the_overlay_can_promise_it(atlas) -> None:
+    """The bug pause would otherwise have made visible.
+
+    A stage transition *arms* the autosave and breaks out of the tick loop; the
+    write lands on the next update. Escape inside that window -- and the banner
+    holds it open for 110 frames -- used to leave to the menu with the previous
+    stage still on disk. Harmless-looking until a row on screen names the stage
+    quitting keeps, at which point the row is simply wrong.
+    """
+    scene = PlayScene(campaign(), BESTIARY, atlas)
+    assert scene._needs_save, "the fresh stage was not armed to be saved"
+
+    press(scene, pygame.K_ESCAPE)
+    scene.update(1 / 60)
+
+    payload = save.read()
+    assert payload is not None, "pausing on the first frame left no save behind"
+    assert payload["index"] == scene.run.index
+
+
+def test_the_quit_row_promises_the_stage_the_save_would_restore(atlas) -> None:
+    """The one string in the overlay that can lie, checked against the file.
+
+    A promise about what is on disk is worth exactly what the disk says, so this
+    round-trips it rather than asserting the wording.
+    """
+    scene = a_paused_fight(atlas)
+    scene.update(1 / 60)
+
+    restored = save.restore(save.read(), campaign(), BESTIARY)
+    assert pause_panel.kept(scene.run) == f"keeps stage {restored.stage_number}"
+
+
+def test_the_quit_row_is_still_honest_from_a_reward_room(atlas) -> None:
+    """A room does not get a stage number of its own -- it belongs to the stage
+    it precedes -- so the same sentence has to stay true one room earlier."""
+    scene = out_through_a_door(cleared(atlas))
+    scene.update(1 / 60)
+    press(scene, pygame.K_ESCAPE)
+
+    restored = save.restore(save.read(), campaign(), BESTIARY)
+    assert pause_panel.kept(scene.run) == f"keeps stage {restored.stage_number}"
+
+
+# --- Settings, from inside a fight -------------------------------------------
+def test_the_settings_row_opens_the_options_screen_on_the_live_settings(
+    atlas,
+) -> None:
+    settings = Settings()
+    scene = a_paused_fight(atlas, settings=settings)
+    scene.pause_index = pause_row("settings")
+
+    options = press(scene, pygame.K_RETURN)
+    assert isinstance(options, OptionsScene)
+    assert options.settings is settings, "the options screen got a copy"
+    assert scene.paused, "the fight resumed while the player was in the menu"
+
+
+def test_leaving_the_settings_comes_back_to_the_same_paused_fight(atlas) -> None:
+    """The live instance, not a rebuild.
+
+    `MenuScene._back` rebuilds because it re-reads the save. A rebuilt
+    `PlayScene` would build a fresh `Run` -- which is exactly the thing a scene
+    holding a run in progress may never do.
+    """
+    scene = a_paused_fight(atlas)
+    scene.pause_index = pause_row("settings")
+    options = press(scene, pygame.K_RETURN)
+
+    assert press(options, pygame.K_ESCAPE) is scene
+    assert scene.paused
+
+
+def test_a_toggle_set_from_a_paused_fight_is_live_when_it_resumes(atlas) -> None:
+    """Otherwise the row is a trap: the player turns something off, sees nothing
+    happen, and concludes the game is broken rather than the menu."""
+    scene = a_paused_fight(atlas)
+    assert scene.effects.screenshake is True
+
+    scene.pause_index = pause_row("settings")
+    options = press(scene, pygame.K_RETURN)
+    options.index = row_of("screenshake")
+    press(options, pygame.K_RETURN)
+    press(options, pygame.K_ESCAPE)
+
+    assert scene.effects.screenshake is False
+
+
+def test_a_rebinding_made_from_a_paused_fight_works_in_that_fight(atlas) -> None:
+    """The moment a player actually discovers a binding is wrong is the moment
+    they are losing a fight because of it."""
+    scene = a_paused_fight(atlas)
+    keymap.assign(scene.settings, Action.DODGE, "c")
+    scene._reapply_settings()
+
+    assert keymap.keycodes(scene.settings)[Action.DODGE] == (pygame.K_c,)
+    assert pygame.K_c in scene.keys[Action.DODGE]
+
+    scene.paused = False
+    press(scene, pygame.K_c)
+    assert scene._read_intent().dodge
+
+
+def test_reapplying_settings_matches_a_scene_built_with_them(atlas) -> None:
+    """The drift guard, and the one assertion here that does not rot.
+
+    Every field `__init__` derives from `Settings` has to be refreshed on the way
+    back from the options screen. Listing them here would be a second list that
+    can disagree with the first; comparing against a freshly built scene is the
+    same claim with nothing to keep in sync, and it covers the *eighth*
+    preference on the day somebody adds one.
+    """
+    settings = Settings()
+    scene = PlayScene(campaign(), BESTIARY, atlas, settings=settings)
+
+    keymap.assign(settings, Action.HEAVY, "v")
+    settings.screenshake = False
+    settings.damage_numbers = False
+    scene._reapply_settings()
+
+    fresh = PlayScene(campaign(), BESTIARY, atlas, settings=settings)
+    for field in (
+        "keys",
+        "move_keys",
+        "skill_keys",
+        "sheet_exit_keys",
+        "skill_labels",
+    ):
+        assert getattr(scene, field) == getattr(fresh, field), field
+    assert scene.effects.screenshake == fresh.effects.screenshake
+    assert scene.effects.damage_numbers == fresh.effects.damage_numbers
+
+
+def test_the_effects_object_survives_the_round_trip(atlas) -> None:
+    """Mutated, never rebuilt. A fresh `Effects` would blank the damage numbers
+    hanging over the arena and reseed its rng, which `tools/screenshot.py`
+    depends on being stable."""
+    scene = a_paused_fight(atlas)
+    effects = scene.effects
+
+    scene._reapply_settings()
+    assert scene.effects is effects
+
+
+def test_typing_a_seed_from_a_paused_fight_does_not_re_roll_it(atlas) -> None:
+    """The determinism guard on the one row that looks like it could move a run.
+
+    It is safe because `Run` took its seed at construction and `_stage_seed`
+    derives from `run.seed`, not from `settings.seed` -- true by where the seed
+    is read rather than by anything `_reapply_settings` does. Pinned here so a
+    refactor that read it at stage entry fails a test rather than shipping a
+    pause menu that can re-roll act eight.
+    """
+    scene = a_paused_fight(atlas)
+    seed, run_seed = scene.seed, scene.run.seed
+
+    scene.settings.seed = 9999
+    scene._reapply_settings()
+
+    assert scene.seed == seed and scene.run.seed == run_seed
+
+
+def test_the_erase_row_is_not_offered_from_inside_a_run(atlas) -> None:
+    """It does not survive the trip.
+
+    `save.delete()` is undone at the next stage boundary, where the autosave
+    writes the file straight back, and `profile.reset()` leaves `runs_started`
+    at zero while a run is still going -- so the `record_end` at the end of it
+    counts a win against a scoreboard that never saw it begin.
+    """
+    scene = a_paused_fight(atlas)
+    scene.pause_index = pause_row("settings")
+    options = press(scene, pygame.K_RETURN)
+
+    assert "erase" not in [row for row, _ in options.rows]
+    assert "erase" in [row for row, _ in ROWS], "it left the title screen too"
+    assert "controls" in [row for row, _ in options.rows], "too much was taken"
 
 
 # --- layout ------------------------------------------------------------------

@@ -60,12 +60,15 @@ from ..render.hud import Hud
 from ..render.job_panel import CHOICE_KEYS, JobPanel
 from ..render.level_panel import ROW_KEYS as LEVEL_ROW_KEYS
 from ..render.level_panel import LevelPanel
+from ..render.pause_panel import ROWS as PAUSE_ROWS
+from ..render.pause_panel import PausePanel
 from ..render.renderer import Renderer
 from ..render.shop_panel import ROW_KEYS, ShopPanel
 from ..bindings import Action
 from ..settings import Settings
 from . import keymap
 from .base import Scene
+from .options import OptionsScene
 
 #: Which way each movement action pushes. The *directions* are the game and the
 #: *keys* are a preference, so this stays here as a constant while which key
@@ -207,36 +210,10 @@ class PlayScene(Scene):
         self.job_panel = JobPanel()
         self.level_panel = LevelPanel()
         self.hero_panel = HeroPanel()
+        self.pause_panel = PausePanel()
         self.accumulator = Accumulator()
-        self.effects = Effects(
-            screenshake=self.settings.screenshake,
-            damage_numbers=self.settings.damage_numbers,
-        )
-
-        # Resolved once, here, rather than per frame: a rebinding takes effect
-        # on the next scene, which is the same rule the effect toggles follow
-        # and for the same reason -- the Controls screen is not reachable from
-        # inside a fight, so there is no moment where a stale table is what the
-        # player is looking at.
-        self.keys = keymap.keycodes(self.settings)
-        self.move_keys = {
-            code: direction
-            for action, direction in MOVE_DIRECTIONS.items()
-            for code in self.keys[action]
-        }
-        self.skill_keys = {
-            code: slot
-            for action, slot in SKILL_SLOTS.items()
-            for code in self.keys[action]
-        }
-        # See the note above `MOVE_DIRECTIONS` about why this one is derived.
-        self.sheet_exit_keys = SHOP_EXIT_KEYS + self.keys[Action.SHEET]
-        #: What the HUD prints on each cooldown pip. Passed down rather than
-        #: read there, so a pip cannot go on saying Q after the buff moved.
-        self.skill_labels = {
-            slot: keymap.label(action, self.settings)
-            for action, slot in SKILL_SLOTS.items()
-        }
+        self.effects = Effects()
+        self._reapply_settings()
 
         # A run handed in is a run loaded off disk. The three parameters that
         # describe how to *start* one are then read back off it rather than
@@ -321,6 +298,21 @@ class PlayScene(Scene):
         #: overlay. Reading eight numbers off a strip that is being shaken by a
         #: brute walking into you is not reading them.
         self.inspecting = False
+
+        #: The fifth thing that stops the world, and the only one that is not
+        #: about the run. The other four ask a question the run has raised --
+        #: which piece, which attribute, which path, what have I got. This one
+        #: asks nothing and decides nothing; it exists because Escape used to end
+        #: the fight on the first press, and Escape is the key this whole genre
+        #: has taught players means "pause".
+        #:
+        #: Set only from the arena branch of `handle_event`, which no panel
+        #: reaches -- and while it is set `update` returns before the tick loop,
+        #: so `_open_panels_for_props` never runs and no panel can open behind
+        #: it. The five are mutually exclusive by construction rather than by
+        #: arbitration, and the handler order below is documentation of that.
+        self.paused = False
+        self.pause_index = 0
         self._enter_stage()
 
         #: Set whenever the run is standing at the start of a stage with nothing
@@ -396,6 +388,15 @@ class PlayScene(Scene):
 
     # --- input ---------------------------------------------------------------
     def handle_event(self, event: pygame.event.Event) -> Optional[Scene]:
+        if self.paused:
+            # First, and it is not a priority decision either -- see the note on
+            # the flag. Pause and the four panels cannot both be up: Escape is
+            # read only from the arena branch below, which none of them reach,
+            # and no panel can open while the world is not being stepped. First
+            # position turns that invariant into an enforcement rather than an
+            # assumption.
+            return self._handle_pause_event(event)
+
         if self.inspecting:
             # First, and it is not a priority decision. The sheet can only be
             # open when the other three are closed, because the key that opens
@@ -421,7 +422,21 @@ class PlayScene(Scene):
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                return self.on_exit() if self.on_exit else None
+                if self.run.is_over:
+                    # The death screen is drawn from this same branch -- there is
+                    # no `is_over` check above it -- and it has exactly two
+                    # answers, both printed on it. Pausing a run that has ended
+                    # is not one of them: the overlay would cover the result and
+                    # take away the only way off it, and its Quit row would
+                    # promise a save file that `_settle` has already deleted.
+                    return self.on_exit() if self.on_exit else None
+                self.paused = True
+                self.pause_index = 0
+                # Nothing else this frame, for the sheet's reason: the world
+                # stops on the next update. The edges are dropped there rather
+                # than here, because `update`'s guard is the one place a press is
+                # deliberately thrown away and pause is not a second one.
+                return None
             if event.key in self.keys[Action.RESTART]:
                 return self.restarted()
             if event.key in self.keys[Action.SHEET]:
@@ -442,6 +457,64 @@ class PlayScene(Scene):
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             self._dodge_buffer = DODGE_BUFFER_TICKS
         return None
+
+    def _handle_pause_event(self, event: pygame.event.Event) -> Optional[Scene]:
+        """Resume, go to Settings, or leave. Everything else is swallowed.
+
+        Including the restart key, which is the panel convention and is what
+        "restart stays on its own key" means in practice -- a row that threw away
+        a fifty-stage run on one Enter is the hazard this overlay exists to
+        remove, not one to add to it.
+        """
+        if event.type != pygame.KEYDOWN:
+            return None
+
+        if event.key == pygame.K_ESCAPE:
+            # It toggles, so the key that opened it closes it. The one press a
+            # player is certain to make is the one that got them here.
+            self.paused = False
+        elif event.key in (pygame.K_UP, pygame.K_w):
+            self.pause_index = (self.pause_index - 1) % len(PAUSE_ROWS)
+        elif event.key in (pygame.K_DOWN, pygame.K_s):
+            self.pause_index = (self.pause_index + 1) % len(PAUSE_ROWS)
+        elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+            return self._activate_pause()
+        return None
+
+    def _activate_pause(self) -> Optional[Scene]:
+        """Take the row under the cursor. Branched on id, never on label."""
+        row = PAUSE_ROWS[self.pause_index][0]
+
+        if row == "resume":
+            self.paused = False
+            return None
+
+        if row == "settings":
+            # `paused` stays set, so leaving that screen lands back on this
+            # overlay rather than in a fight the player is not looking at.
+            return OptionsScene(self.settings, self._resume_from_settings, in_run=True)
+
+        # Quit. Byte for byte what Escape did before this overlay existed --
+        # nothing is written and nothing is deleted, so what survives is the
+        # autosave from the start of this room, which is what the row promises.
+        nxt = self.on_exit() if self.on_exit else None
+        if nxt is None:
+            # Nowhere to go -- the tools and every test build a scene with no
+            # `on_exit`. Resume rather than leave an overlay up over a scene
+            # nobody can leave.
+            self.paused = False
+        return nxt
+
+    def _resume_from_settings(self) -> "PlayScene":
+        """This fight again, still paused, with the new preferences in force.
+
+        The live instance rather than a rebuild -- `OptionsScene._resume` one
+        level up, and for a sharper version of the same reason: a rebuilt
+        `PlayScene` builds a fresh `Run`, which is precisely the thing a scene
+        holding a run in progress may never do.
+        """
+        self._reapply_settings()
+        return self
 
     def _handle_job_event(self, event: pygame.event.Event) -> Optional[Scene]:
         """Choose a path. There is no third answer.
@@ -553,6 +626,56 @@ class PlayScene(Scene):
                     self.shrine_offers = ()
         return None
 
+    def _reapply_settings(self) -> None:
+        """Everything this scene derives from `Settings`, in one place.
+
+        Called from `__init__` and again whenever the player comes back from the
+        options screen, which the pause overlay makes reachable **from inside a
+        fight**. Before that it could only be reached between runs, and reading
+        the settings once at construction was the whole story.
+
+        One method rather than two lists that must agree. That is not tidiness:
+        two lists is the shape that guarantees the *eighth* preference is
+        silently inert on resume, and a player who turns something off and sees
+        nothing happen is worse off than one who was never offered the row.
+
+        **The two effect flags are mutated, never rebuilt.** A fresh `Effects`
+        would drop the damage numbers and the shake currently in flight -- they
+        would blank mid-air on resume -- and would reseed its `rng`, which cannot
+        reach a fight (`test_effects.py` pins that) but does make
+        `tools/screenshot.py` stop reproducing.
+
+        **`settings.seed` is deliberately absent**, and it is the one row on that
+        screen this method must keep ignoring. The run took its seed at
+        construction and `Run._stage_seed` derives from `run.seed`, so typing a
+        new one on a paused run changes nothing about the run in progress. That
+        is true by where the seed is read rather than by anything here, so it is
+        pinned by a test: a refactor that read `settings.seed` at stage entry
+        would let a player re-roll act VIII from a pause menu.
+        """
+        self.effects.screenshake = self.settings.screenshake
+        self.effects.damage_numbers = self.settings.damage_numbers
+
+        self.keys = keymap.keycodes(self.settings)
+        self.move_keys = {
+            code: direction
+            for action, direction in MOVE_DIRECTIONS.items()
+            for code in self.keys[action]
+        }
+        self.skill_keys = {
+            code: slot
+            for action, slot in SKILL_SLOTS.items()
+            for code in self.keys[action]
+        }
+        # See the note above `MOVE_DIRECTIONS` about why this one is derived.
+        self.sheet_exit_keys = SHOP_EXIT_KEYS + self.keys[Action.SHEET]
+        #: What the HUD prints on each cooldown pip. Passed down rather than
+        #: read there, so a pip cannot go on saying Q after the buff moved.
+        self.skill_labels = {
+            slot: keymap.label(action, self.settings)
+            for action, slot in SKILL_SLOTS.items()
+        }
+
     def restarted(self) -> "PlayScene":
         """A fresh run from stage one, as the same class.
 
@@ -580,6 +703,24 @@ class PlayScene(Scene):
             settings=self.settings,
             difficulty=self.difficulty,
         )
+
+    def _autosave(self) -> None:
+        """Write the run, if it is standing somewhere a snapshot describes.
+
+        Every panel is answered and the world has not been stepped since it was
+        built -- the one moment a snapshot describes the run completely. See the
+        note on `_needs_save`.
+
+        Called from the pause branch as well as the live one, so the promise the
+        Quit row makes is true on the first frame of a stage as well as the
+        thousandth. Not hoisted above the panel guard instead: saving before the
+        promotion, level and shop panels are answered records a run that had not
+        promoted, which is the whole reason `_needs_save` is a flag.
+        """
+        if self._needs_save and not self.run.is_over:
+            save.write(self.run)
+            profile.record_stage(self.run)
+            self._needs_save = False
 
     def _read_intent(self) -> Intent:
         """What the player is asking for, without spending any of it.
@@ -727,6 +868,20 @@ class PlayScene(Scene):
 
     # --- update --------------------------------------------------------------
     def update(self, elapsed_seconds: float) -> Optional[Scene]:
+        if self.paused:
+            self._drop_edges()
+            # Written here too, and this is not belt-and-braces. A stage
+            # transition *arms* `_needs_save` and breaks out of the tick loop;
+            # the write lands on the next update. Escape inside that window --
+            # the banner is up for 110 frames, so it is an easy window to hit --
+            # used to leave to the menu with the previous stage still on disk.
+            # That was already wrong; it becomes intolerable the moment a row on
+            # screen says which stage quitting keeps. The precondition the note
+            # on `_needs_save` states holds here by construction: every panel is
+            # answered whenever this flag can be set.
+            self._autosave()
+            return None
+
         if self.promoting or self.levelling or self.shopping or self.inspecting:
             # Not stepped, and the accumulator is not fed either -- banking real
             # seconds while a panel is open would fast-forward the first moments
@@ -745,13 +900,7 @@ class PlayScene(Scene):
                 self._shop_settle -= 1
             return None
 
-        # Every panel is answered and the world has not been stepped since it
-        # was built -- the one moment a snapshot describes the run completely.
-        # See the note on `_needs_save`.
-        if self._needs_save and not self.run.is_over:
-            save.write(self.run)
-            profile.record_stage(self.run)
-            self._needs_save = False
+        self._autosave()
 
         intent = self._read_intent()
 
@@ -867,7 +1016,12 @@ class PlayScene(Scene):
             skill_labels=self.skill_labels,
         )
 
-        if self.shopping or self.promoting or self.levelling or self.inspecting:
+        if self.paused:
+            # A leading branch rather than a fifth `if` inside the block below,
+            # which leaves that block exactly as it was. The bug the note there
+            # records was an `elif` *between* those four; this adds none.
+            self.pause_panel.draw(surface, self.run, self.pause_index)
+        elif self.shopping or self.promoting or self.levelling or self.inspecting:
             # A panel, or the banner -- never both. Both at once puts the stage
             # name through the panel's title, and the banner is still counting
             # down underneath, so it gets its remaining frames once the panel is

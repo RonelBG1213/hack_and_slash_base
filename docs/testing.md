@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-python -m pytest              # 1235 tests, headless, no window
+python -m pytest              # 1293 tests, headless, no window
 python -m pytest tests/test_loot.py
 python main.py --smoke        # pixel fidelity: every sprite upscales with hard edges
 ```
@@ -54,7 +54,7 @@ That only matters for the handful of render tests; everything under `core/` and
 | --- | --- | --- |
 | `test_playthrough.py` | 313 | the [balance brackets](balance.md) and both class×stage grids |
 | `test_run.py` | 34 | carry-over: health, gold, banking across stages, and that a promotion survives one |
-| `test_render.py` | 91 | drawing, the HUD, the panels, and the input path including rebound keys — headless |
+| `test_render.py` | 116 | drawing, the HUD, the five panels, the pause overlay, and the input path including rebound keys — headless |
 | `test_loot.py` | 28 | the gold formula, rarity weights, the sweep, the RNG split |
 | `test_progression.py` | 14 | experience, the curve, spending, and **that the layer ships off** |
 | `test_attributes.py` | 12 | the attribute block, and **that it moved nothing** |
@@ -67,7 +67,7 @@ That only matters for the handful of render tests; everything under `core/` and
 | `test_shop.py` | 23 | prices, caps, the late shelf, the Boots, refusal when short |
 | `test_level.py` | 13 | tiles, solidity, spawns |
 | `test_effects.py` | 14 | that the feel pass changes nothing, whichever way its toggles are set |
-| `test_menu.py` | 60 | the six menu rows, the autosave, the options and Controls screens, and every column layout |
+| `test_menu.py` | 72 | the six menu rows, the autosave, the options and Controls screens, pausing a fight, and every column layout |
 | `test_save.py` | 16 | **that a loaded stage is the stage that was saved** |
 | `test_settings.py` | 15 | preferences and the profile, and that neither can stop the game starting |
 | `test_bindings.py` | 20 | **that the shipped keys are the keys that shipped**, and the rules about changing them |

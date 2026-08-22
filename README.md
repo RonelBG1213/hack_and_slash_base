@@ -72,7 +72,8 @@ mid-fight save — see `src/hack_and_slash/game/save.py` for why.
 
 **Settings** covers window scale and fullscreen, screenshake, damage numbers, the
 seed for the next run, erasing the save and profile, and a **Controls** row that
-opens the key bindings. Nothing on that screen can change how a fight resolves,
+opens the key bindings. It is reachable from the pause overlay as well as from
+here; the erase row is the one thing it does not offer mid-run. Nothing on that screen can change how a fight resolves,
 which is the line it is drawn on: difficulty is a balance decision and balance
 decisions live in `data/` where they get swept. Which key swings is not how hard
 the swing lands, so the bindings sit on the right side of that line.
@@ -130,13 +131,25 @@ right click rolls, alongside whatever keys those actions are bound to.
 | --- | --- |
 | Mouse | Aim |
 | Left click / right click | Swing / dodge roll |
-| Esc | Back to the menu |
+| Esc | Pause — resume, Settings, or quit to the menu |
 | Up / down, Enter | Choose, on the menu and the Settings screen |
 | Left / right | Change a value, on the Settings screen |
 | `1`–`8` | Buy, at a stall — three rolled pieces of gear over the consumables |
 | `1`–`3` | Spend a point, at a shrine — three of the eight attributes |
 | `1` `2` | Choose a path, on the promotion screen after stage twenty |
 | Enter / Space / Esc | Dismiss the stall, the shrine or the character sheet |
+
+**Esc pauses the fight** rather than ending it. The world stops where it is —
+nothing is banked, so resuming picks up on the tick it stopped — and the overlay
+offers Resume, Settings and Quit to menu. Quitting keeps whatever the autosave
+holds, which is the start of the room you were in, and the Quit row says which
+stage that is. Nothing is written when you pause or quit: a save is still only
+ever taken on the tick a room begins.
+
+Settings from the pause menu is the real one, not a copy — including Controls, so
+a binding that is wrong can be fixed in the fight that revealed it. The only row
+missing there is **Erase saved run**, which does not mean anything while you are
+playing the run it would erase.
 
 The second table is fixed because every row in it is how you reach a screen or
 leave one. A swing bound to Escape is a player who cannot get out of the arena;
