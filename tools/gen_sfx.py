@@ -234,6 +234,17 @@ def voice_trap() -> list[float]:
     )
 
 
+def voice_burn() -> list[float]:
+    # A status paying out. Quieter and duller than `trap` and much duller than
+    # `hurt`, because this one repeats: it fires once a frame for as long as
+    # something is alight, where every other cue in the game is an event. A
+    # sharp sound at that rate stops being information and becomes a fault.
+    return gain(
+        envelope(lowpass(noise(0.13), 0.28), attack=0.02, curve=1.8),
+        0.42,
+    )
+
+
 def voice_prop() -> list[float]:
     # A door taken or a fixture used. Soft, and the only cue in the game that is
     # not about violence.
@@ -287,6 +298,7 @@ VOICES = {
     "death": voice_death,
     "hero_death": voice_hero_death,
     "trap": voice_trap,
+    "burn": voice_burn,
     "prop": voice_prop,
     "coin": voice_coin,
     "relic": voice_relic,

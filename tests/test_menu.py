@@ -20,7 +20,7 @@ import pytest
 from hack_and_slash import config, settings as settings_module
 from hack_and_slash.bindings import Action
 from hack_and_slash.core import campaign_io
-from hack_and_slash.game import difficulty, jobs, profile, save
+from hack_and_slash.game import difficulty, jobs, profile, save, unlocks
 from hack_and_slash.game.run import Run
 from hack_and_slash.scenes.achievements import AchievementsScene
 from hack_and_slash.render import pause_panel
@@ -35,7 +35,7 @@ from hack_and_slash.scenes.accessibility import AccessibilityScene
 from hack_and_slash.scenes.options import ROWS, OptionsScene
 from hack_and_slash.scenes.play import PlayScene
 from hack_and_slash.scenes.select import DIFFICULTY_Y, CharacterSelectScene
-from hack_and_slash.scenes.unlockables import UnlockablesScene
+from hack_and_slash.scenes.unlockables import NAME_X, STATE_X, UnlockablesScene
 from hack_and_slash.settings import SCALES, Settings
 
 from .helpers import BESTIARY
@@ -142,7 +142,18 @@ def test_new_game_goes_to_the_character_select(atlas) -> None:
 
 
 # --- the difficulty row on the character select ------------------------------
-def select(atlas, **kwargs) -> CharacterSelectScene:
+#: A profile that has earned everything `data/unlocks.json` offers. Written
+#: before a select screen is built, because the tier gate reads the profile at
+#: construction -- and because almost every test below is about the *cursor*,
+#: which has to be tested on a row where every tier is reachable. The gate
+#: itself is tested against a fresh profile further down.
+UNLOCKED = profile.Profile(
+    runs_started=99, runs_won=9, deepest_stage=50, best_gold=99999
+)
+
+
+def select(atlas, unlocked: bool = True, **kwargs) -> CharacterSelectScene:
+    profile.save(UNLOCKED if unlocked else profile.Profile())
     return CharacterSelectScene(campaign(), BESTIARY, atlas, **kwargs)
 
 
@@ -592,6 +603,284 @@ def test_the_stub_screens_draw_on_a_machine_that_has_never_played(atlas) -> None
     for scene in (AchievementsScene(None), UnlockablesScene(None)):
         scene.draw(surface)
         assert not is_blank(surface)
+
+
+# --- the champions modifier --------------------------------------------------
+def test_a_run_meets_no_champions_unless_it_asked(atlas) -> None:
+    """The default, and the state every recorded number was measured in."""
+    from hack_and_slash.game import elites
+
+    scene = select(atlas)
+    assert scene.elites is elites.OFF
+    assert scene._begin().run.elites is elites.OFF
+
+
+def test_a_run_meets_champions_when_it_asked_and_earned_it(atlas) -> None:
+    from hack_and_slash.game import elites
+
+    scene = select(atlas, settings=Settings(champions=True))
+    assert not scene.elites.is_off
+
+    run = scene._begin().run
+    assert run.elites is scene.elites
+    assert run.world.elites is run.elites
+
+
+def test_the_preference_cannot_outlive_the_unlock(atlas) -> None:
+    """The safety net, and the reason the check is here rather than only on the
+    screen that offers it: `state/settings.json` is a file a player can edit and
+    `state/profile.json` is a file the options screen can erase. A preference
+    that outlived its unlock is the one route by which a run could meet
+    champions without anybody deciding it should."""
+    from hack_and_slash.game import elites
+
+    scene = select(atlas, unlocked=False, settings=Settings(champions=True))
+    assert scene.elites is elites.OFF
+
+
+def test_restarting_keeps_the_champions_it_was_started_with(atlas) -> None:
+    """`R` is a second attempt at *this* run, so it cannot quietly re-read a
+    preference that has changed since -- the same argument the tier is carried
+    through a restart for."""
+    scene = select(atlas, settings=Settings(champions=True))._begin()
+    live = scene.run.elites
+
+    scene.settings.champions = False
+    assert scene.restarted().run.elites is live
+
+
+# --- the tier gate -----------------------------------------------------------
+def test_a_fresh_profile_opens_on_a_tier_it_is_allowed_to_pick(atlas) -> None:
+    """The load-bearing one, from the screen's side.
+
+    `index_of_default` decides where the cursor starts, and a lock in front of
+    that tier would open the screen on a row that refuses to start a run. The
+    data file is held to the same claim by
+    `test_unlocks.test_the_default_tier_is_never_behind_an_unlock`; this is the
+    half that would notice if the screen stopped reading it.
+    """
+    scene = select(atlas, unlocked=False)
+    assert not scene.locked[scene.difficulty_index]
+    assert scene.difficulty.is_identity
+
+
+def test_a_locked_tier_cannot_be_reached_by_the_cursor(atlas) -> None:
+    scene = select(atlas, unlocked=False)
+    locked = [i for i, shut in enumerate(scene.locked) if shut]
+    assert locked, "the shipped table is expected to lock something"
+
+    for _ in range(len(scene.difficulties.tiers) * 2):
+        press(scene, pygame.K_DOWN)
+    assert scene.difficulty_index not in locked
+
+
+def test_the_cursor_steps_over_a_locked_tier_rather_than_stopping_at_it(atlas) -> None:
+    """A lock in the middle of the scale, which the shipped table does not have
+    and a later one might: the walk has to pass over it, not halt on the row
+    before it."""
+    scene = select(atlas)
+    scene.locked = tuple(i == 1 for i in range(len(scene.difficulties.tiers)))
+    scene.difficulty_index = 0
+
+    press(scene, pygame.K_DOWN)
+    assert scene.difficulty_index == 2
+
+
+def test_the_cursor_gives_up_rather_than_landing_on_a_locked_tier(atlas) -> None:
+    """With everything past it shut, down does nothing at all -- it does not
+    clamp onto the last row, because that row cannot start a run."""
+    scene = select(atlas)
+    scene.locked = tuple(i > 0 for i in range(len(scene.difficulties.tiers)))
+    scene.difficulty_index = 0
+
+    press(scene, pygame.K_DOWN)
+    assert scene.difficulty_index == 0
+
+
+def test_a_locked_tier_cannot_be_reached_by_a_click(atlas) -> None:
+    scene = select(atlas, unlocked=False)
+    opened = scene.difficulty_index
+
+    for i, (left, width) in enumerate(scene._tier_spans()):
+        if scene.locked[i]:
+            click_internal(scene, left + width // 2, DIFFICULTY_Y + 3)
+            assert scene.difficulty_index == opened
+
+
+def test_an_earned_profile_reaches_every_tier(atlas) -> None:
+    """The other end: nothing above is a permanent restriction."""
+    scene = select(atlas)
+    assert not any(scene.locked)
+
+
+def test_the_row_says_what_the_tier_one_step_harder_wants(atlas) -> None:
+    """A padlock with the rule written beside it, which is the whole reason the
+    Unlockables screen stopped being a stub -- said again where the player is
+    actually standing when they meet the lock."""
+    scene = select(atlas, unlocked=False)
+    nxt = scene.difficulties.tiers[scene.difficulty_index + 1]
+    assert scene.locked[scene.difficulty_index + 1], "the fixture is not at a lock"
+    assert nxt.name in scene._locked_hint()
+
+
+def test_the_hint_never_covers_the_untuned_flag(atlas) -> None:
+    """`(untuned)` is a recorded decision about saying an unmeasured number on
+    the screen and not only in the data file. A tier with nothing locked beside
+    it says its own piece."""
+    scene = select(atlas, unlocked=False)
+    scene.difficulty_index = 0  # the gentlest, with an unlocked tier after it
+    assert scene._locked_hint() == ""
+
+
+def test_no_hint_at_all_when_nothing_is_locked(atlas) -> None:
+    scene = select(atlas)
+    for index in range(len(scene.difficulties.tiers)):
+        scene.difficulty_index = index
+        assert scene._locked_hint() == ""
+
+
+def test_the_select_screen_draws_with_a_tier_locked(atlas) -> None:
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    select(atlas, unlocked=False).draw(surface)
+    assert not is_blank(surface)
+
+
+# --- the unlockables table ---------------------------------------------------
+def a_table(*entries) -> unlocks.Table:
+    return unlocks.Table(entries=tuple(entries))
+
+
+def an_unlock(unlock_id: str, name: str, won: int = 1, blurb: str = "") -> unlocks.Unlock:
+    return unlocks.Unlock(
+        id=unlock_id,
+        name=name,
+        kind=unlocks.Grant.MODIFIER,
+        target="champions",
+        requires=unlocks.Requirement((("runs_won", won),)),
+        blurb=blurb,
+    )
+
+
+def unlockables(
+    table: unlocks.Table | None = None, settings: Settings | None = None
+) -> UnlockablesScene:
+    """A screen over a table of our own, so these tests do not move when
+    `data/unlocks.json` is retuned -- the same reason `test_difficulty.py`
+    builds its payloads rather than reading the shipped file."""
+    scene = UnlockablesScene(None, settings or Settings())
+    if table is not None:
+        scene.table = table
+        scene.earned = unlocks.earned(scene.profile, table)
+    return scene
+
+
+def test_the_unlockables_screen_names_every_entry_in_the_table() -> None:
+    table = a_table(an_unlock("a", "First"), an_unlock("b", "Second"))
+    assert [row[0] for row in unlockables(table).rows] == ["First", "Second"]
+
+
+def test_a_locked_row_says_what_it_wants() -> None:
+    """The whole reason the screen stopped being a stub: a padlock with a rule
+    behind it, and the rule written where the player can read it."""
+    profile.save(profile.Profile(runs_won=0))
+    name, state, _, earned = unlockables(a_table(an_unlock("a", "First"))).rows[0]
+    assert not earned
+    assert state == "win a run"
+
+
+def test_an_earned_switch_says_which_way_it_is_set() -> None:
+    """Not "earned". Once a modifier is earned the interesting fact about it is
+    whether it is on, and a row that can be pressed has to say what pressing it
+    did."""
+    profile.save(profile.Profile(runs_won=1))
+    scene = unlockables(a_table(an_unlock("a", "First")))
+
+    assert scene.rows[0][3], "it was earned"
+    assert scene.rows[0][1] == "off"
+
+    press(scene, pygame.K_RETURN)
+    assert scene.rows[0][1] == "on"
+    assert scene.settings.champions
+
+
+def test_an_earned_row_that_is_not_a_switch_says_earned() -> None:
+    """A difficulty unlock is picked on the character select, beside the class,
+    where a decision about a run belongs -- so it is a line to read here and not
+    a thing to press."""
+    profile.save(profile.Profile(deepest_stage=50))
+    tier = unlocks.Unlock(
+        id="t",
+        name="Hard",
+        kind=unlocks.Grant.DIFFICULTY,
+        target="relentless",
+        requires=unlocks.Requirement((("deepest_stage", 10),)),
+    )
+    scene = unlockables(a_table(tier))
+    assert scene.rows[0][1] == "earned"
+
+    press(scene, pygame.K_RETURN)
+    assert scene.rows[0][1] == "earned", "a row that is not a switch did something"
+
+
+def test_a_locked_switch_cannot_be_turned_on() -> None:
+    profile.save(profile.Profile(runs_won=0))
+    scene = unlockables(a_table(an_unlock("a", "First")))
+
+    press(scene, pygame.K_RETURN)
+    assert not scene.settings.champions
+    assert scene.rows[0][1] == "win a run"
+
+
+def test_the_toggle_survives_leaving_the_screen() -> None:
+    """Written on the way out, exactly as the other three settings screens
+    write theirs."""
+    profile.save(profile.Profile(runs_won=1))
+    scene = unlockables(a_table(an_unlock("a", "First")))
+
+    press(scene, pygame.K_RETURN)
+    press(scene, pygame.K_ESCAPE)
+
+    assert settings_module.load().champions
+
+
+def test_escape_still_leaves_the_screen() -> None:
+    profile.save(profile.Profile(runs_won=1))
+    left = []
+    scene = UnlockablesScene(lambda: left.append(True), Settings())
+    scene.table = a_table(an_unlock("a", "First"))
+    scene.earned = unlocks.earned(scene.profile, scene.table)
+
+    press(scene, pygame.K_ESCAPE)
+    assert left, "Escape is back on every screen in the game"
+
+
+def test_the_unlockables_screen_draws_an_empty_table(atlas) -> None:
+    """`"unlocks": []` is the documented rollback, so the screen it produces has
+    to be a screen and not a bare title."""
+    scene = unlockables(a_table())
+    assert scene.is_empty
+
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    scene.draw(surface)
+    assert not is_blank(surface)
+
+
+def test_no_unlockables_row_overflows_the_column(atlas) -> None:
+    """Measured against the real fonts, like every other layout claim here: a
+    name that runs into the state column is a rendering bug that reads as a
+    wording one."""
+    scene = unlockables()
+    for name, state, blurb, _ in scene.rows:
+        assert NAME_X + scene.body.size(name)[0] < STATE_X
+        assert STATE_X + scene.small.size(state)[0] <= config.INTERNAL_W
+        assert NAME_X + scene.small.size(blurb)[0] <= config.INTERNAL_W
+
+
+def test_the_shipped_unlockables_screen_draws(atlas) -> None:
+    profile.save(profile.Profile(runs_started=4, runs_won=1, deepest_stage=23))
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    unlockables().draw(surface)
+    assert not is_blank(surface)
 
 
 # --- the autosave ------------------------------------------------------------
@@ -1139,6 +1428,11 @@ NOT_LIVE = {
                 "field name does not appear in the source",
     "reduce_motion": "read live off `self.settings` inside the tick loop, so it "
                      "is always current and there is nothing to refresh",
+    "champions": "read once at the character select and copied onto the `Run`, "
+                 "exactly as the difficulty tier is. Re-reading it mid-run would "
+                 "let a pause menu disarm the monsters already standing in the "
+                 "room -- and the save records what the run opted into, not what "
+                 "the settings say today",
 }
 
 

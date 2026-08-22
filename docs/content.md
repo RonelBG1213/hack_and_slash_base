@@ -657,6 +657,162 @@ and `harms`.
 
 ---
 
+## Adding an elite affix
+
+One edit. [`data/elites.json`](../data/elites.json), in the `affixes` block:
+
+```json
+{ "id": "brutal", "name": "Brutal", "weight": 6, "hp": 1300,
+  "attributes": { "damage": 4, "move_speed": -60 } }
+```
+
+No code. What an affix *does* is add its block to `Entity.bonus` beside the
+difficulty tier's, and that is the same line for every affix there will ever be.
+
+| Key | Means |
+| --- | --- |
+| `weight` | relative, against the other affixes. There is no second rarity dial |
+| `hp` | per-mille of **this creature's** health. 1000 changes nothing |
+| `attributes` | any of the eight but `max_hp`, in the attribute's own units |
+
+**`max_hp` is refused at load, and the refusal is the interesting part.** Health
+on an affix is a percentage because one flat number means something quite
+different to an 8hp rat and a 55hp brute — a flat +20 is a rounding error on one
+and a different animal on the other. `data/difficulty.json` makes the same
+argument about its own `hp` dial.
+
+Three more guards, each of which is a way to write a champion nobody can fight:
+
+- **An affix that changes nothing is refused.** A champion is a *mark* as well
+  as a block — the renderer rings anything that rolled — so an affix the player
+  cannot tell from an ordinary monster is worse than no affix.
+- **`move_speed` at or below -1000 is refused.** Nothing paths around walls in
+  this game, so a monster that cannot walk is a stage that never ends, and every
+  instrument in the project reports that as a balance failure.
+- **`evasion` at or above 1000 is refused**, for the same reason one layer over.
+
+> [!IMPORTANT]
+> **A behavioural affix is not something to argue about — it is something the
+> schema cannot say.** An affix carries an `Attributes` block, and
+> `Attributes.from_dict` raises on a key it does not know, so `"summons"`,
+> `"cadence"` and `"charges"` are load errors rather than design discussions.
+> That is deliberate: [Limits](limits.md#nothing-paths-around-walls) records
+> that enemies walk straight at the hero, and every arena is laid out around it.
+
+> [!WARNING]
+> **Nothing has measured any of this and nothing can while the layer is
+> opt-in.** `autoplay` never enables it, so the sweep has no opinion about
+> whether a 12% champion rate is a spice or a wall. Same position
+> `data/rooms.json` is in, chosen the same way.
+
+The rollbacks are `"enabled": false` in the file, and — independently —
+`World(elites=OFF)`, which is the default at every seam in the project and is
+what keeps the recorded grid measuring the monsters it always measured.
+
+---
+
+## Adding an unlock
+
+One edit. [`data/unlocks.json`](../data/unlocks.json), in the `unlocks` block:
+
+```json
+{ "id": "nightmare_tier", "name": "Nightmare", "kind": "difficulty",
+  "target": "nightmare", "requires": { "deepest_stage": 25 },
+  "blurb": "they see you first and they do not miss" }
+```
+
+No code, unless the unlock is a **modifier** — those are a two-part contract
+like a shop good: `kind: "modifier"` names an id in `unlocks.MODIFIERS`, and the
+loader refuses a target nothing implements.
+
+| Key | Means |
+| --- | --- |
+| `kind` | `difficulty` or `modifier`. Both are *access* |
+| `target` | the tier id, or the modifier id. Checked at load, both ways |
+| `requires` | counters from `game/profile.py`, compared with `>=` |
+
+**The counters are derived from `Profile`'s own fields**, so a fifth counter is
+usable by this file the day it is declared — and a requirement naming something
+the profile does not keep is a load error rather than a row nobody can earn.
+
+> [!IMPORTANT]
+> **An unlock grants access and never numbers, and that is structural.** There
+> is no `attributes` key in the schema and no import of `attributes.py` in
+> `game/unlocks.py`. The reason is the whole reason the Unlockables screen was
+> a stub for so long: a run that begins with numbers the reference bot did not
+> have is measuring a different game, and re-establishing the grid is a sweep
+> rather than a test. A run that begins with a *choice* costs nothing, because
+> the grid measures a specified class over a specified stage and does not care
+> how the player got the right to pick it.
+
+Two things the loader refuses that look like oversights and are not: an unlock
+that asks for nothing (a row reading "unlocked" on a fresh profile teaches the
+player the screen is decoration), and a threshold of zero, which is the same
+fault wearing a number.
+
+**Never gate the default tier or the gentlest one.** `select.index_of_default`
+opens the cursor on the first, so a lock in front of it strands the screen on a
+row that cannot start a run; and a locked Easy is unreachable for exactly the
+player it exists for. Both are pinned by test.
+
+The rollback is `"unlocks": []`. Nothing is locked unless an entry says it is,
+so an empty list is the game as it shipped before unlocks existed.
+
+---
+
+## Inflicting a status
+
+Two keys on a weapon in [`data/weapons.json`](../data/weapons.json):
+
+```json
+"ember_lash": {
+  "damage": 7, "variance": 2, "arc_degrees": 90, "reach": 26,
+  "windup": 8, "active": 4, "recovery": 12,
+  "inflict_ticks": 180,
+  "inflict": { "regen": -25, "move_speed": -150 }
+}
+```
+
+No code. There is no list of status *kinds* anywhere, because there does not
+need to be one:
+
+| To inflict | Set | Because |
+| --- | --- | --- |
+| a burn or a bleed | `regen` negative | `sim._regen` has a drain branch; it pays out in whole points off the same bank |
+| a slow | `move_speed` negative | `sim._walk_speed` has always multiplied by this. Clamped at zero |
+| a vulnerability | `defense` negative | `combat.resolve_damage` has always subtracted it, and `MIN_DAMAGE` is a floor rather than a cap |
+
+**Units catch people here exactly as they do on gear.** `regen: -25` is a
+quarter of a hit point per tick — one point every four ticks, about 45 over a
+180-tick burn. `move_speed: -150` is 15% slower.
+
+Four things that will bite:
+
+- **`inflict_ticks` is what makes it real.** The duration says *this inflicts
+  something*; the block says what. A block with no duration is inert rather than
+  permanent — the safe way round, and the same way `is_buff` reads.
+- **A status replaces rather than stacking.** Two attacks that inflict different
+  things do not combine; the second wins.
+- **A slow does not slow a roll or a charge.** `sim._self_propulsion` branches on
+  `DODGING` and on a charging `ACTIVE` *before* it reads the walking speed, so
+  the roadmap's own example — "a slow that makes the charger's commitment
+  punishable" — does not work as written. A slow is a repositioning tax.
+- **A status on an enemy weapon moves the grid**, immediately and by a lot. A
+  status on a hero's *skill* slot is invisible to it, because the reference bot
+  presses the light attack only — but `--policy skilful` presses the others, so
+  its numbers move. Neither is a reason not to; both are a reason to say which.
+  `test_no_enemy_attack_inflicts_anything` and
+  `test_no_light_attack_inflicts_anything` hold the two lines that matter.
+
+Three attacks carry a block today, all of them a promoted class's heavy or
+ultimate: **Deathmark** (`defense: -3`, 240 ticks), **Runeshot**
+(`move_speed: -200`, 120) and **Cataclysm** (`regen: -12`, 180). They are
+pinned as a list by `test_exactly_three_attacks_inflict_anything`, because the
+failure worth catching is not a count changing but a *fourth weapon opting in
+without anybody deciding it should*.
+
+---
+
 ## Tools
 
 ```sh

@@ -175,6 +175,14 @@ slide out from under it.
 > is a stage — but anybody comparing a suite run against this page should
 > expect four.
 >
+> **Re-confirmed after the unlocks, champion and status work**: the same four,
+> failing the same way, with 411 of 415 green and no fifth. Worth recording
+> because that change set touched `_regen`, `_walk_speed`, `combat.apply_hit`
+> and `Entity.attrs` -- the four most load-bearing functions in the project --
+> and the claim that it moved nothing is otherwise a claim about intent. It was
+> measured twice: once with the champion layer in and the status layer not, and
+> once with both.
+>
 > Every one of the forty stages clears 4/4 entered at full health, on all three
 > tiers. So this is not a wall in the campaign; it is attrition — the heal
 > between stages no longer sustaining a run — which is precisely what the tool's

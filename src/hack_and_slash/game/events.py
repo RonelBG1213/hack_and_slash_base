@@ -42,6 +42,14 @@ class EventKind(str, Enum):
     #: what the *enemies* did to the hero would otherwise count the room's
     #: spikes among them. `amount` is the damage, exactly as on a HIT.
     TRAP = "trap"
+    #: A status is costing a body health -- a burn or a bleed paying out a whole
+    #: point. Its own kind rather than HIT, which carries a facing, shakes the
+    #: screen and throws a damage number; and rather than TRAP, which
+    #: `render/tally.py` counts as *what the floor did* and would file an
+    #: enemy's fire under the room's spikes. `amount` is the damage, exactly as
+    #: on a HIT and a TRAP.
+    STATUS = "status"
+
     #: A reward room's fixture was used, or one of its doors was walked
     #: through. One kind for both, because the presentation layer wants the
     #: same thing from each -- a flash where it happened -- and `amount` is

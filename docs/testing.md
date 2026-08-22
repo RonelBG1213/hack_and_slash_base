@@ -53,15 +53,18 @@ That only matters for the handful of render tests; everything under `core/` and
 | File | Tests | What it guards |
 | --- | --- | --- |
 | `test_playthrough.py` | 415 | the [balance brackets](balance.md) and both class×stage grids |
-| `test_render.py` | 148 | drawing, the HUD, the six panels, the pause overlay, the run-end summary, the input path including rebound keys, and **that a fight actually reaches the speaker** — headless |
+| `test_render.py` | 161 | drawing, the HUD, the six panels, the pause overlay, the run-end summary, the input path including rebound keys, and **that a fight actually reaches the speaker** — headless |
 | `test_rooms.py` | 86 | the reward rooms: which one you get, how it turns, and what stands in the middle |
-| `test_menu.py` | 84 | the six menu rows, the autosave, the options and Controls screens, pausing a fight, **that every preference is re-applied or declared not to be**, and every column layout |
+| `test_menu.py` | 106 | the six menu rows, the autosave, the options and Controls screens, pausing a fight, **that every preference is re-applied or declared not to be**, and every column layout |
 | `test_equipment.py` | 36 | the twelve pieces, the rarity multiplier, and **the two-attribute ceiling** |
 | `test_entities.py` | 35 | content validity: levels, boss weapon order, sprite scale |
 | `test_run.py` | 34 | carry-over: health, gold, banking across stages, and that a promotion survives one |
 | `test_progression.py` | 33 | experience, the curve, spending, and **that the layer ships off** |
 | `test_hazards.py` | 29 | the traps, what unlocks them by floor, and what they refuse to stand on |
-| `test_save.py` | 29 | **that a loaded stage is the stage that was saved** |
+| `test_save.py` | 32 | **that a loaded stage is the stage that was saved** |
+| `test_elites.py` | 32 | the champion layer, and **that the campaign has never met one** |
+| `test_status.py` | 33 | the burn, the slow and the vulnerability, and **that no enemy and no light attack inflicts one** |
+| `test_unlocks.py` | 28 | what a lost run leaves behind, and **that an unlock cannot express a stat** |
 | `test_difficulty.py` | 28 | the seven dials per tier, and **that Normal is arithmetically the grid's game** |
 | `test_loot.py` | 28 | the gold formula, rarity weights, the sweep, the RNG split |
 | `test_shop.py` | 26 | prices, caps, the late shelf, the Boots, refusal when short |
@@ -77,7 +80,7 @@ That only matters for the handful of render tests; everything under `core/` and
 | `test_attributes.py` | 17 | the attribute block, and **that it moved nothing** |
 | `test_combat.py` | 16 | hit resolution and damage rolls |
 | `test_campaign.py` | 15 | act structure, stage ordering, playability |
-| `test_tally.py` | 28 | **that the run summary's four derived numbers are not miscounted** -- no double-counted crits, no trap damage in what the hero dealt -- and that counting cannot change a fight |
+| `test_tally.py` | 29 | **that the run summary's four derived numbers are not miscounted** -- no double-counted crits, no trap damage in what the hero dealt -- and that counting cannot change a fight |
 | `test_settings.py` | 17 | preferences and the profile, and that neither can stop the game starting |
 | `test_effects.py` | 14 | that the feel pass changes nothing, whichever way its toggles are set |
 | `test_level.py` | 13 | tiles, solidity, spawns |
@@ -288,7 +291,9 @@ assertion has already failed — the hundreds of passing cells pay nothing.
 > - `test_every_class_can_finish_the_campaign[priest]`
 > - `test_a_run_carries_damage_forward`
 >
-> Confirmed at `929b32e`. They are the run-level bracket rather than the grid,
+> Confirmed at `929b32e`, and **re-confirmed after the unlocks, champion and
+> status work** -- 411 of 415 green, the same four, no fifth. They are the
+> run-level bracket rather than the grid,
 > and the distinction is the one this whole page rests on: **the per-stage grid
 > is clean and must stay clean**; the run bracket is the open question about
 > whether `heal_between_stages` sustains a campaign. Before treating a

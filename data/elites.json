@@ -1,0 +1,107 @@
+{
+  "_comment": [
+    "Champions: an ordinary monster that rolled something extra. game/elites.py",
+    "holds the arithmetic and none of the values, the way game/hazards.py and",
+    "game/rooms.py do.",
+    "",
+    "*** enabled: false IS THE ROLLBACK, AND IT IS NOT HOW THE LAYER IS OFF. ***",
+    "",
+    "Two switches, and the difference matters. This one is the content rollback:",
+    "set it false and no affix is ever rolled whatever anything else asks for.",
+    "The other one is structural and is the guarantee that matters to the",
+    "recorded balance grid: World() takes elites=OFF by default, so the campaign,",
+    "every test, tools/balance.py and game/autoplay.py all fight the same",
+    "monsters they fought before this file existed -- and they would even if this",
+    "said enabled: true. A run only meets champions if it opted in, which it can",
+    "only do once the profile has earned the unlock in data/unlocks.json.",
+    "",
+    "So the claim is not 'the numbers below are gentle'. The claim is that",
+    "nothing the grid measures ever reads them.",
+    "",
+    "*** WHAT A CHAMPION MAY BE: STATS, NEVER BEHAVIOUR. ***",
+    "",
+    "An affix carries an attributes block, and Attributes.from_dict refuses a key",
+    "it does not know -- so an affix that summoned adds, or charged, or pathed",
+    "around a pillar is not something the loader rejects, it is something this",
+    "schema cannot say. docs/limits.md records that nothing in this game paths",
+    "around walls, and every arena is laid out around that; a behavioural affix",
+    "is the one kind that interacts with it.",
+    "",
+    "KEYS",
+    "  enabled     the content rollback, above",
+    "  chance      per-mille of ordinary spawns that roll an affix",
+    "  from_floor  the first floor a champion may appear on",
+    "  bosses      whether a boss may roll one. False: a boss is already the",
+    "              act's statement, and a prefix on it is a second one",
+    "  affixes     id, name, weight (relative), hp (per-mille of the creature's",
+    "              own health, 1000 changes nothing), attributes (the eight, in",
+    "              their own units -- see game/attributes.py)",
+    "",
+    "HEALTH IS PER-MILLE AND max_hp IS REFUSED. data/difficulty.json makes the",
+    "same argument about its own hp dial: one flat number means something quite",
+    "different to a rat and to a brute, and +20 health is a rounding error on one",
+    "and a different creature on the other.",
+    "",
+    "*** EVERY NUMBER BELOW IS A GUESS. ***",
+    "",
+    "Nothing has swept this layer, and nothing can while it is opt-in: autoplay",
+    "never enables it, so the sweep has no opinion about whether a 12% champion",
+    "rate is a spice or a wall. Same position data/rooms.json is in, chosen the",
+    "same way and for the same reason -- the alternative is an instrument that",
+    "moves the fixed reference on the day it gains the ability to measure this.",
+    "",
+    "The rates are set against one figure that is not a guess: an ordinary stage",
+    "carries a mean of 12.2 enemies, so 120 per-mille is between one and two",
+    "champions a room, which is the density at which a mark still reads as",
+    "special. The affix magnitudes are deliberately below what a difficulty tier",
+    "does -- Hard is +7.5% health on every monster in the room, and these are",
+    "+40% on one of them."
+  ],
+
+  "enabled": true,
+  "chance": 120,
+  "from_floor": 2,
+  "bosses": false,
+
+  "affixes": [
+    {
+      "id": "armoured",
+      "name": "Armoured",
+      "weight": 10,
+      "hp": 1400,
+      "attributes": { "defense": 2, "move_speed": -80 }
+    },
+    {
+      "id": "vicious",
+      "name": "Vicious",
+      "weight": 10,
+      "attributes": { "damage": 3 }
+    },
+    {
+      "id": "quick",
+      "name": "Quick",
+      "weight": 8,
+      "attributes": { "move_speed": 150 }
+    },
+    {
+      "id": "elusive",
+      "name": "Elusive",
+      "weight": 6,
+      "attributes": { "evasion": 120 }
+    },
+    {
+      "id": "vital",
+      "name": "Vital",
+      "weight": 8,
+      "hp": 1600,
+      "attributes": { "regen": 4 }
+    },
+    {
+      "id": "cruel",
+      "name": "Cruel",
+      "weight": 5,
+      "hp": 1250,
+      "attributes": { "damage": 2, "crit_chance": 150, "crit_damage": 400 }
+    }
+  ]
+}

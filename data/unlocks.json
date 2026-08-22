@@ -1,0 +1,78 @@
+{
+  "_comment": [
+    "What a run leaves behind. game/unlocks.py holds the arithmetic and none of",
+    "the values, the way game/hazards.py and game/rooms.py do.",
+    "",
+    "*** AN EMPTY LIST IS THE ROLLBACK. ***",
+    "",
+    "Nothing is locked unless an entry below says it is locked, so \"unlocks\": []",
+    "is the game exactly as it shipped before this file existed: every tier open,",
+    "no modifier reachable, and the Unlockables screen back to saying there is",
+    "nothing to unlock. No state is written anywhere, so there is nothing to",
+    "clean up after switching it off either -- what a profile has earned is",
+    "recomputed from the four counters every time it is asked.",
+    "",
+    "*** EVERY ENTRY HERE GRANTS ACCESS AND NEVER NUMBERS. ***",
+    "",
+    "That is the rule the whole file exists under, and it is what keeps the",
+    "recorded 280-cell class-by-stage grid meaningful. An unlock that handed a",
+    "run a stat would mean a run beginning with numbers the reference bot did",
+    "not have -- and the grid would then be describing a game nobody plays. An",
+    "unlock that hands over a *choice* costs nothing, because the grid measures a",
+    "specified class over a specified stage and does not care how the player got",
+    "the right to pick it.",
+    "",
+    "The rule is enforced by the schema rather than by this paragraph: there is",
+    "no attributes key, and an unknown key raises at load.",
+    "",
+    "KEYS",
+    "  id        what the code and this file agree to call it",
+    "  name      what the screens call it",
+    "  kind      difficulty | modifier -- both are access, and a third is a",
+    "            design decision rather than a line of code",
+    "  target    the tier id, or the modifier id that game/unlocks.MODIFIERS",
+    "            declares. Checked at load in both cases",
+    "  requires  counters from game/profile.py, compared with >=. Every counter",
+    "            it can name only ever goes up, so an unlock cannot be taken",
+    "            back once earned",
+    "  blurb     one line, in the voice of select.ROLES",
+    "",
+    "THE THRESHOLDS ARE A FIRST PASS AND NOTHING HAS MEASURED THEM. They are set",
+    "against the only figure anybody has: a reference run reaches the fork at",
+    "stage 20 and the run-level bracket is red past it, so stage 10 is roughly",
+    "half of the half a player actually finishes, and stage 25 is past the fork.",
+    "Whether either is the right ask is a question for hands on a keyboard --",
+    "the same position data/rooms.json and the shop prices are in.",
+    "",
+    "Easy and Normal are deliberately not here. Normal is the tier every",
+    "recorded number in the project was measured against, and a default sitting",
+    "behind a lock would mean a fresh player opening the game on something else."
+  ],
+
+  "unlocks": [
+    {
+      "id": "hard_tier",
+      "name": "Hard",
+      "kind": "difficulty",
+      "target": "relentless",
+      "requires": { "deepest_stage": 10 },
+      "blurb": "the monsters hit back, and they are tougher"
+    },
+    {
+      "id": "nightmare_tier",
+      "name": "Nightmare",
+      "kind": "difficulty",
+      "target": "nightmare",
+      "requires": { "deepest_stage": 25 },
+      "blurb": "everything above, and they see you coming"
+    },
+    {
+      "id": "champions",
+      "name": "Champion's Wake",
+      "kind": "modifier",
+      "target": "champions",
+      "requires": { "runs_won": 1 },
+      "blurb": "ordinary monsters may rise as champions"
+    }
+  ]
+}

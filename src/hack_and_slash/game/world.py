@@ -5,13 +5,14 @@ that is `sim.step`. The split is what makes the sim testable: a test builds a
 world, steps it a known number of ticks, and asserts on what it finds, with no
 window, no clock and no input device anywhere in the picture.
 
-Randomness lives here, in *four* seeded `Random`s, and the split matters. `rng`
+Randomness lives here, in *five* seeded `Random`s, and the split matters. `rng`
 is the fight: damage rolls, and nothing else. `loot_rng` is what a kill leaves
 behind. `attr_rng` is crit and evasion. `hazard_rng` is where the traps stand.
-All four are derived from the one seed, so a run still replays exactly -- but
-neither a loot roll nor a crit roll can shift the sequence a damage roll draws
-from, which is what let the loot layer and then the attribute layer each be added
-to a tuned game without moving a single recorded number. `test_loot.py` and
+`elite_rng` is which monsters rose as champions. All five are derived from the
+one seed, so a run still replays exactly -- but neither a loot roll nor a crit
+roll can shift the sequence a damage roll draws from, which is what let the loot
+layer and then the attribute layer each be added to a tuned game without moving
+a single recorded number. `test_loot.py` and
 `test_attributes.py` assert that rather than trusting it.
 
 `hazard_rng` is the odd one and worth reading twice. It is drawn from **once**,
@@ -39,6 +40,7 @@ from enum import Enum
 from ..core.level import Direction, Level, PropKind, RoomKind
 from ..core.spatial import SpatialHash
 from ..core.vec2 import Vec2
+from . import elites as elites_module
 from . import hazards
 from .attributes import NEUTRAL, Attributes
 from .difficulty import NORMAL as NORMAL_DIFFICULTY, Difficulty
@@ -130,6 +132,13 @@ class Projectile:
     #: for why it cannot happen at impact -- and read only to emit the event.
     crit: bool = False
 
+    #: What this shot leaves on what it hits, copied off the weapon at launch.
+    #: Carried here for the same reason `damage` and `knockback` are: a shot
+    #: knows its `owner_id` and not its owner, and by the time it lands the body
+    #: that loosed it may be dead and culled -- so there is no weapon to ask.
+    inflict: Attributes = NEUTRAL
+    inflict_ticks: int = 0
+
 
 class World:
     def __init__(
@@ -142,6 +151,7 @@ class World:
         purse: Purse | None = None,
         hero_bonus: Attributes = NEUTRAL,
         difficulty: Difficulty = NORMAL_DIFFICULTY,
+        elites: elites_module.Table = elites_module.OFF,
     ) -> None:
         """One stage in progress.
 
@@ -176,6 +186,15 @@ class World:
         `NEUTRAL` and whose every multiplier takes an early return, so a world
         built without an opinion is still the fight every recorded number in
         this project was measured against.
+
+        `elites` is the champion layer, and **it defaults to off rather than to
+        the shipped table**. That is not tidiness: it is the whole guarantee.
+        `tools/balance.py`, `game/autoplay.py`, `tests/test_playthrough.py` and
+        every other caller in the project builds a world without mentioning it,
+        so the 280 recorded cells go on measuring the monsters they always
+        measured however `data/elites.json` is tuned. A run meets champions only
+        by asking for them, and it can only ask once the profile has earned the
+        unlock. See `game/elites.py`.
         """
         self.level = level
         self.bestiary = bestiary
@@ -186,6 +205,7 @@ class World:
         self.purse = purse or Purse()
         self.hero_bonus = hero_bonus
         self.difficulty = difficulty
+        self.elites = elites
 
         #: Separate from `rng` on purpose. See the module docstring: this is the
         #: guarantee that adding loot to a tuned game moved nothing.
@@ -207,6 +227,24 @@ class World:
         #: be added to a tuned campaign at all -- a die rolled on a measured tick
         #: would shift every damage roll after it.
         self.hazard_rng = random.Random(seed ^ hazards.HAZARD_STREAM)
+
+        #: Which monsters rose as champions. The fifth stream, and the same
+        #: trick as the fourth in one more respect than the offset: it is drawn
+        #: from **once**, in `_populate` below, and never again for the length
+        #: of the stage. An affix is a block of attributes handed over at spawn;
+        #: everything it does afterwards is the arithmetic that was already
+        #: there.
+        #:
+        #: On a world without champions -- which is every world the recorded
+        #: grid was measured in -- this generator is constructed and never
+        #: sampled at all. `roll_for` returns before it touches it.
+        self.elite_rng = random.Random(seed ^ elites_module.ELITE_STREAM)
+
+        #: Which bodies rolled what, by entity id, for the renderer. Empty on
+        #: every world the layer is off in. Read by `render/` and by nothing
+        #: under `game/` -- the sim has the affix already, as attributes, and a
+        #: second reading of the same fact is how the two start disagreeing.
+        self.elite_ids: dict[int, str] = {}
 
         self.tick = 0
         self.outcome = Outcome.RUNNING
@@ -321,6 +359,21 @@ class World:
             # nothing here runs at all, which is what keeps a Normal fight the
             # fight every recorded number was measured against.
             block = self.difficulty.enemies.block_for(enemy_type)
+
+            # And whatever this one rolled on top of the tier. Added rather
+            # than replacing: a champion on Hard is both, which is what a
+            # player would expect and what neither dial says on its own.
+            #
+            # The `is not None` guard is not an optimisation. `NEUTRAL +
+            # NEUTRAL` is an equal-but-distinct block, so summing
+            # unconditionally would put a bonus on every enemy in the game and
+            # defeat the identity test below -- the same discipline
+            # `Entity.attrs` and `Enemies.block_for` already keep.
+            affix = self.elites.roll_for(enemy_type, self.purse.floor, self.elite_rng)
+            if affix is not None:
+                block = block + affix.block_for(enemy_type)
+                self.elite_ids[enemy.id] = affix.id
+
             if block is not NEUTRAL:
                 enemy.bonus = block
                 enemy.hp = enemy.max_hp

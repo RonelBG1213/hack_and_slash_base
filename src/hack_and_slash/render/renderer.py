@@ -290,6 +290,7 @@ class Renderer:
             if not camera.is_on_screen(entity.pos):
                 continue
             self._draw_telegraph(surface, entity, camera)
+            self._draw_champion_mark(surface, world, entity, camera)
             self._draw_body(surface, entity, camera)
             self._draw_enemy_health(surface, entity, camera)
 
@@ -310,6 +311,44 @@ class Renderer:
                 sprite, (sprite.get_width() * scale, sprite.get_height() * scale)
             )
         return sprite
+
+    #: How far outside a champion's sprite its ring is drawn. One pixel, so the
+    #: ring reads as a rim on the body rather than as a circle it is standing
+    #: in -- which is what the shadow already is.
+    CHAMPION_PAD = 2
+
+    def _draw_champion_mark(
+        self, surface: pygame.Surface, world: World, entity: Entity, camera: Camera
+    ) -> None:
+        """A ring under anything that rolled an affix.
+
+        Drawn *before* the body, so it is a rim the sprite sits inside rather
+        than a box over its face -- the same order the shadow is drawn in and
+        for the same reason.
+
+        Read off `world.elite_ids` rather than off the body, because a champion
+        is not a thing an `Entity` knows it is: the affix reached it as
+        attributes, and every part of the sim that matters reads those. This is
+        the one place the fact is needed as a *name*.
+
+        Costs one falsy lookup per body on every world the layer is off in,
+        which is every world the recorded grid was measured in -- the same
+        argument `sim._touch_props` and the loot layer both rest on.
+        """
+        if not world.elite_ids or entity.id not in world.elite_ids:
+            return
+
+        sprite = self._scaled(entity.type.sprite, entity)
+        sx, sy = camera.to_screen(entity.pos)
+        half = sprite.get_width() // 2
+        pad = self.CHAMPION_PAD
+        pygame.draw.rect(
+            surface,
+            self.palette.champion,
+            (sx - half - pad, sy - half - pad, sprite.get_width() + pad * 2,
+             sprite.get_height() + pad * 2),
+            1,
+        )
 
     def _draw_body(self, surface: pygame.Surface, entity: Entity, camera: Camera) -> None:
         sprite = self._scaled(entity.type.sprite, entity)

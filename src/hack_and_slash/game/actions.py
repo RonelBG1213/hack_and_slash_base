@@ -18,7 +18,7 @@ touches this file.
 from __future__ import annotations
 
 from ..core.vec2 import ZERO, Vec2, from_angle
-from .attributes import NEUTRAL, PER_MILLE
+from .attributes import NEUTRAL, PER_MILLE, Attributes
 from .entities import ActionState, Entity
 
 #: How much of your walking speed you keep mid-swing. Not zero -- rooting the
@@ -159,6 +159,31 @@ def apply_buff(entity: Entity) -> None:
     entity.buff_haste = weapon.buff_haste
 
 
+def apply_status(entity: Entity, block: Attributes, ticks: int) -> None:
+    """Put a timed block on a body somebody else hit.
+
+    Takes the block and the duration rather than the weapon, because the
+    projectile path has no weapon in scope by the time a shot lands -- an arrow
+    carries `owner_id` and the owner may be dead and culled. So `Projectile`
+    carries its own copy of these two, exactly as it already carries `damage`
+    and `knockback`.
+
+    **Replaces rather than stacks**, for the reason `apply_buff` replaces: a
+    status that added would let an attack ratchet itself upward by being landed
+    on time, and replacing is the reading that stays correct when two different
+    attacks inflict two different things.
+
+    A no-op for all but three attacks in the shipped game, and for every attack
+    the reference bot presses: `inflict_ticks` is zero on every light attack and
+    on every enemy weapon, which is what makes this call free on every tick the
+    recorded grid has ever measured.
+    """
+    if ticks <= 0:
+        return
+    entity.status = block
+    entity.status_ticks = ticks
+
+
 def begin_dodge(entity: Entity, direction: Vec2) -> bool:
     """Roll. Invulnerability starts immediately, not part-way through.
 
@@ -283,6 +308,14 @@ def tick_timers(entity: Entity) -> None:
         if entity.buff_ticks == 0:
             entity.buff = NEUTRAL
             entity.buff_haste = 0
+
+    # The same shape for the block somebody else applied, on its own timer.
+    # Separate from the buff above rather than folded into it -- see the note on
+    # `Entity.status` for why the two may never share a slot.
+    if entity.status_ticks > 0:
+        entity.status_ticks -= 1
+        if entity.status_ticks == 0:
+            entity.status = NEUTRAL
 
     # Empty for anything without skills, so this costs nothing on the hundreds
     # of enemy bodies a run steps through. Entries are left at zero rather than

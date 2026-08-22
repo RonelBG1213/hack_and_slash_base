@@ -187,6 +187,75 @@ learn at the moment you can least afford to — but it does mean a fight holds n
 surprise once you have read the three attacks, and all four bosses share the
 shape.
 
+### Champions are stats, and only on ordinary monsters
+
+`data/elites.json` rolls an affix onto an ordinary spawn from the run's own
+seed. Four things it deliberately is not.
+
+**No behavioural affixes**, and the refusal is structural rather than a rule:
+an affix carries an `Attributes` block, `Attributes.from_dict` raises on a key
+it does not know, so nothing that summons, paces or paths can be written down.
+That follows from [nothing paths around walls](#nothing-paths-around-walls) —
+the one limit every arena is laid out against — and from the recorded finding
+that a brain aimed at a player behaviour can only be measured by an instrument
+that has it.
+
+**No boss ever rolls one.** A boss is already the act's statement, and it is the
+one body with a health bar of its own for the mark to compete with. It is a dial
+(`bosses`) rather than a hard rule, because a seeded arena mode has no acts to
+make a statement about.
+
+**Off unless a run asks.** Two independent switches: `enabled` in the data file,
+and `World(elites=OFF)` at every seam in the project. The second is the one that
+protects the grid, and it protects it *however the file is tuned* — so this
+layer could ship enabled tomorrow without a single recorded number moving.
+
+**And therefore entirely unmeasured.** `autoplay` never opts in, so nothing has
+an opinion about whether a 12% champion rate is a spice or a wall. This is the
+[shop's hole](#nothing-measures-the-shop) in a new place and it was chosen the
+same way: an instrument that opted in would stop the grid being a fixed
+reference on the day it gained the ability to measure this.
+
+### A status has no stun, and only three attacks inflict one
+
+`Weapon.inflict` / `inflict_ticks` and `Entity.status` / `status_ticks` are the
+substrate: a burn is a negative `regen`, a slow a negative `move_speed`, a
+vulnerability a negative `defense`. Three things it is not.
+
+**There is no stun.** `Entity.stagger` is a plain integer rather than one of the
+eight attributes, so it cannot ride a block — and `actions.movement_scale`
+returns zero while it is set, which makes it a total lockout rather than a
+status. Adding one means a separate scalar on the weapon and a decision about
+how long a player may be denied their hands, which is a design question and not
+a field.
+
+**A slow does not slow a roll or a charge.** `sim._self_propulsion` branches on
+`DODGING` and on a charging `ACTIVE` before it reads the walking speed. So the
+obvious use — making a charger's commitment punishable — is not what a slow
+does; it is a repositioning tax. The dodge exclusion is the recorded one from
+the attribute layer (a roll is a fixed-distance defensive tool and stretching it
+buys invulnerability rather than mobility); the charge falls out of the same
+ordering.
+
+**Three attacks carry a block, and where they are is the whole of why they
+could ship unswept.** The Assassin's Deathmark (a vulnerability), the Magic
+Archer's Runeshot (a slow) and the Wizard's Cataclysm (a burn) — every one an
+advanced class's heavy or ultimate. The reference bot presses the light attack
+and nothing else, so the recorded grid cannot see any of the three, which is the
+same reason `docs/balance.md` has never had an opinion about the twenty
+promoted attacks. `--policy skilful` *does* press those slots, so its numbers
+moved; nothing gates on them.
+
+**Which means all three magnitudes are guesses**, in the same position every
+number in `data/rooms.json` is in. They are written into the weapons' own
+`_comment` blocks rather than here, beside the numbers they describe.
+
+**A status on an *enemy* weapon is the change that cannot be made this way.**
+Every enemy attack is pressed on measured ticks, so a burn on a grunt moves all
+280 cells on the day it lands. `test_no_enemy_attack_inflicts_anything` is the
+guard, and the rollback for the whole layer is still one edit: remove the three
+`inflict` blocks and the code is inert.
+
 ### Enemies do not dodge
 
 Expressed as data: they have no `dodge_ticks`. The roll is the player's verb

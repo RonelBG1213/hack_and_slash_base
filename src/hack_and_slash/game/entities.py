@@ -119,6 +119,27 @@ class Weapon:
     #: defensive tool designed against the i-frame window rather than a skill.
     buff_haste: int = 0
 
+    #: What this attack leaves on the body it *hits*, and for how long. The buff
+    #: pair above pointed the other way round: that one is granted to the user
+    #: when the window opens, this one is applied to the target when a blow is
+    #: confirmed.
+    #:
+    #: A burn is a negative `regen`, a slow is a negative `move_speed`, and a
+    #: vulnerability is a negative `defense` -- so status effects needed no new
+    #: arithmetic anywhere, in the same way the difficulty dials needed none for
+    #: three of their six. What they needed was somewhere to put the block and a
+    #: timer to take it off again.
+    #:
+    #: **Three attacks in `data/weapons.json` carry these**, and all three are a
+    #: promoted class's heavy or ultimate -- which is the only place in the game
+    #: a status is invisible to the recorded grid, because the reference bot
+    #: presses the light attack and nothing else. No enemy attack carries one:
+    #: that is the change that moves all 280 cells, and
+    #: `test_no_enemy_attack_inflicts_anything` is the guard. Removing the three
+    #: blocks makes the whole layer inert, which is the rollback.
+    inflict: Attributes = NEUTRAL
+    inflict_ticks: int = 0
+
     @property
     def total_ticks(self) -> int:
         return self.windup + self.active + self.recovery
@@ -137,6 +158,17 @@ class Weapon:
         much harder to see than one that reads as "the skill does nothing".
         """
         return self.buff_ticks > 0
+
+    @property
+    def is_inflicting(self) -> bool:
+        """Whether this attack leaves anything behind on what it hits.
+
+        Read off the duration rather than off the block, for the reason
+        `is_buff` gives one property above: a block of zeroes with a duration is
+        a tuning mistake, and it is far easier to spot as "the burn does
+        nothing" than as "the attack stopped inflicting".
+        """
+        return self.inflict_ticks > 0
 
     @classmethod
     def from_dict(cls, weapon_id: str, payload: dict) -> "Weapon":
@@ -168,6 +200,9 @@ class Weapon:
             buff=Attributes.from_dict(payload.get("buff")),
             buff_ticks=int(payload.get("buff_ticks", 0)),
             buff_haste=int(payload.get("buff_haste", 0)),
+            # Same door as `buff`, and the same reason for using it.
+            inflict=Attributes.from_dict(payload.get("inflict")),
+            inflict_ticks=int(payload.get("inflict_ticks", 0)),
         )
 
 
@@ -284,6 +319,20 @@ class EntityType:
         have earned some.
         """
         return self.hp + self.attributes.max_hp
+
+    @property
+    def is_boss(self) -> bool:
+        """Whether this is one of the things an act ends on.
+
+        Driven by `sprite_scale` rather than by a name or a flag, which is the
+        rule `render/hud.py` already decided the boss bar by: *a thing drawn
+        twice the size of everything else is a thing whose health the player
+        needs to be able to read*. Named here rather than left as a comparison
+        in two files, because the second reader is `game/elites.py` -- and an
+        affix layer that disagreed with the health bar about what a boss is
+        would put a champion's mark on something with no bar to hang it from.
+        """
+        return self.sprite_scale > 1
 
     @property
     def can_dodge(self) -> bool:
@@ -522,6 +571,22 @@ class Entity:
     #: cooldown is stamped.
     buff_haste: int = 0
 
+    #: The fourth attribute layer: what somebody *else* put on this body, and
+    #: how many ticks of it are left. A burn, a slow, a vulnerability.
+    #:
+    #: **A separate pair from `buff` above, deliberately.** The two look alike
+    #: and could not share a slot: `apply_buff` replaces rather than stacks --
+    #: which is only sound because every buff is shorter than the cooldown
+    #: gating it, a property of the *content* -- so sharing would mean an
+    #: enemy's burn wiping the Priest's Benediction and a cast of it putting out
+    #: a fire. `render/hud.py` also reads `buff_ticks` to light the Q pip, and
+    #: a hero who had been set alight would light it.
+    #:
+    #: Deliberately *not* saved, for the reason `buff` is not: a save is taken
+    #: between stages, so a status dies with the `World` that applied it.
+    status: Attributes = NEUTRAL
+    status_ticks: int = 0
+
     # Cosmetic only. The renderer reads these; the sim never branches on them,
     # which is what lets the feel pass be turned off without changing a fight.
     flash: int = 0
@@ -569,14 +634,15 @@ class Entity:
 
     @property
     def attrs(self) -> Attributes:
-        """Content plus earned plus whatever the Q slot is granting right now.
+        """Content, plus earned, plus the Q slot, plus whatever hit this body.
 
         Summed on every access rather than cached: the earned half changes when
         a level is spent, the content half changes when `jobs.promote` swaps the
         type, the third half expires on a timer, and a cache invalidated in
-        three places is a cache that will be wrong in a fourth.
+        three places is a cache that will be wrong in a fourth. The fourth half
+        -- a status somebody else applied -- expires on a timer of its own.
 
-        **The buff is tested by identity against the shared `NEUTRAL`
+        **Each optional half is tested by identity against the shared `NEUTRAL`
         singleton**, not summed unconditionally, and that is not a
         micro-optimisation. `sim._walk_speed` reads this once per body per tick,
         so an unconditional third addend would put an eight-field construction
@@ -586,7 +652,9 @@ class Entity:
         singleton rather than to a fresh `Attributes()` that merely equals it.
         """
         base = self.type.attributes + self.bonus
-        return base if self.buff is NEUTRAL else base + self.buff
+        if self.buff is not NEUTRAL:
+            base = base + self.buff
+        return base if self.status is NEUTRAL else base + self.status
 
     @property
     def max_hp(self) -> int:

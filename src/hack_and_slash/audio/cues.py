@@ -80,6 +80,11 @@ def cue_for(event: Event) -> Optional[str]:
             return "blocked"
         case EventKind.TRAP:
             return "trap"
+        case EventKind.STATUS:
+            # One per frame however many ticks the burn paid out in it --
+            # `Cues.drain` collapses a stalled frame down to one play per cue,
+            # which is exactly the case this needs and already handles.
+            return "burn"
         case EventKind.PROP:
             return "prop"
 

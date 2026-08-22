@@ -119,14 +119,23 @@ def _regen(world: World) -> None:
     * **The dead do not regenerate.** The phase-1 loop has no liveness filter,
       and `_settle` culls a corpse one tick after it dies -- so without this a
       body could tick back above zero in the window between the two and quietly
-      un-lose the run.
+      un-lose the run. It holds for the drain below as well, where it stops a
+      corpse being burned a second time.
     * **Nothing is banked at full health**, so a hero that spends a whole stage
       untouched does not arrive at the next fight with a reservoir of instant
-      healing saved up.
+      healing saved up. This one is the *healing* branch's alone -- see `_burn`.
+
+    A negative rate is a burn and goes to `_burn` below. The guard that used to
+    read `rate <= 0` reads `rate == 0` for that reason and for no other, and on
+    every body in the shipped game it is exactly zero.
     """
     for entity in world.entities:
         rate = entity.attrs.regen
-        if rate <= 0 or not entity.is_alive:
+        if rate == 0 or not entity.is_alive:
+            continue
+
+        if rate < 0:
+            _burn(world, entity, rate)
             continue
 
         ceiling = entity.max_hp
@@ -138,6 +147,62 @@ def _regen(world: World) -> None:
         gained, entity.regen_bank = divmod(entity.regen_bank, attributes.REGEN_SCALE)
         if gained:
             entity.hp = min(ceiling, entity.hp + gained)
+
+
+def _burn(world: World, entity: Entity, rate: int) -> None:
+    """Pay out a *negative* regeneration: a burn, a bleed, a poison.
+
+    Reached only when the net rate is below zero, so the healing branch above is
+    the arithmetic it always was, line for line -- which is what
+    `tests/test_sim.py`'s four regen tests are the receipt for. The guard they
+    protect went from `rate <= 0` to `rate == 0`, and on every body in the
+    shipped game the rate is exactly zero.
+
+    **One bank, shared with the healing.** `attrs.regen` already sums the
+    layers, so a hero with +25 regen carrying a -50 burn has a net rate of -25
+    and one bank does the right thing with it. Two banks would need a rule for
+    what happens when both are non-zero, and there is no honest one.
+
+    **No full-health short-circuit**, and that is the one place this deliberately
+    does not mirror the branch above. Being on fire at full health is the
+    ordinary case rather than the excluded one; the healing branch skips at the
+    ceiling because there is nothing above it to bank toward, and a burn has a
+    floor rather than a ceiling.
+
+    Routed through `combat.incoming`, so a burn costs what the tier says a blow
+    costs -- the same argument `apply_hazard` makes: the hero cannot tell,
+    mid-fight, which of the two hurt it, and a tier that scaled one and not the
+    other would be lying about how hard it is. It draws no dice, and at the
+    identity tier it is `max(1, damage)` on a number already at least one.
+
+    `last_hit_by` is deliberately left alone, exactly as `apply_hazard` leaves
+    it: nothing killed you, a status did.
+    """
+    entity.regen_bank += rate
+    lost, entity.regen_bank = divmod(entity.regen_bank, attributes.REGEN_SCALE)
+    if not lost:
+        return
+
+    damage = combat.incoming(world, entity, -lost)
+    entity.hp = max(0, entity.hp - damage)
+    world.emit(
+        Event(
+            EventKind.STATUS,
+            entity.pos,
+            entity.id,
+            amount=damage,
+            is_hero=entity.is_hero,
+        )
+    )
+
+    if not entity.is_alive:
+        # Announced here rather than left to `_settle`, which judges the run but
+        # does not speak for a body that stopped between blows. Without this a
+        # burn kill is silent: no cue, no shake, and nothing for `Tally.kills`
+        # to count.
+        world.emit(
+            Event(EventKind.DEATH, entity.pos, entity.id, is_hero=entity.is_hero)
+        )
 
 
 def _gather_intents(world: World, hero_intent: Intent) -> dict[int, Intent]:
@@ -217,7 +282,18 @@ def _walk_speed(entity: Entity) -> float:
     bonus = entity.attrs.move_speed
     if bonus == 0:
         return entity.type.speed
-    return entity.type.speed * (1 + bonus / attributes.PER_MILLE)
+
+    # Floored at zero, and only on this branch. A slow is a negative bonus, and
+    # past -1000 the product turns negative -- which does not stop a body, it
+    # *reverses* it: the walk vector flips and the thing marches away from what
+    # it was chasing, into a wall. A stopped body is a body a slow made useless;
+    # a reversed one is a bug wearing a status effect.
+    #
+    # The `bonus == 0` return above is deliberately left alone rather than
+    # folded into this expression: `test_walking_speed_is_the_type_s_own_number_at_zero`
+    # asserts identity, and `max(0.0, x)` hands back a new float that is equal
+    # to the type's speed without being it.
+    return max(0.0, entity.type.speed * (1 + bonus / attributes.PER_MILLE))
 
 
 def _self_propulsion(entity: Entity, intent: Intent) -> Vec2:
@@ -368,6 +444,10 @@ def _loose_projectile(world: World, entity: Entity) -> None:
                 damage=damage,
                 crit=crit,
                 knockback=weapon.knockback,
+                # Copied at launch, like the damage and the crit above it, and
+                # for the same reason: the weapon is not reachable at impact.
+                inflict=weapon.inflict,
+                inflict_ticks=weapon.inflict_ticks,
                 ticks_left=weapon.projectile_lifetime,
             )
         )

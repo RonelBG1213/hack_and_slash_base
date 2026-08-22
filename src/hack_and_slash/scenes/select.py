@@ -36,6 +36,9 @@ import pygame
 from .. import config
 from ..core.campaign import Campaign
 from ..game import difficulty as difficulty_module
+from ..game import elites as elites_module
+from ..game import profile as profile_module
+from ..game import unlocks
 from ..game.entities import Bestiary, EntityType
 from ..render.atlas import Atlas
 from ..settings import Settings
@@ -110,6 +113,19 @@ class CharacterSelectScene(Scene):
         self.difficulties = difficulty_module.table()
         self.difficulty_index = self.difficulties.index_of_default
 
+        #: What this machine has earned the right to pick. Read once, at open:
+        #: nothing on this screen can earn an unlock, and a file read per frame
+        #: for a number that cannot move is a file read per frame.
+        #:
+        #: `unlocks.is_open` answers True for anything no entry names, so an
+        #: empty `data/unlocks.json` leaves every tier reachable and this whole
+        #: gate inert -- which is what makes the empty table the rollback.
+        self.profile = profile_module.load()
+        self.locked = tuple(
+            not unlocks.is_open(unlocks.Grant.DIFFICULTY, tier.id, self.profile)
+            for tier in self.difficulties.tiers
+        )
+
         self.title = pygame.font.Font(None, 30)
         self.body = pygame.font.Font(None, 17)
         self.small = pygame.font.Font(None, 14)
@@ -138,7 +154,11 @@ class CharacterSelectScene(Scene):
                 # row, which -- because `_move_difficulty` clamps rather than
                 # wrapping -- walked to the hardest tier and stuck there with no
                 # way back. A mouse could reach exactly one of the three.
-                self.difficulty_index = tier
+                if not self.locked[tier]:
+                    # A locked tier refuses the click rather than selecting and
+                    # then failing to start: the row is greyed and says what it
+                    # wants, so a click on it has already been answered.
+                    self.difficulty_index = tier
                 return None
 
             hit = self._column_at(event.pos)
@@ -160,8 +180,20 @@ class CharacterSelectScene(Scene):
         # Clamped, where the roster wraps. Difficulty is an ordered scale and
         # wrapping one puts Relentless one keypress below Forgiving, which is
         # the single worst misread available on this screen.
+        #
+        # A locked tier is stepped *over* rather than stopped at, and the walk
+        # gives up rather than clamping onto one: landing the cursor on a row
+        # that cannot start a run would strand the screen, which is the same
+        # fault the clamp above was written to avoid in the other direction.
         count = len(self.difficulties.tiers)
-        self.difficulty_index = max(0, min(self.difficulty_index + step, count - 1))
+        index = self.difficulty_index
+        while True:
+            index += step
+            if not 0 <= index < count:
+                return
+            if not self.locked[index]:
+                self.difficulty_index = index
+                return
 
     def _tier_spans(self) -> list[tuple[int, int]]:
         """Where each tier name sits on the row, as `(x, width)`.
@@ -242,7 +274,29 @@ class CharacterSelectScene(Scene):
             settings=self.settings,
             on_exit=self.on_exit,
             difficulty=self.difficulty,
+            elites=self.elites,
         )
+
+    @property
+    def elites(self) -> elites_module.Table:
+        """The champion layer this run will meet, or the layer switched off.
+
+        **Two conditions, and the second is the safety net.** The player has to
+        have turned it on, and the profile has to have earned the right to --
+        because `Settings` is a file a player can edit and a profile is a file a
+        player can erase, and a preference outliving the unlock that justified
+        it would be the one route by which a run met champions without anybody
+        deciding it should.
+
+        Read here rather than held, so the answer is taken at the moment a run
+        is built. `Run` then copies it and nothing re-reads it for the length of
+        the campaign.
+        """
+        if not self.settings.champions:
+            return elites_module.OFF
+        if not unlocks.is_open(unlocks.Grant.MODIFIER, "champions", self.profile):
+            return elites_module.OFF
+        return elites_module.table()
 
     @property
     def chosen(self) -> EntityType:
@@ -350,9 +404,18 @@ class CharacterSelectScene(Scene):
         for i, (left, width) in enumerate(self._tier_spans()):
             tier = self.difficulties.tiers[i]
             selected = i == self.difficulty_index
-            label = self.small.render(
-                tier.name, False, config.WHITE if selected else config.GREY
-            )
+            # Three states rather than two, the same way `menu._draw_rows`
+            # greys a row it cannot open: a locked tier is dimmer than an
+            # unselected one, because "not chosen" and "not available" are
+            # different things and the row already uses brightness for the
+            # first of them.
+            if selected:
+                colour = config.WHITE
+            elif self.locked[i]:
+                colour = config.PANEL
+            else:
+                colour = config.GREY
+            label = self.small.render(tier.name, False, colour)
             if selected:
                 # A box rather than a brighter colour alone: this row sits
                 # between two other centred lines of small grey text, and
@@ -361,6 +424,18 @@ class CharacterSelectScene(Scene):
                 pygame.draw.rect(surface, config.PANEL, box)
                 pygame.draw.rect(surface, config.ACCENT, box, 1)
             surface.blit(label, (left, DIFFICULTY_Y))
+
+        # The line under the row says one of two things, and the tier's own
+        # blurb is the one that wins. A lock is explained only when the player
+        # is standing right in front of it -- see `_locked_hint` -- because the
+        # `(untuned)` flag below is a recorded decision about saying an
+        # unmeasured number on the screen rather than only in the data file, and
+        # a hint that covered it would quietly undo that.
+        wanted = self._locked_hint()
+        if wanted:
+            line = self.small.render(wanted, False, config.GREY)
+            surface.blit(line, (centre - line.get_width() // 2, DIFFICULTY_Y + 14))
+            return
 
         blurb = chosen.blurb
         if not chosen.measured:
@@ -372,3 +447,28 @@ class CharacterSelectScene(Scene):
         if blurb:
             line = self.small.render(blurb, False, config.GREY)
             surface.blit(line, (centre - line.get_width() // 2, DIFFICULTY_Y + 14))
+
+    def _locked_hint(self) -> str:
+        """What the tier *one step harder* is waiting for, or empty.
+
+        Only that one, and only from the row beside it. Two reasons, and the
+        second is the one that decided it:
+
+        * It is the moment the answer is needed. The tiers are an ordered scale
+          and the locks are earned in that order, so the tier after the cursor
+          is the next one a player can have -- and pressing down onto it is
+          exactly when they will ask why nothing happened.
+        * It leaves the `(untuned)` flag alone everywhere else. That flag is a
+          recorded decision about saying an unmeasured number on the screen and
+          not only in `data/difficulty.json`, and a hint that sat on top of it
+          would undo that quietly, on the tier a fresh player is standing on.
+        """
+        nxt = self.difficulty_index + 1
+        if nxt >= len(self.difficulties.tiers) or not self.locked[nxt]:
+            return ""
+
+        tier = self.difficulties.tiers[nxt]
+        gate = unlocks.table().gating(unlocks.Grant.DIFFICULTY, tier.id)
+        if gate is None:
+            return ""
+        return f"{tier.name}: {gate.requires.describe()}"

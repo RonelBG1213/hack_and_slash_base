@@ -47,6 +47,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="skip the character select and play this class. For tuning; the "
         "normal way in is to pick one on the screen that exists for it",
     )
+    parser.add_argument(
+        "--champions",
+        action="store_true",
+        help="roll elite affixes onto ordinary monsters. For looking at the "
+        "layer without first winning the run that unlocks it -- the normal way "
+        "in is the Unlockables screen. Only applies with --class",
+    )
     return parser.parse_args(argv)
 
 
@@ -164,7 +171,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.hero is not None:
         # Naming a class means skipping the screen whose only job is to ask for
         # one. Straight into the fight, which is the point of the flag.
+        from hack_and_slash.game import elites
         from hack_and_slash.scenes.play import PlayScene
+
+        # The one place the unlock is not consulted, and it is the same licence
+        # `--stage` already takes: this path exists to look at something without
+        # playing up to it. The character select is where the rule lives, and it
+        # checks both the preference and the profile.
+        champions = elites.table() if args.champions else elites.OFF
 
         App(
             PlayScene(
@@ -176,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
                 hero_type_id=args.hero,
                 settings=settings,
                 on_exit=home,
+                elites=champions,
             ),
             settings=settings,
         ).run()

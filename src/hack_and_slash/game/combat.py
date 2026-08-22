@@ -186,6 +186,11 @@ def apply_hit(world, attacker: Entity, target: Entity, weapon: Weapon, rng) -> b
     target.stagger = actions.STAGGER_TICKS
     actions.interrupt(target)
 
+    # Past the i-frame and evasion gate above, so a blow that was avoided leaves
+    # nothing behind -- exactly as it lands no damage, no knockback and no
+    # stagger. A no-op on every attack in the shipped game.
+    actions.apply_status(target, weapon.inflict, weapon.inflict_ticks)
+
     # Cosmetic freeze. The sim decrements this but never branches on it.
     world.hitstop = max(world.hitstop, weapon.hitstop)
 
@@ -337,6 +342,9 @@ def resolve_projectile_hits(world) -> None:
             target.velocity = target.velocity + shot.velocity.normalized() * shot.knockback
             target.stagger = actions.STAGGER_TICKS
             actions.interrupt(target)
+            # Off the shot rather than off a weapon, for the reason given at
+            # the top of this function: there may be no owner left to ask.
+            actions.apply_status(target, shot.inflict, shot.inflict_ticks)
             world.emit(
                 Event(
                     EventKind.HIT,

@@ -46,10 +46,12 @@ from ..game import (
     save,
     shop,
     skills,
+    unlocks,
 )
 from ..game.entities import DEFAULT_HERO, Bestiary
 from ..game.intent import Intent
 from ..game.difficulty import NORMAL as NORMAL_DIFFICULTY, Difficulty
+from ..game.elites import OFF as ELITES_OFF, Table as EliteTable
 from ..game.run import Run
 from ..game.sim import Accumulator, step
 from ..render import level_panel as level_rows
@@ -199,6 +201,7 @@ class PlayScene(Scene):
         run: Optional[Run] = None,
         settings: Optional[Settings] = None,
         difficulty: Difficulty = NORMAL_DIFFICULTY,
+        elites: EliteTable = ELITES_OFF,
     ) -> None:
         self.campaign = campaign
         self.bestiary = bestiary
@@ -237,6 +240,17 @@ class PlayScene(Scene):
         #: describe this session and the summary has to say so.
         self.tally = Tally(partial=run is not None)
 
+        #: What this run has earned across runs, accumulated as it goes. Held
+        #: rather than recomputed at the end, because it is a *difference*
+        #: between two readings of the profile and the profile is written
+        #: **twice**: `record_stage` banks the depth on every stage transition,
+        #: and `record_end` banks the rest. So a depth unlock is already earned
+        #: by the time the run is over, and a summary that only compared at the
+        #: end would announce the one kind of unlock and silently drop the
+        #: other -- which is the sort of gap that reads as the feature being
+        #: broken for exactly the unlocks that are easiest to get.
+        self.unlocked_now: tuple = ()
+
         self._reapply_settings()
 
         # A run handed in is a run loaded off disk. The three parameters that
@@ -251,6 +265,7 @@ class PlayScene(Scene):
             at_stage=start_stage,
             hero_type_id=hero_type_id,
             difficulty=difficulty,
+            elites=elites,
         )
         self.seed = self.run.seed
         self.start_stage = self.run.start_index
@@ -261,6 +276,11 @@ class PlayScene(Scene):
         # "this run again" rather than "this run, at whatever the argument
         # happened to default to".
         self.difficulty = self.run.difficulty
+
+        # And the champion layer, read back for exactly the same reason: a run
+        # off disk carries what it opted into, and R has to be a second attempt
+        # at *this* run rather than at whatever the settings say now.
+        self.elites = self.run.elites
 
         # Replaced immediately by _enter_stage, which needs the stage's real
         # size. A placeholder rather than an Optional so nothing downstream has
@@ -757,6 +777,7 @@ class PlayScene(Scene):
             hero_type_id=self.hero_type_id,
             settings=self.settings,
             difficulty=self.difficulty,
+            elites=self.elites,
         )
 
     def _finish(self) -> None:
@@ -778,7 +799,12 @@ class PlayScene(Scene):
         self._ended = True
         self._needs_save = False
         save.delete()
-        profile.record_end(self.run)
+
+        # Read before the write and compared with what the write produced.
+        # `record_end` hands the profile back precisely so this does not have to
+        # re-read a file it just wrote -- see its docstring.
+        before = profile.load()
+        self._note_unlocks(before, profile.record_end(self.run))
 
     def _autosave(self) -> None:
         """Write the run, if it is standing somewhere a snapshot describes.
@@ -795,8 +821,26 @@ class PlayScene(Scene):
         """
         if self._needs_save and not self.run.is_over:
             save.write(self.run)
-            profile.record_stage(self.run)
+            before = profile.load()
+            self._note_unlocks(before, profile.record_stage(self.run))
             self._needs_save = False
+
+    def _note_unlocks(self, before, after) -> None:
+        """Add whatever crossed the line between two readings of the profile.
+
+        Additive and de-duplicated rather than assigned: this is called once per
+        stage transition and once at the end, and an unlock earned on stage ten
+        still belongs on the summary of the run that earned it forty stages
+        later.
+        """
+        known = {entry.id for entry in self.unlocked_now}
+        crossed = [
+            entry
+            for entry in unlocks.newly_earned(before, after)
+            if entry.id not in known
+        ]
+        if crossed:
+            self.unlocked_now = self.unlocked_now + tuple(crossed)
 
     def _read_intent(self) -> Intent:
         """What the player is asking for, without spending any of it.
@@ -1194,6 +1238,7 @@ class PlayScene(Scene):
                 self.run,
                 self.tally,
                 restart=keymap.label(Action.RESTART, self.settings),
+                unlocked=self.unlocked_now,
             )
 
     def _draw_banner(self, surface: pygame.Surface) -> None:

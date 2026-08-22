@@ -149,6 +149,30 @@ otherwise.
 > scale — because with seven dials there is no single number to take the
 > minimum of: a tier could halve incoming damage and double enemy health.
 
+### Champions, which are the other axis
+
+A tier is a dial on *every* monster in the room. A champion is one monster in it
+being different from the one beside it — the only thing in the game that makes
+the twelfth grunt of a run different from the eleventh, because every arena is a
+hand-written list of creatures at fixed coordinates and always will be.
+
+It is a **run modifier** rather than a setting: earned across runs, switched on
+in Unlockables, and chosen for a run at the moment that run begins. Ordinary
+monsters only, never a boss, and never before floor two. Six affixes, weighted,
+rolled from the run's own seed — so the same seed meets the same champions and a
+different one does not.
+
+Every affix is *stats*: tougher, faster, harder-hitting, harder to hit. That is
+a rule about what a champion may be rather than a first pass to be widened
+later, and the reason is [the one limit the level design rests
+on](limits.md#nothing-paths-around-walls) — monsters walk straight at you, every
+arena is laid out around that, and an affix that changed how one moved would be
+changing the thing the room was drawn for.
+
+**Nothing has measured any of it.** The reference bot never opts in, which is
+exactly why the recorded grid is untouched by the layer existing and exactly why
+nobody knows whether one champion a room is a spice or a wall.
+
 ---
 
 ## The classes

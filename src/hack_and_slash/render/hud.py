@@ -315,7 +315,7 @@ class Hud:
         needs to be able to read, and that stays true for whatever gets added
         next. A 12px pip over a boss is not a boss.
         """
-        bosses = [e for e in world.enemies() if e.type.sprite_scale > 1]
+        bosses = [e for e in world.enemies() if e.type.is_boss]
         if not bosses:
             return
         boss = bosses[0]

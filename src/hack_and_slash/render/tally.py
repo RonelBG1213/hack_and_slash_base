@@ -117,6 +117,15 @@ class Tally:
                 case EventKind.TRAP:
                     if event.is_hero:
                         self.burned += event.amount
+                case EventKind.STATUS:
+                    # Filed as an ordinary blow rather than beside the traps: a
+                    # burn on the hero came from a *body*, and a burn on
+                    # anything else is damage the player dealt however many
+                    # ticks after the swing it arrives.
+                    if event.is_hero:
+                        self.taken += event.amount
+                    else:
+                        self.dealt += event.amount
                 case EventKind.DEATH:
                     if not event.is_hero:
                         self.kills += 1

@@ -235,9 +235,9 @@ stage would draw the same rolls in the same order, which is both duller and a
 worse test — a bug that only shows up on a particular sequence would never appear
 twice.
 
-### Five random streams, not one
+### Six random streams, not one
 
-Four live on the `World` and are derived from its seed; the fifth belongs to the
+Five live on the `World` and are derived from its seed; the sixth belongs to the
 layer above and is derived from the run's.
 
 | Stream | Seeded | Draws for |
@@ -246,6 +246,7 @@ layer above and is derived from the run's.
 | `world.loot_rng` | `seed ^ 0x10071` | what a kill leaves behind |
 | `world.attr_rng` | `seed ^ 0x2A771` | crit and dodge |
 | `world.hazard_rng` | `seed ^ 0x7A0B5` | where an arena's traps stand — drawn from **once**, at construction |
+| `world.elite_rng` | `seed ^ 0x3117E` | which monsters rose as champions — drawn from **once**, at construction, and on a run that did not opt in, never |
 | the map stream | `(seed ^ 0x4D0075) + index * 7919` | which three doors a reward room offers |
 
 The map stream is the one that is **not held anywhere**. `rooms._stream` builds a

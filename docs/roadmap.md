@@ -55,10 +55,10 @@ imported it, so the game stayed silent through that commit and the one after it
 while every document went on saying the tree had no audio in it. Both halves are
 in now.
 
-`audio/cues.py` maps eleven of the twelve `EventKind`s to a named cue and splits
+`audio/cues.py` maps twelve of the thirteen `EventKind`s to a named cue and splits
 four of them on payload — a blow you land and a blow you take are different
 sounds, and so are a coin and a relic. `audio/bank.py` owns the mixer and
-sixteen channels. `tools/gen_sfx.py` writes fourteen WAVs from a fixed seed, the
+sixteen channels. `tools/gen_sfx.py` writes fifteen WAVs from a fixed seed, the
 way `gen_art.py` writes the sprites, and they are gitignored for the same two
 reasons. `main.py` opens the mixer at the rate, width and channel count the
 generator writes, so nothing is resampled between the file and the speaker.
@@ -115,9 +115,13 @@ in the README is exactly the kind of thing that ends an install attempt.
 The absence of a build step is a real asset for the edit loop and should be
 kept. What is needed is a *second* path — a one-file executable produced by a
 tool that runs over the existing tree — not a change to how the project is
-developed. Note that the generated artefacts are the wrinkle: `assets/` and
-`levels/` are gitignored and built by `tools/`, so the packaging step has to run
-the generators, not just freeze the source.
+developed. Note that the generated artefacts are the wrinkle — though a smaller
+one than this paragraph used to claim. **`levels/` is committed**: all 52 files,
+the fifty stages, the campaign manifest and the room template, are in the repo
+and `git check-ignore` says nothing about them. Only `assets/` is generated and
+ignored, so the packaging step has to run `gen_art.py` and `gen_sfx.py` before
+it freezes, and `make_level.py` / `make_rooms.py` are a *developer's* commands
+rather than a build's.
 
 ### No controller
 
@@ -182,12 +186,39 @@ seen everything stage 12 will ever be.
 the grid on the day it lands and throws away the project's best property to buy
 a different one. See [the order](#the-order) for the alternative.
 
-### Nothing survives a run
+### ~~Nothing survives a run~~
+
+**Shipped.** `game/unlocks.py` is the first thing that reads the four counters,
+and it is built so that reading them still cannot move the grid: an unlock
+grants **access** and never numbers, and that is structural rather than a rule
+somebody has to remember — there is no `attributes` key in the schema and no
+import of `attributes.py` in the module, so a stat grant is not a thing the
+loader refuses but a thing the file cannot say.
+
+**Nothing is stored.** What is unlocked is derived from the profile every time
+it is asked for, which is `promotes_from`, `variant_of` and `rooms._wall_of` a
+fourth time. No schema bump, nothing to migrate, and no unlock state that can
+disagree with the scoreboard beside it. `"unlocks": []` in
+`data/unlocks.json` is the game exactly as it shipped before — nothing is locked
+unless an entry says it is — and that is why the loader deliberately has *no*
+two-way "every modifier must be reachable" check in `shop.stock`'s image: it
+would make the rollback illegal. A content test makes that claim about the
+shipped file instead, which is where it belongs.
+
+Three entries to start: Hard at stage 10, Nightmare at stage 25, and
+**Champion's Wake** — the [elite layer](#no-elite-layer) as an opt-in run
+modifier — for a run won. The Unlockables screen lists them with what each one
+wants, the character select greys a tier it cannot offer and says why, and the
+run-end summary names whatever the run just earned. Easy and Normal are never
+gated and a test pins it: the cursor opens on the default tier, so a lock in
+front of it would strand the screen on a row that cannot start a run.
+
+The paragraph below is the argument that was made *before* it shipped, kept
+because it is the reasoning the shape came from.
 
 `game/profile.py` keeps four lifetime counters and its docstring states plainly
 that nothing in the sim, in `Run`, or in anything deciding a fight ever reads
-one. The Achievements screen draws them; the Unlockables screen is empty and
-[says so](../README.md#the-main-menu).
+one.
 
 That is a coherent position and the docstring argues it well — the day an unlock
 hands a run a head start is the day the grid moves. The cost is that **a player
@@ -226,9 +257,38 @@ frame windows, knockback, hitstop, cooldown, and the projectile block. `buff`,
 `buff_ticks` and `buff_haste` exist, and they are all **self**-buffs on the
 neutral slot.
 
-Nothing in the game applies a state to an enemy. No burn, no bleed, no slow, no
-stun, no vulnerability, and no damage type for anything to resist or be weak to.
-Combat resolves as one number against one health pool.
+~~Nothing in the game applies a state to an enemy.~~ **The substrate shipped;
+the content has not.** `Weapon.inflict` / `inflict_ticks` mirror the buff pair
+pointing the other way — that one is granted to the user when the window opens,
+this one is applied to the target when a blow is *confirmed*, past the i-frame
+and evasion gate, so an avoided blow leaves nothing behind. It lands on
+`Entity.status` / `status_ticks`, a fourth `Attributes` addend beside the buff
+and deliberately not sharing its slot: `apply_buff` replaces rather than stacks
+and `render/hud.py` lights the Q pip off `buff_ticks`, so one slot would mean an
+enemy's fire putting out the Priest's Benediction and lighting their skill pip
+while it burned.
+
+**Three of the four effects needed no arithmetic at all.** A vulnerability is a
+negative `defense`, which `combat.resolve_damage` has always subtracted; a slow
+is a negative `move_speed`, which `sim._walk_speed` has always multiplied by —
+it needed one clamp, because past -1000 the product turns negative and that does
+not stop a body, it *reverses* it. A burn is a negative `regen`, and it is the
+one that needed a branch: `_regen` refused negatives, short-circuited at full
+health, had no floor at zero and announced no death. It has a sibling now, and
+the healing branch is byte-identical so `tests/test_sim.py`'s four regen tests
+are the receipt.
+
+There is still no stun — `Entity.stagger` is a plain int rather than an
+attribute, so it cannot ride a block, and `movement_scale` returns zero while it
+is set, which makes it a total lockout rather than a status — and no damage type
+for anything to resist or be weak to.
+
+**Three attacks carry a block**, and where they are is why they could ship
+without a sweep: Deathmark, Runeshot and Cataclysm are all a promoted class's
+heavy or ultimate, and the reference bot presses the light attack and nothing
+else. No enemy attack inflicts anything — that is the change that moves all 280
+cells, and `test_no_enemy_attack_inflicts_anything` is the guard. Removing the
+three blocks makes the layer inert again, which is the rollback.
 
 This is the substrate the previous gap is missing. Status effects are what turn
 flat stats into interactions — a slow that makes the charger's commitment
@@ -247,6 +307,39 @@ An elite/champion layer — a modifier rolled onto an ordinary spawn from the
 run's seed — is the single largest variety multiplier per hour of work available
 here, and it is the one change in this document that adds run-to-run difference
 *without* touching the stage literals the grid depends on.
+
+**Shipped, and off unless a run asks for it.** `game/elites.py` and
+`data/elites.json`: six stat affixes, weighted, rolled per ordinary spawn from a
+**fifth** seeded stream (`world.elite_rng`, `seed ^ ELITE_STREAM`) and added to
+`Entity.bonus` beside the difficulty tier's block. No new arithmetic in
+`combat`, `sim` or `ai` — the affix slot was already built, and this is the
+third feature `attributes.py` has absorbed that looked like it needed
+mechanics.
+
+Two independent guards, and the second is the one that matters:
+
+* `data/elites.json` has an `enabled` flag, which is the content rollback.
+* **`World(...)` takes `elites=OFF` by default**, so `tools/balance.py`,
+  `game/autoplay.py`, `tests/test_playthrough.py` and every other caller in the
+  project fight the monsters they always fought *however the file is tuned*. A
+  run meets champions only by opting in, and it can only opt in once the
+  profile has earned the unlock.
+
+So "the grid is unmoved" is a test rather than a sweep, in the shape
+[Testing](testing.md) already records four times:
+`test_an_off_elite_layer_draws_no_dice_at_all` compares the generator's state
+either side of construction, and
+`test_no_enemy_in_any_shipped_stage_is_a_champion` walks all fifty arenas
+asserting `bonus is NEUTRAL` by identity.
+
+The warning below was heeded rather than argued with: every affix carries an
+`Attributes` block and nothing else, and because `Attributes.from_dict` refuses
+an unknown key, a behavioural affix is not something the loader rejects — it is
+something the schema cannot express. Health is per-mille of the creature rather
+than a flat `max_hp`, for the reason `difficulty.Enemies` already gives: one
+flat number means something quite different to a rat and to a brute. **No boss
+ever rolls one**, and none of the numbers has been swept — nothing can sweep
+them while the layer is opt-in, and `data/elites.json` says so at the top.
 
 > [!WARNING]
 > **It is not free, and the constraint is recorded elsewhere.**
@@ -284,7 +377,7 @@ simply absent.
 | **Suspend mid-fight** | One autosave slot, written on the tick a stage begins. `game/save.py` [argues the refusal](../README.md#the-main-menu) | The argument is about *save scumming* and holds. Handheld play needs suspend-and-quit, which is a different feature and is compatible with it. **The pause overlay above did not deliver it** and was deliberately built not to: quitting from pause keeps the room you started, not the fight you were in |
 | ~~**Run-end summary**~~ | **Shipped.** `render/result_panel.py`: the verdict, the class and its promotion, the depth and the clock, gold left, kills, damage dealt and taken, the build that was assembled and everything bought | The four numbers that did not exist are now derived from the event stream by `render/tally.py`, a third consumer beside the feel pass and the audio pass — no file under `game/` changed and the sweep never drains events, so the grid could not move. **The unlocks half of [order item 4](#the-order) is still open.** [Limits](limits.md#the-result-screen-is-a-full-stop-now) records the wash decision it overturned and the two things the screen cannot honestly say |
 | **Daily seeded run and leaderboard** | Absent | **The expensive half is already built.** Exact seeded determinism is the property this project has defended hardest; a daily seed is a date-derived integer through the same door `--seed` uses |
-| **Tutorial** | Absent | Fifteen attacks across four slots, eight attributes, four room types and a compulsory fork, all introduced by a controls table |
+| **Tutorial** | **Written, not wired.** `render/tutorial.py` is complete — six lessons, two kinds of satisfier, a `Lesson` table keyed on `bindings.Action` so a prompt names the key the player actually bound — and `tests/test_tutorial.py` holds it to the feel pass's rule that a fight resolves identically with it running. **Nothing in `src/` imports either.** | The same shape the audio layer had in `09bc62c`: the layer arrived complete and the call sites did not, so every document went on saying the thing was absent while the code sat in the tree. What is missing is a `Tutorial` on `PlayScene`, a `feed` beside `effects.tick()` on the drained list the feel and audio passes already share, and somewhere to draw a prompt |
 
 ---
 
@@ -349,11 +442,16 @@ The honest first instrument for all three is hands on a keyboard, not
    build. Nothing above this line reaches anyone without it — and note the
    build now has a fourth generator to run, since `assets/sfx/` is gitignored
    exactly as `assets/sprites.png` is.
-4. ~~**Run-end summary**~~, **then the first unlocks** — access only, never stats, per
-   [Nothing survives a run](#nothing-survives-a-run). Turns four dead counters
-   into a reason to press New Game.
-5. **Elite affixes, then status effects.** Variety and build texture on content
-   that already exists. Stat affixes before behavioural ones.
+4. ~~**Run-end summary**, **then the first unlocks**~~ — **both shipped.**
+   Access only, never stats, per
+   [Nothing survives a run](#nothing-survives-a-run). Four dead counters are now
+   two locked tiers and an opt-in modifier, and the summary names what a run
+   earned on its way down.
+5. ~~**Elite affixes, then status effects.**~~ **Shipped.** Stat affixes only,
+   as the warning above asked, and three status-bearing attacks on promoted
+   slots the grid cannot see. What is left is measurement rather than build:
+   nothing has swept the champion rates, and nothing can while the layer is
+   opt-in.
 6. **The seeded arena mode and a daily leaderboard.** Replay value; grid
    untouched.
 7. **Art.** Largest cost, best spent once the six items above have proved the
@@ -361,8 +459,10 @@ The honest first instrument for all three is hands on a keyboard, not
 
 Items 1–3 are the product line: below it there is nothing to sell, above it
 there is. **One of the three is done**, which is the first time that sentence
-has been able to say so. Items 4–6 are the retention line. Item 7 is what decides whether
-anyone arrives.
+has been able to say so. Items 4–6 are the retention line, and **two of those
+three are done** — what is left of it is item 6, the seeded arena and the daily
+leaderboard, which is also where the champion layer stops being opt-in and
+becomes what a mode is *about*. Item 7 is what decides whether anyone arrives.
 
 > [!NOTE]
 > **The suite is not a green gate right now, and the baseline is now written

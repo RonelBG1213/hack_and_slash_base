@@ -70,6 +70,13 @@ class Palette:
     hurt_number: tuple[int, int, int]
     dealt_number: tuple[int, int, int]
 
+    #: The rim on a champion. Its own field rather than a reuse of `caution`,
+    #: because the two answer different questions on the same screen -- one is
+    #: "this bar is getting low" and the other is "that monster is not the
+    #: monster beside it" -- and a palette that wanted to separate them could
+    #: not if they were one value.
+    champion: tuple[int, int, int]
+
     #: Keyed by `loot.Rarity.value`, exactly as `config.RARITY_COLORS` is, so a
     #: tier added to `data/loot.json` is one entry in each palette and nothing
     #: else. Keyed by the string and not the enum because this module imports
@@ -91,6 +98,9 @@ SHIPPED = Palette(
     # disagreeing with the health bar about what "hurt" looks like.
     hurt_number=(232, 106, 96),
     dealt_number=(240, 236, 220),
+    # Violet: the one hue nothing else on the arena floor uses, so a rim in it
+    # cannot be read as low health, as a telegraph or as a rarity.
+    champion=(186, 132, 232),
     rarity=dict(config.RARITY_COLORS),
 )
 
@@ -111,6 +121,9 @@ COLOURBLIND = Palette(
     # was me" reads the same on the bar and in the air.
     hurt_number=(230, 130, 60),
     dealt_number=(240, 236, 220),
+    # Okabe-Ito's reddish purple, which is the ring's hue under every common
+    # deficiency and is not `bad` above.
+    champion=(204, 121, 167),
     rarity={
         "common": (170, 176, 188),
         "uncommon": (86, 180, 233),

@@ -525,3 +525,42 @@ def test_gear_keys_do_not_collide_with_the_shops_tally() -> None:
 
     assert shop.bought(restored, poultice) == 1
     assert equipment.taken(restored, equipment.offers(restored)[0])
+
+
+# --- champions ---------------------------------------------------------------
+def test_a_restored_run_remembers_that_it_opted_into_champions() -> None:
+    """The decision, not the layer. What an affix *is* lives in
+    `data/elites.json` and is allowed to move, so a save that stored the numbers
+    would hand a run back on the tuning it was started under rather than on the
+    one the file now holds -- the same argument the tier's id is stored for.
+    """
+    from hack_and_slash.game import elites
+
+    run = mid_run()
+    run.elites = elites.table()
+
+    restored = save.restore(save.snapshot(run), campaign(), BESTIARY)
+
+    assert not restored.elites.is_off
+    assert restored.world.elites is restored.elites
+
+
+def test_a_restored_run_that_never_asked_for_champions_still_has_none() -> None:
+    from hack_and_slash.game import elites
+
+    restored = save.restore(save.snapshot(mid_run()), campaign(), BESTIARY)
+
+    assert restored.elites is elites.OFF
+    assert restored.world.elites.is_off
+
+
+def test_a_save_written_before_champions_existed_is_refused() -> None:
+    """Not migrated -- refused, which is what `check_version` has always done.
+    An older build reading a newer file would drop the flag and hand back a run
+    with the champions quietly switched off, and that silent wrongness is the
+    whole reason the version moved."""
+    payload = save.snapshot(mid_run())
+    payload["version"] = save.SAVE_VERSION - 1
+
+    with pytest.raises(save.SaveFormatError):
+        save.check_version(payload)

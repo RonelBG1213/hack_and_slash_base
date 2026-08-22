@@ -42,7 +42,7 @@ from pathlib import Path
 from .. import config
 from ..core.campaign import Campaign
 from ..core.level import Direction, RoomKind
-from . import difficulty, rooms
+from . import difficulty, elites, rooms
 from .attributes import NEUTRAL, Attributes
 from .entities import DEFAULT_HERO, Bestiary
 from .run import Run
@@ -51,7 +51,7 @@ from .world import Purse, World
 #: Bumped when the shape of a snapshot changes in a way an older reader would
 #: get wrong. A save from another version is refused rather than guessed at --
 #: see `restore`, and the note there about what this does and does not catch.
-SAVE_VERSION = 4
+SAVE_VERSION = 5
 
 
 class SaveFormatError(Exception):
@@ -114,6 +114,17 @@ def snapshot(run: Run) -> dict:
         # unmeasured -- so a run saved today would reload on the old tuning
         # after the sweep that fixed it.
         "difficulty": run.difficulty.id,
+        # Whether this run opted into champions. A bool and not the table: what
+        # an affix *is* lives in `data/elites.json` and is explicitly allowed to
+        # move, exactly as a tier's numbers are -- so storing the layer would
+        # weld a saved run to the tuning it was started under. Storing the
+        # *decision* restores the run the player was having.
+        #
+        # This is what took SAVE_VERSION 4 -> 5. An older build reading a newer
+        # file would drop the key and hand the player back a run with the
+        # champions quietly switched off, which is the exact class of silent
+        # wrongness the version field exists to refuse.
+        "elites": not run.elites.is_off,
     }
 
 
@@ -179,6 +190,11 @@ def restore(payload: dict, campaign: Campaign, bestiary: Bestiary) -> Run:
     # loader, and it is bounded -- every other field still raises.
     tier = difficulty.table().get(str(payload.get("difficulty", "")))
 
+    # The live table if the run opted in, off if it did not. Read now rather
+    # than stored, for the reason the snapshot gives: the decision is the run's,
+    # the numbers are the file's.
+    champions = elites.table() if payload.get("elites") else elites.OFF
+
     room = _room(payload.get("room"))
     entered_from = _direction(payload.get("entered_from"))
     level = (
@@ -207,6 +223,7 @@ def restore(payload: dict, campaign: Campaign, bestiary: Bestiary) -> Run:
         purse=Purse(floor=index + 1, gold_find=gold_find),
         hero_bonus=earned,
         difficulty=tier,
+        elites=champions,
     )
 
     return Run(
@@ -214,6 +231,7 @@ def restore(payload: dict, campaign: Campaign, bestiary: Bestiary) -> Run:
         bestiary=bestiary,
         world=world,
         difficulty=tier,
+        elites=champions,
         index=index,
         seed=seed,
         hero_type_id=hero_type_id,

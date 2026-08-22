@@ -131,8 +131,8 @@ def stats(run, tally: Tally) -> tuple[tuple[str, str], ...]:
     )
 
 
-def earned_lines(run) -> tuple[str, ...]:
-    """What the run built, as up to two lines of `Label +value`.
+def earned_lines(run, lines: int = 2) -> tuple[str, ...]:
+    """What the run built, as up to `lines` lines of `Label +value`.
 
     Only the attributes that actually moved, and through `level_panel`'s
     `LABELS` and `format_value` rather than a third copy -- that function's own
@@ -147,7 +147,7 @@ def earned_lines(run) -> tuple[str, ...]:
     ]
     if not parts:
         return ("no attributes gained",)
-    return _wrap(parts)
+    return _wrap(parts, lines)
 
 
 def purchase_line(run) -> str:
@@ -171,17 +171,40 @@ def purchase_line(run) -> str:
     return "   ".join(parts) if parts else "nothing"
 
 
-def _wrap(parts: list[str]) -> tuple[str, ...]:
-    """At most two lines of `PER_LINE`, the remainder as a count.
+def unlock_line(unlocked) -> str:
+    """What this run earned across runs, or empty if it earned nothing.
+
+    Pure, like every other derivation on this screen, and it takes the unlocks
+    rather than a `Profile` because *what crossed the line* is a comparison of
+    two readings and only `scenes/play.py` is holding both.
+
+    Access, never numbers -- so this line can say what it says without the
+    result screen becoming a place where the balance grid is decided. See
+    `game/unlocks.py`.
+    """
+    names = [entry.name for entry in unlocked]
+    if not names:
+        return ""
+    return "Unlocked: " + ", ".join(names)
+
+
+def _wrap(parts: list[str], lines: int = 2) -> tuple[str, ...]:
+    """At most `lines` lines of `PER_LINE`, the remainder as a count.
 
     Capped rather than scrolled or shrunk: this screen has 188 pixels and a
     third line would land on the hint, which is the one thing that may never be
     covered -- it is how the player leaves.
+
+    `lines` is 1 on the runs that earned an unlock, and that is a deliberate
+    trade rather than a shortage: the receipt already has a "+N more" idiom for
+    exactly this, and an unlock is news where a fourth purchase is a detail.
     """
     first = "   ".join(parts[:PER_LINE])
     rest = parts[PER_LINE:]
     if not rest:
         return (first,)
+    if lines < 2:
+        return ("   ".join(parts[:PER_LINE - 1]) + f"   +{len(parts) - PER_LINE + 1} more",)
     if len(rest) <= PER_LINE:
         return (first, "   ".join(rest))
     return (first, "   ".join(rest[:PER_LINE - 1]) + f"   +{len(rest) - PER_LINE + 1} more")
@@ -193,8 +216,19 @@ class ResultPanel:
         self.font = pygame.font.Font(None, 16)
         self.small = pygame.font.Font(None, 13)
 
-    def draw(self, surface: pygame.Surface, run, tally: Tally, restart: str = "R") -> None:
-        """The summary. `restart` is asked for because that key is rebindable."""
+    def draw(
+        self,
+        surface: pygame.Surface,
+        run,
+        tally: Tally,
+        restart: str = "R",
+        unlocked=(),
+    ) -> None:
+        """The summary. `restart` is asked for because that key is rebindable.
+
+        `unlocked` defaults to nothing, so every caller written before unlocks
+        existed -- and every test -- draws exactly the screen it drew before.
+        """
         self._wash(surface)
 
         text, colour = verdict(run)
@@ -213,12 +247,25 @@ class ResultPanel:
             right = VALUE_L if left else VALUE_R
             surface.blit(rendered, (right - rendered.get_width(), y))
 
-        for i, line in enumerate(earned_lines(run)):
+        # The two wrapped blocks give up their second line to make room for the
+        # unlock, and only on the runs that earned one. Measured rather than
+        # assumed: at one line each the unlock sits at BOUGHT_Y + WRAP_H, which
+        # is the last row that clears the hint.
+        news = unlock_line(unlocked)
+        budget = 1 if news else 2
+
+        for i, line in enumerate(earned_lines(run, budget)):
             self._centre(surface, self.small, line, EARNED_Y + i * WRAP_H, config.GOOD)
 
-        bought = _wrap(purchase_line(run).split("   ")) if run.purchases else ("nothing",)
+        parts = purchase_line(run).split("   ")
+        bought = _wrap(parts, budget) if run.purchases else ("nothing",)
         for i, line in enumerate(bought):
             self._centre(surface, self.small, line, BOUGHT_Y + i * WRAP_H, config.GREY)
+
+        if news:
+            self._centre(
+                surface, self.small, news, BOUGHT_Y + WRAP_H, config.ACCENT
+            )
 
         self._centre(
             surface,

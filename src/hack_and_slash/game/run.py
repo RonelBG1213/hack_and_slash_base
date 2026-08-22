@@ -43,6 +43,7 @@ from ..core.level import Direction, PropKind, RoomKind
 from . import jobs, progression, rooms
 from .attributes import NEUTRAL, Attributes
 from .difficulty import NORMAL as NORMAL_DIFFICULTY, Difficulty
+from .elites import OFF as ELITES_OFF, Table as EliteTable
 from .entities import DEFAULT_HERO, Bestiary, EntityType
 from .world import Outcome, Purse, World
 
@@ -179,6 +180,18 @@ class Run:
     #: this feature -- is the run it has always been, with no file read.
     difficulty: Difficulty = NORMAL_DIFFICULTY
 
+    #: The champion layer this run opted into, or `elites.OFF`. Threaded exactly
+    #: as `difficulty` is and for the same reasons: chosen once at the character
+    #: select, carried through `restart`, and defaulting to the identity so a
+    #: `Run` built by a test or by `tools/balance.py` is the run it has always
+    #: been with no file read.
+    #:
+    #: A whole `Table` rather than a bool, so that what a run met is decided when
+    #: the run starts rather than re-read per stage. `data/elites.json` can then
+    #: be edited mid-session -- which somebody tuning it will do -- without the
+    #: fortieth stage of a run fighting a different layer from the first.
+    elites: EliteTable = ELITES_OFF
+
     # --- lifecycle -----------------------------------------------------------
     @classmethod
     def start(
@@ -189,6 +202,7 @@ class Run:
         at_stage: int = 0,
         hero_type_id: str = DEFAULT_HERO,
         difficulty: Difficulty = NORMAL_DIFFICULTY,
+        elites: EliteTable = ELITES_OFF,
     ) -> "Run":
         """Begin a run.
 
@@ -216,12 +230,14 @@ class Run:
                 # tool jumping to stage 18 sees stage 18's payouts.
                 purse=Purse(floor=index + 1),
                 difficulty=difficulty,
+                elites=elites,
             ),
             index=index,
             seed=seed,
             start_index=index,
             hero_type_id=hero_type_id,
             difficulty=difficulty,
+            elites=elites,
         )
 
     def restart(self) -> "Run":
@@ -239,6 +255,7 @@ class Run:
             at_stage=self.start_index,
             hero_type_id=self.hero_type_id,
             difficulty=self.difficulty,
+            elites=self.elites,
         )
 
     @property
@@ -435,6 +452,10 @@ class Run:
             purse=Purse(floor=self.index + 1, gold_find=self.gold_find),
             hero_bonus=self.earned,
             difficulty=self.difficulty,
+            # A reward room has nothing to roll on -- it carries no enemy
+            # spawns at all -- so this is carried for consistency rather than
+            # for effect, exactly as the tier is.
+            elites=self.elites,
         )
         self.just_advanced = True
 
@@ -519,6 +540,7 @@ class Run:
             # clipped back to the bare class's 130 by the line meant to keep it.
             hero_bonus=self.earned,
             difficulty=self.difficulty,
+            elites=self.elites,
         )
         self.just_advanced = True
         self.healed = carried - before

@@ -225,7 +225,10 @@ class MenuScene(Scene):
         if action == "achievements":
             return AchievementsScene(self._back)
         if action == "unlockables":
-            return UnlockablesScene(self._back)
+            # The live `Settings`, for the same reason the options row gets
+            # it: the screen carries the champions toggle now, and a copy would
+            # mean the run started next never heard about it.
+            return UnlockablesScene(self._back, self.settings)
         if action == "quit":
             return self._quit()
         return None

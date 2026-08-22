@@ -119,11 +119,21 @@ creature `data/entities.json` declares, and `data/difficulty.json` refuses to
 load if that is not true of the default. The other three ship marked untuned
 until `tools/balance.py --difficulty` has swept them.
 
-**Achievements** and **Unlockables** are stubs and say so. Achievements draws
-four lifetime counters from `state/profile.json`; nothing is defined. Unlockables
-is empty because unlocks were chosen to be gameplay-affecting, and the first one
-that ships moves the recorded class×stage grid — so it is a design decision to be
-taken deliberately rather than a screen to be filled in.
+**Achievements** is a stub and says so: four lifetime counters from
+`state/profile.json`, and nothing defined against them.
+
+**Unlockables** is not one any more. It lists what `data/unlocks.json` offers,
+what each one still wants, and which of them are switched on. Three to start —
+Hard at stage 10, Nightmare at stage 25, and **Champion's Wake**, which turns on
+the elite layer for a run won. Escape leaves; Enter turns a modifier on.
+
+The rule the screen is built under, because it is the one that used to keep it
+empty: **an unlock grants access and never numbers.** A run that begins with
+numbers the reference bot did not have is measuring a different game and the
+recorded class×stage grid stops describing it; a run that begins with a *choice*
+costs nothing, because the grid measures a specified class over a specified
+stage and does not care how the player got the right to pick it. There is no
+`attributes` key in the schema, so that is enforced rather than remembered.
 
 `state/` holds the save, the settings and the profile. It is generated and
 gitignored, like `levels/` and `assets/`.
@@ -230,11 +240,11 @@ take it. It never grants a roll the game would otherwise refuse.
 
 | | |
 | --- | --- |
-| [**Design**](docs/design.md) | What the game asks of the player — the fight, the enemies, the bosses, the five classes and the ten they promote into, the four attack slots, the shape of a run, the traps the floor puts under you, and the fork in the middle of it |
+| [**Design**](docs/design.md) | What the game asks of the player — the fight, the enemies, the bosses, the champions among them, the five classes and the ten they promote into, the four attack slots, the shape of a run, the traps the floor puts under you, and the fork in the middle of it |
 | [**Loot and gold**](docs/loot.md) | Drop rates, the gold formula, rarity, the shop and the room you reach it through, and which of those numbers are measured |
-| [**Architecture**](docs/architecture.md) | The two structural rules, the nine-phase tick, the `Intent` seam, determinism and the four RNG streams |
+| [**Architecture**](docs/architecture.md) | The two structural rules, the nine-phase tick, the `Intent` seam, determinism and the six RNG streams |
 | [**Balance**](docs/balance.md) | The brackets the game is held to, the four findings that overturned an assumption, and what to reach for when a bracket breaks |
-| [**Content and tuning**](docs/content.md) | Editing the JSON: adding an enemy, a variant, a class, a boss, a brain, a room, a trap. The tools |
+| [**Content and tuning**](docs/content.md) | Editing the JSON: adding an enemy, a variant, a class, a boss, a brain, a room, a trap, an elite affix, an unlock, a status. The tools |
 | [**Testing**](docs/testing.md) | Running the suite, the three load-bearing tests, and the strict-xfail policy |
 | [**Known limits**](docs/limits.md) | What this does not do, and which of those were decisions |
 | [**Roadmap**](docs/roadmap.md) | What is missing against the genre this sits in, what each absence costs, and the order to buy them back — the one document here that is judgement rather than measurement |

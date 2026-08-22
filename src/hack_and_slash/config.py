@@ -22,6 +22,8 @@ ROOMS_DATA = DATA_DIR / "rooms.json"
 HAZARDS_DATA = DATA_DIR / "hazards.json"
 EQUIPMENT_DATA = DATA_DIR / "equipment.json"
 DIFFICULTY_DATA = DATA_DIR / "difficulty.json"
+UNLOCKS_DATA = DATA_DIR / "unlocks.json"
+ELITES_DATA = DATA_DIR / "elites.json"
 SPRITE_ATLAS = ASSETS_DIR / "sprites.png"
 
 #: One WAV per cue, generated like the atlas and committed like it -- which is
@@ -257,6 +259,8 @@ SOUND_NAMES = (
     # what the floor and the rooms do
     "trap",
     "prop",
+    # what a status does, tick after tick
+    "burn",
     # what a kill leaves behind
     "coin",
     "relic",

@@ -2470,6 +2470,194 @@ def test_a_run_that_gained_nothing_says_so(atlas) -> None:
     assert result_panel.earned_lines(scene.run) == ("no attributes gained",)
 
 
+# --- the champion mark -------------------------------------------------------
+def test_a_champion_is_drawn_differently_from_the_monster_beside_it(atlas) -> None:
+    """The mark is the whole of how a player learns the layer exists. Two
+    frames, identical but for one enemy having rolled, must not be the same
+    picture."""
+    from hack_and_slash.game.attributes import PER_MILLE
+    from hack_and_slash.game.elites import Affix, Table
+    from hack_and_slash.game.world import World
+    from hack_and_slash.render.camera import Camera
+    from hack_and_slash.render.renderer import Renderer
+
+    from .helpers import BESTIARY, level_with
+
+    always = Table(
+        enabled=True,
+        chance=PER_MILLE,
+        affixes=(Affix(id="a", name="A", hp=1400),),
+    )
+    level = level_with((3, 3), [("grunt", (6, 3))])
+
+    def frame(table) -> pygame.Surface:
+        world = World(level, BESTIARY, seed=99, elites=table)
+        surface = pygame.Surface((config.INTERNAL_W, config.VIEWPORT_H))
+        camera = Camera(*world.level.pixel_size, config.INTERNAL_W, config.VIEWPORT_H)
+        camera.follow(world.hero.pos, Vec2(0, 0))
+        Renderer(atlas).draw(surface, world, camera, Effects())
+        return surface
+
+    from hack_and_slash.game.elites import OFF
+
+    plain = pygame.image.tobytes(frame(OFF), "RGB")
+    marked = pygame.image.tobytes(frame(always), "RGB")
+    assert plain != marked, "a champion drew exactly like an ordinary monster"
+
+
+def test_the_mark_costs_an_ordinary_world_nothing(atlas) -> None:
+    """One falsy lookup per body on every world the recorded grid was measured
+    in -- the argument `sim._touch_props` and the loot layer both rest on, and
+    the test that says so rather than the comment that hopes so."""
+    from hack_and_slash.game.elites import OFF
+    from hack_and_slash.game.world import World
+
+    from .helpers import BESTIARY, level_with
+
+    world = World(level_with((3, 3), [("grunt", (6, 3))]), BESTIARY, seed=99, elites=OFF)
+    assert world.elite_ids == {}
+
+
+def test_both_palettes_name_a_champion_colour() -> None:
+    """A palette that could not separate the rim from the health bar would make
+    the mark unreadable for the players the second palette exists for."""
+    from hack_and_slash import palette as palette_module
+
+    for palette in palette_module.BY_NAME.values():
+        assert palette.champion != palette.bad
+        assert palette.champion != palette.caution
+
+
+# --- the unlock line ---------------------------------------------------------
+def an_unlock(name: str):
+    from hack_and_slash.game import unlocks
+
+    return unlocks.Unlock(
+        id=name.lower(),
+        name=name,
+        kind=unlocks.Grant.MODIFIER,
+        target="champions",
+        requires=unlocks.Requirement((("runs_won", 1),)),
+    )
+
+
+def test_a_run_that_crosses_a_line_reports_it_on_the_result_screen(atlas) -> None:
+    """End to end, from the counter to the screen: a fresh profile, a run that
+    dies deep enough to earn something, and the summary holding the news.
+
+    The reading has to happen *at the moment the run ends* -- `record_end` has
+    written the counter by the next frame, so asking again finds nothing
+    crossed. That is what `PlayScene.unlocked_now` is for."""
+    from hack_and_slash.game import profile, unlocks
+
+    profile.save(profile.Profile())
+    gate = unlocks.table().gating(unlocks.Grant.DIFFICULTY, "relentless")
+    assert gate is not None, "the shipped table is expected to gate a tier"
+    wanted = dict(gate.requires.counters)["deepest_stage"]
+
+    scene = PlayScene(campaign(), BESTIARY, atlas, start_stage=wanted - 1)
+    scene.update(1 / 60)
+    scene.world.hero.hp = 0
+    scene.update(1 / 60)
+
+    assert scene.run.is_over
+    assert [entry.id for entry in scene.unlocked_now] == [gate.id]
+    assert gate.name in result_panel.unlock_line(scene.unlocked_now)
+
+
+def test_an_unlock_earned_mid_run_is_still_on_the_summary(atlas) -> None:
+    """`record_stage` banks the depth on every transition, so a depth unlock is
+    earned long before the run ends. The summary accumulates rather than
+    comparing once, or it would announce the unlocks written at the end and
+    silently drop the ones written on the way."""
+    from hack_and_slash.game import profile, unlocks
+
+    profile.save(profile.Profile())
+    gate = unlocks.table().gating(unlocks.Grant.DIFFICULTY, "relentless")
+    wanted = dict(gate.requires.counters)["deepest_stage"]
+
+    scene = PlayScene(campaign(), BESTIARY, atlas, start_stage=wanted - 1)
+    scene.update(1 / 60)
+    assert profile.load().deepest_stage >= wanted, "the depth was banked mid-run"
+    assert [entry.id for entry in scene.unlocked_now] == [gate.id]
+
+    # And it is still there when the run ends, rather than being recomputed
+    # against a profile that has already banked it.
+    scene.world.hero.hp = 0
+    scene.update(1 / 60)
+    assert [entry.id for entry in scene.unlocked_now] == [gate.id]
+
+
+def test_an_unlock_is_announced_once_however_many_stages_follow_it(atlas) -> None:
+    from hack_and_slash.game import profile, unlocks
+
+    profile.save(profile.Profile())
+    gate = unlocks.table().gating(unlocks.Grant.DIFFICULTY, "relentless")
+    wanted = dict(gate.requires.counters)["deepest_stage"]
+
+    scene = PlayScene(campaign(), BESTIARY, atlas, start_stage=wanted - 1)
+    scene.update(1 / 60)
+    before = scene.unlocked_now
+
+    scene._needs_save = True
+    scene._autosave()
+    assert scene.unlocked_now == before, "the same unlock was announced twice"
+
+
+def test_a_run_that_crosses_nothing_reports_nothing(atlas) -> None:
+    from hack_and_slash.game import profile
+
+    profile.save(profile.Profile())
+    assert dead(atlas).unlocked_now == ()
+
+
+def test_a_run_that_earned_nothing_draws_no_unlock_line() -> None:
+    assert result_panel.unlock_line(()) == ""
+
+
+def test_the_result_screen_names_an_unlock_the_run_earned() -> None:
+    line = result_panel.unlock_line((an_unlock("Nightmare"),))
+    assert "Nightmare" in line
+    assert line.isascii()
+
+
+def test_the_result_screen_names_every_unlock_a_run_earned() -> None:
+    line = result_panel.unlock_line((an_unlock("Nightmare"), an_unlock("Champions")))
+    assert "Nightmare" in line and "Champions" in line
+
+
+def test_the_unlock_line_takes_the_second_line_off_the_two_blocks(atlas) -> None:
+    """The trade the layout makes, pinned rather than left to a comment: on a
+    run that earned something the build and the receipt give up their second
+    line, because the last row that clears the hint is where the news goes."""
+    scene = maximal(dead(atlas))
+    assert len(result_panel.earned_lines(scene.run, 2)) == 2
+    assert len(result_panel.earned_lines(scene.run, 1)) == 1
+
+    parts = result_panel.purchase_line(scene.run).split("   ")
+    assert len(result_panel._wrap(parts, 1)) == 1
+    assert "more" in result_panel._wrap(parts, 1)[0], "the remainder is still counted"
+
+
+def test_the_unlock_line_clears_the_hint(atlas) -> None:
+    """The same measurement the fit test makes, on the compressed layout: one
+    line of build, one of receipt, and the news under them."""
+    lowest = result_panel.BOUGHT_Y + result_panel.WRAP_H
+    assert lowest + 8 <= result_panel.hint_y(), "the unlock line runs into the hint"
+
+
+def test_the_summary_draws_with_an_unlock_to_announce(atlas) -> None:
+    scene = maximal(dead(atlas))
+    panel = result_panel.ResultPanel()
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+
+    panel.draw(surface, scene.run, scene.tally, unlocked=(an_unlock("Nightmare"),))
+    assert not is_blank(surface)
+
+    line = result_panel.unlock_line((an_unlock("Champion's Wake"),))
+    assert panel.small.size(line)[0] <= config.INTERNAL_W
+
+
 # --- it draws, and it fits ---------------------------------------------------
 def maximal(scene) -> PlayScene:
     """The tallest and widest the summary can ever be asked to draw."""

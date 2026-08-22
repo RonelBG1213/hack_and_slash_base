@@ -129,6 +129,19 @@ class Settings:
     #: not how hard the swing lands. The line above holds.
     bindings: dict[str, list[str]] = field(default_factory=dict)
 
+    #: Whether the next run opts into champions. The one field here that *can*
+    #: decide a fight, and it is allowed for the reason the difficulty tier is
+    #: not: this is not a row on the options screen. It is offered on the
+    #: Unlockables screen, only once it has been earned, and it is read exactly
+    #: once -- at the character select, when a run is being built. `Run` copies
+    #: the answer, so turning it off does not disarm a run already in progress.
+    #:
+    #: A bool rather than a set of modifier ids, because `BOOL_FIELDS` is
+    #: derived from these fields and a bool therefore costs the loader nothing.
+    #: A second modifier is the moment to widen it, and `game/unlocks.MODIFIERS`
+    #: is where that list already lives.
+    champions: bool = False
+
     @property
     def window_size(self) -> tuple[int, int]:
         """Pixel size of the window this asks for.

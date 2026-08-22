@@ -1066,10 +1066,18 @@
     "knockback": 6.0,
     "hitstop": 9,
     "cooldown": 1500,
+    "inflict_ticks": 240,
+    "inflict": { "defense": -3 },
     "_comment": [
       "Nearly twice the Flurry's damage into a fiftieth of its arc. The Rogue's",
       "ultimate stops being a net and becomes a single answer to a single body,",
-      "which is the whole difference between the two branches."
+      "which is the whole difference between the two branches.",
+      "",
+      "The name finally means something: four seconds of -3 defense on whatever",
+      "it hit, which is the Assassin picking a target and then killing it rather",
+      "than the ultimate being the killing itself. Negative defense is added by",
+      "the same line that subtracts a positive one, and MIN_DAMAGE still holds",
+      "underneath. See docs/content.md, Inflicting a status."
     ]
   },
 
@@ -1175,10 +1183,18 @@
     "projectile_speed": 4.0,
     "projectile_radius": 5.5,
     "projectile_lifetime": 200,
+    "inflict_ticks": 120,
+    "inflict": { "move_speed": -200 },
     "_comment": [
       "The fattest projectile in the game -- wider than the Magician's Lance --",
       "and slower than the Piercer it replaces. Two damage less, and much harder",
-      "to miss with."
+      "to miss with.",
+      "",
+      "The rune binds: two seconds at 20% slower on whatever it hits, which is",
+      "the Magic Archer buying back the range its own shot is slow enough to",
+      "lose. Note what a slow does NOT do -- it does not slow a roll or a charge,",
+      "because sim._self_propulsion branches on both before it reads a walking",
+      "speed. This is a repositioning tax, not an answer to a charger."
     ]
   },
 
@@ -1297,7 +1313,17 @@
     "projectile_lifetime": 200,
     "projectile_count": 7,
     "spread_degrees": 70,
-    "_comment": "The Nova with four more damage a bolt, on the longest cooldown in the game."
+    "inflict_ticks": 180,
+    "inflict": { "regen": -12 },
+    "_comment": [
+      "The Nova with four more damage a bolt, on the longest cooldown in the",
+      "game.",
+      "",
+      "And it leaves the ground burning: -0.12 hp a tick for three seconds, so",
+      "about 21 damage after the bolt, paid a whole point at a time out of the",
+      "same bank health regeneration uses. Seven bolts, and a body caught by two",
+      "of them burns once -- a status replaces rather than stacking."
+    ]
   },
 
   "battle_priest_crusade": {
