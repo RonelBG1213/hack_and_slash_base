@@ -126,7 +126,7 @@ class HeroPanel:
         self.font = pygame.font.Font(None, 16)
         self.small = pygame.font.Font(None, 13)
 
-    def draw(self, surface: pygame.Surface, run) -> None:
+    def draw(self, surface: pygame.Surface, run, close_key: str = "I") -> None:
         self._wash(surface)
 
         heading = self.title.render("THE HERO", False, config.ACCENT)
@@ -152,7 +152,11 @@ class HeroPanel:
         for index, name in enumerate(ROWS):
             self._row(surface, run, index, name)
 
-        hint = self.small.render("I or Esc to close", False, config.GREY)
+        # `close_key` rather than a literal: the sheet key is rebindable, and a
+        # panel naming a key that no longer opens it is worse than one naming
+        # none. Defaulted to the shipped key so a bare `HeroPanel()` -- the
+        # tools, the tests -- draws what it always did.
+        hint = self.small.render(f"{close_key} or Esc to close", False, config.GREY)
         surface.blit(
             hint, ((config.INTERNAL_W - hint.get_width()) // 2, hint_y(len(ROWS)))
         )

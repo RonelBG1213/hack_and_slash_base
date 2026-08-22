@@ -29,7 +29,14 @@ PURE_PACKAGES = ("core", "game")
 #: preferences, and it is on this list because the window size is read from it
 #: *before* there is a window to ask -- the moment it imports pygame, `main.py`
 #: can no longer decide how big to open the display.
-PURE_MODULES = ("config", "settings")
+#:
+#: `bindings` is here as a consequence of `settings` rather than on its own
+#: account: the bindings are a preference, `Settings` holds them, and a module
+#: `settings` imports cannot be less pure than `settings` is. That constraint is
+#: the whole reason a binding is stored as a key *name* -- naming a `pygame.K_*`
+#: would need the import this test forbids. `scenes/keymap.py` is where the
+#: translation lives, and it is not on this list.
+PURE_MODULES = ("config", "settings", "bindings")
 
 
 def _pure_modules() -> list[str]:

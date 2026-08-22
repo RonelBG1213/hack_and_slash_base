@@ -71,10 +71,21 @@ stage that was saved rather than one that resembles it. There is deliberately no
 mid-fight save — see `src/hack_and_slash/game/save.py` for why.
 
 **Settings** covers window scale and fullscreen, screenshake, damage numbers, the
-seed for the next run, and erasing the save and profile, with the controls listed
-beside them for reference. They are printed, not rebindable. Nothing on that screen
-can change how a fight resolves, which is the line it is drawn on: difficulty is
-a balance decision and balance decisions live in `data/` where they get swept.
+seed for the next run, erasing the save and profile, and a **Controls** row that
+opens the key bindings. Nothing on that screen can change how a fight resolves,
+which is the line it is drawn on: difficulty is a balance decision and balance
+decisions live in `data/` where they get swept. Which key swings is not how hard
+the swing lands, so the bindings sit on the right side of that line.
+
+**Controls** rebinds the eleven gameplay keys — the four directions, the four
+attacks, the roll, the character sheet and restart. Up and down to choose, Enter
+to arm a row, then press the key you want; Escape cancels an armed row instead of
+leaving, and a Reset row puts everything back. Rebinding an action **replaces**
+every key it had, so binding Move up to the up arrow drops `W` from it.
+
+Escape, Enter and the digits that buy at a stall, spend at a shrine and choose at
+the fork are **not** rebindable, and the screen refuses them: they are how you
+reach that screen and leave it. The mouse buttons are not rebindable either.
 
 **Difficulty** is chosen on the character select, beside the class — **Easy,
 Normal, Hard, Nightmare**, up and down to move between them. A tier says how
@@ -98,19 +109,27 @@ gitignored, like `levels/` and `assets/`.
 
 ## Controls
 
-Also on the Settings screen, in short form — this table is the long one.
+What the game ships with. Everything in the first table is **rebindable** on
+Settings → Controls; nothing in the second is.
 
 | Input | Action |
 | --- | --- |
 | WASD / arrows | Move |
-| Mouse | Aim |
 | Left click (or `J`) | Light attack — hold to keep swinging |
 | `Q` | Class buff — no hitbox; grants your class's own stat block for a few seconds |
 | `E` | Heavy skill |
 | `F` | Ultimate |
-| Space / Shift / right click | Dodge roll |
+| Space / Shift | Dodge roll |
 | `I` / Tab | Character sheet — what the class brings, what the run earned, and the total |
 | `R` | Restart the run |
+
+Aiming is the mouse and the two mouse buttons are fixed: left click swings and
+right click rolls, alongside whatever keys those actions are bound to.
+
+| Input | Action |
+| --- | --- |
+| Mouse | Aim |
+| Left click / right click | Swing / dodge roll |
 | Esc | Back to the menu |
 | Up / down, Enter | Choose, on the menu and the Settings screen |
 | Left / right | Change a value, on the Settings screen |
@@ -118,6 +137,12 @@ Also on the Settings screen, in short form — this table is the long one.
 | `1`–`3` | Spend a point, at a shrine — three of the eight attributes |
 | `1` `2` | Choose a path, on the promotion screen after stage twenty |
 | Enter / Space / Esc | Dismiss the stall, the shrine or the character sheet |
+
+The second table is fixed because every row in it is how you reach a screen or
+leave one. A swing bound to Escape is a player who cannot get out of the arena;
+a roll bound to `1` is a player who buys a Tonic every time they dodge at a
+stall. `state/settings.json` records only the actions you actually moved, so a
+key that never gets rebound follows the game if the shipped default ever changes.
 
 Between two stages is a **reward room** you walk through: a fountain, a shop
 stall, a shrine or a chest, and three doors naming what the room after the

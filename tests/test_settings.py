@@ -13,6 +13,8 @@ somebody tidying up, so it is asserted rather than commented.
 
 from __future__ import annotations
 
+import json
+
 from hack_and_slash import settings as settings_module
 from hack_and_slash.game import profile
 from hack_and_slash.settings import AUTO_SCALE, Settings
@@ -31,6 +33,9 @@ def test_a_fresh_install_is_the_game_as_it_shipped() -> None:
     assert fresh.screenshake is True
     assert fresh.damage_numbers is True
     assert fresh.seed == 0
+    # Empty rather than filled in with `bindings.DEFAULTS`, and the difference
+    # is the whole point: this player follows the shipped key if it ever moves.
+    assert fresh.bindings == {}
 
 
 def test_settings_survive_a_round_trip(tmp_path) -> None:
@@ -45,6 +50,45 @@ def test_settings_survive_a_round_trip(tmp_path) -> None:
     assert read.screenshake is False
     assert read.damage_numbers is True
     assert read.seed == 1234
+
+
+def test_bindings_survive_a_round_trip(tmp_path) -> None:
+    """Key *names*, so the file is one a person can read and fix.
+
+    `bindings.py` and this module are both pygame-free -- the window size is
+    read before there is a window to ask -- so neither could name a `K_*` even
+    if a raw keycode were the better thing to store, which it is not.
+    """
+    path = tmp_path / "settings.json"
+    settings_module.save(Settings(bindings={"dodge": ["c"], "heavy": ["v"]}), path)
+
+    assert settings_module.load(path).bindings == {"dodge": ["c"], "heavy": ["v"]}
+    assert '"c"' in path.read_text(encoding="utf-8"), "stored as a keycode"
+
+
+def test_a_mangled_bindings_block_costs_the_bindings_and_nothing_else(
+    tmp_path,
+) -> None:
+    """The asymmetry this file exists to assert, applied to the newest field.
+
+    Four ways the block can be wrong -- not a mapping, an action from a later
+    build, a value that is not a list, a key that is not a string -- and none of
+    them may stop the game starting or take the other five preferences with it.
+    """
+    path = tmp_path / "settings.json"
+
+    path.write_text(json.dumps({"scale": 5, "bindings": "sideways"}), encoding="utf-8")
+    read = settings_module.load(path)
+    assert read.bindings == {}
+    assert read.scale == 5, "a bad bindings block took an unrelated setting with it"
+
+    path.write_text(
+        json.dumps(
+            {"bindings": {"grapple": ["g"], "dodge": ["c"], "heavy": 7, "sheet": [1]}}
+        ),
+        encoding="utf-8",
+    )
+    assert settings_module.load(path).bindings == {"dodge": ["c"]}
 
 
 def test_a_missing_file_is_not_an_error(tmp_path) -> None:

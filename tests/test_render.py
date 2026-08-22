@@ -12,6 +12,7 @@ import pygame
 import pytest
 
 from hack_and_slash import config
+from hack_and_slash.bindings import Action
 from hack_and_slash.core import campaign_io
 from hack_and_slash.core.vec2 import Vec2
 from hack_and_slash.game import skills
@@ -22,10 +23,11 @@ from hack_and_slash.render.atlas import load as load_atlas
 from hack_and_slash.render.effects import Effects
 from hack_and_slash.render.hud import PIP_ACTIVE, Hud
 from hack_and_slash.render.renderer import Renderer
-from hack_and_slash.scenes import smoke
+from hack_and_slash.scenes import keymap, smoke
 from hack_and_slash.scenes.menu import MenuScene
 from hack_and_slash.scenes.play import PlayScene
 from hack_and_slash.scenes.select import CharacterSelectScene
+from hack_and_slash.settings import Settings
 
 from .helpers import BESTIARY, HERO, add_enemy, make_world
 
@@ -340,6 +342,98 @@ def test_a_skill_key_selects_its_slot_and_fires_once(atlas) -> None:
 
     scene._consume_edges()
     assert scene._read_intent().weapon == skills.LIGHT, "the press fired twice"
+
+
+def rebound(action, name: str) -> Settings:
+    """Settings with one action moved, built the way the screen builds them."""
+    settings = Settings()
+    assert keymap.assign(settings, action, name) is None
+    return settings
+
+
+def test_a_rebound_skill_fires_on_its_new_key(atlas) -> None:
+    """The whole feature, in the units the sim cares about.
+
+    Driven through the same three calls as the test at the top of this section:
+    a keypress becomes an `Intent` naming a slot. The only difference is which
+    key, which is the point.
+    """
+    scene = PlayScene(
+        campaign(), BESTIARY, atlas, settings=rebound(Action.HEAVY, "v")
+    )
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_v))
+    intent = scene._read_intent()
+    assert intent.attack and intent.weapon == skills.HEAVY
+
+    scene._consume_edges()
+    assert scene._read_intent().weapon == skills.LIGHT, "the press fired twice"
+
+
+def test_the_key_a_rebound_skill_used_to_be_on_stops_working(atlas) -> None:
+    """Rebinding replaces, so the old key is a key like any other now."""
+    scene = PlayScene(
+        campaign(), BESTIARY, atlas, settings=rebound(Action.HEAVY, "v")
+    )
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_e))
+    assert scene._read_intent().weapon == skills.LIGHT
+
+
+def test_a_rebound_dodge_buffers_from_its_new_key(atlas) -> None:
+    scene = PlayScene(
+        campaign(), BESTIARY, atlas, settings=rebound(Action.DODGE, "c")
+    )
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_c))
+    assert scene._read_intent().dodge
+
+
+def test_a_rebound_sheet_key_closes_the_sheet_it_opened(atlas) -> None:
+    """Derived rather than a constant, because the panel toggles on its own key.
+
+    `SHEET_EXIT_KEYS` used to be a module constant built from the shipped keys.
+    A rebound key that opened a panel it could not close would be a run ended by
+    Escape, which is exactly the trade the shop's exit keys exist to avoid.
+    """
+    scene = PlayScene(
+        campaign(), BESTIARY, atlas, settings=rebound(Action.SHEET, "c")
+    )
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_c))
+    assert scene.inspecting
+
+    scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_c))
+    assert not scene.inspecting
+
+
+def test_the_hud_pip_names_the_key_that_actually_fires_it(atlas) -> None:
+    """A pip still saying Q after the buff moved is confidently wrong.
+
+    Worse than an unlabelled pip: a player reads it, presses it, and nothing
+    happens. `SKILL_PIP_LABELS` stays in `render/hud.py` as the shipped default
+    for the tools and the bare-`Hud()` tests, and `PlayScene` passes its own.
+    """
+    scene = PlayScene(
+        campaign(), BESTIARY, atlas, settings=rebound(Action.NEUTRAL, "c")
+    )
+
+    # Spied rather than read off the scene: `scene.skill_labels` being right and
+    # never reaching the HUD is exactly the bug this is here to catch.
+    seen = {}
+    scene.hud.draw = lambda *args, **kwargs: seen.update(kwargs)
+    scene.draw(pygame.Surface((config.INTERNAL_W, config.INTERNAL_H)))
+
+    labels = seen["skill_labels"]
+    assert labels[skills.NEUTRAL] == "C"
+    assert labels[skills.HEAVY] == "E", "an untouched slot moved"
+
+
+def test_a_bare_hud_still_draws_the_keys_that_shipped() -> None:
+    """The default is what `tools/screenshot.py` and half this file rely on."""
+    from hack_and_slash.render.hud import SKILL_PIP_LABELS
+
+    assert SKILL_PIP_LABELS[skills.NEUTRAL] == "Q"
 
 
 def test_the_highest_slot_wins_when_two_keys_land_in_one_frame(atlas) -> None:
@@ -1730,7 +1824,7 @@ def test_the_hero_panel_takes_the_screen_from_the_banner(atlas) -> None:
 
     drawn = []
     scene._draw_banner = lambda surface: drawn.append("banner")
-    scene.hero_panel.draw = lambda surface, run: drawn.append("sheet")
+    scene.hero_panel.draw = lambda *args, **kwargs: drawn.append("sheet")
 
     scene.draw(pygame.Surface((config.INTERNAL_W, config.INTERNAL_H)))
     assert drawn == ["sheet"], "the banner drew over the character sheet"

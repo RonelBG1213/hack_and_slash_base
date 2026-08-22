@@ -36,7 +36,7 @@ list of absences: the systems depth is already past what most projects on that
 shelf ship with. Five classes forking into ten, thirty-five distinct attacks,
 ten bosses, six enemy archetypes with nine variants, an eight-attribute layer,
 a twelve-piece gear pool, hazards, four seeded RNG streams and a headless suite
-of ~803 tests holding a measured balance grid. **The gaps below are product
+of ~1,235 tests holding a measured balance grid. **The gaps below are product
 gaps, not engineering ones**, and that is a much better problem to have than the
 reverse.
 
@@ -113,7 +113,12 @@ plugs into. Aim comes off a stick instead of a cursor and nothing under the seam
 learns about it.
 
 It pairs naturally with [rebinding](#what-players-will-file-as-bugs), which is
-the same refactor seen from the other side.
+the same refactor seen from the other side — **and that half has now shipped**,
+which makes this smaller again than the paragraph above already claimed. The
+named actions a pad would bind to exist (`bindings.Action`), the resolution of a
+binding to a device event is already isolated in one module
+(`scenes/keymap.py`), and `scenes/play.py` reads actions rather than keys. What
+is left is a second table of bindings and a stick where the cursor was.
 
 ---
 
@@ -252,7 +257,7 @@ simply absent.
 
 | | Where it stands | Why it matters |
 | --- | --- | --- |
-| **Key rebinding** | The [README](../README.md#the-main-menu) states the controls are printed, not rebindable | An accessibility baseline, not a preference. Shares a refactor with [controller support](#no-controller) |
+| ~~**Key rebinding**~~ | **Shipped.** Settings → Controls rebinds the eleven gameplay keys; menu keys, the panel digits and the mouse buttons are fixed by decision and [Limits](limits.md#only-the-gameplay-keys-rebind) records why | Was an accessibility baseline. It also built `bindings.Action`, which is the list [controller support](#no-controller) now binds to rather than inventing |
 | **In-fight pause** | `Esc` leaves to the menu; there is no resume overlay | Every player will press it once expecting a pause and lose their run |
 | **Accessibility options** | Screenshake and damage numbers toggle on the Settings screen | No colourblind palette, no text scale, no assist mode. The difficulty tiers are a start and every one but Normal is [untuned](limits.md#two-of-the-three-difficulty-tiers-are-unmeasured) |
 | **Localisation** | Strings are hardcoded in `scenes/` and `render/` | Cheap now as a string table, expensive later as a refactor across nine render modules |
@@ -312,8 +317,10 @@ The honest first instrument for all three is hands on a keyboard, not
 
 1. **Sound.** Biggest perceived-quality jump on the page, and `game/events.py`
    already fires at every moment a cue is needed.
-2. **Controller, and rebinding with it.** One refactor at the `Intent` seam,
-   two features out.
+2. **Controller.** ~~And rebinding with it~~ — rebinding shipped first and on
+   its own, which was the cheaper order than it looked: it did the refactor at
+   the `Intent` seam, so the controller is now the second binding table rather
+   than the second half of one job.
 3. **Packaging to a single executable**, with the generators run as part of the
    build. Nothing above this line reaches anyone without it.
 4. **Run-end summary, then the first unlocks** — access only, never stats, per

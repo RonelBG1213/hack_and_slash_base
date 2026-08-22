@@ -19,8 +19,10 @@ src/hack_and_slash/
   core/     vectors, level, campaign, collision, spatial index   <- no pygame
   game/     entities, actions, combat, AI, run, the tick          <- no pygame
   render/   atlas, camera, renderer, HUD, effects, shop and job panels
-  scenes/   menu, select, play, options, achievements, unlockables, smoke
+  scenes/   menu, select, play, options, controls, keymap, achievements,
+            unlockables, smoke
   settings.py  the player's preferences                            <- no pygame
+  bindings.py  which action a key asks for                         <- no pygame
 data/       entities.json, weapons.json, loot.json   -- content, not code
 levels/     stage1..40.json, campaign.json           -- generated
 assets/     sprites.png                              -- generated
@@ -39,7 +41,9 @@ tests/      803 tests, all headless
 | `core/spatial.py` | Broadphase hash. `World` builds it with cell 48 — a little wider than the longest reach in the game, so a swing query sweeps four buckets at worst |
 | `game/save.py` | Snapshot and restore a `Run`. Pure functions over a `dict`; the disk is touched from `scenes/` only, so the balance sweep cannot grow a file dependency |
 | `game/profile.py` | Four lifetime counters, and the only thing in the project that outlives a run |
-| `settings.py` | Window, effect toggles, seed. Beside `config.py` rather than in `render/` because the window size is read *before* there is a display to ask |
+| `settings.py` | Window, effect toggles, seed, key bindings. Beside `config.py` rather than in `render/` because the window size is read *before* there is a display to ask |
+| `bindings.py` | The eleven things a player can ask for, and the key names that ship asking them. Pure, as a consequence of `settings.py` being pure — see [the Intent seam](#which-key-and-where-that-lives) |
+| `scenes/keymap.py` | The only place a key *name* becomes a keycode, plus the rules about what may be bound. Not a `Scene`, like `scenes/smoke.py` |
 
 Both are **generated**, and they are treated differently on the way into git:
 `assets/*.png` is gitignored, `levels/*.json` is committed. A fresh clone must
@@ -141,6 +145,36 @@ The player and the AI produce the same structure, so they go through exactly the
 same code path, and a test can script a whole fight with no input device, no
 window and no clock. `game/autoplay.py` is a bot that produces `Intent`s; so is
 `scenes/play.py` reading the keyboard. Neither is privileged.
+
+### Which key, and where that lives
+
+Rebinding sits *above* the seam, and it is the clearest demonstration of what
+the seam buys. Three layers, each knowing strictly less than the one above it:
+
+| | knows | may import pygame |
+| --- | --- | --- |
+| `bindings.py` | that there is an `Action.DODGE`, and that it ships on `"space"` | **no** |
+| `scenes/keymap.py` | what `"space"` is as an integer on this machine | yes |
+| `scenes/play.py` | that this keycode being down means `Intent(dodge=True)` | yes |
+| `game/sim.py` | `Intent(dodge=True)` | **no** |
+
+Bindings are stored as SDL key *names* rather than as keycodes, and that is
+forced rather than chosen: they live on `Settings`, `Settings` is read before
+there is a window to ask how big to be, and `test_architecture.py` therefore
+holds both it and `bindings.py` pygame-free. A module that may not import pygame
+cannot name a `pygame.K_*`. Names turn out to be the better storage anyway --
+`"left shift"` is something a person can read in a diff and fix by hand, where
+`1073742049` is not.
+
+`Settings.bindings` records **only the actions that were changed**, which is
+`AUTO_SCALE`'s rule a second time: an action nobody rebound has had no opinion
+expressed about it, so it follows the shipped default if that ever moves.
+
+**Nothing below the seam learns any of it happened.** That is why rebinding
+could not move the recorded balance grid even in principle -- `autoplay` and
+`ai` produce Intents with no input device in sight, and `test_playthrough.py`
+imports nothing from `scenes/`. A controller lands the same way: a second table
+of names under the same `Action` values, and nothing under the seam changes.
 
 ## The tick
 

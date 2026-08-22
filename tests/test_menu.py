@@ -17,11 +17,15 @@ from __future__ import annotations
 import pygame
 import pytest
 
-from hack_and_slash import config
+from hack_and_slash import config, settings as settings_module
+from hack_and_slash.bindings import Action
 from hack_and_slash.core import campaign_io
 from hack_and_slash.game import difficulty, jobs, profile, save
 from hack_and_slash.game.run import Run
 from hack_and_slash.scenes.achievements import AchievementsScene
+from hack_and_slash.scenes import keymap
+from hack_and_slash.scenes.controls import ROWS as ROWS_C
+from hack_and_slash.scenes.controls import ControlsScene
 from hack_and_slash.scenes.menu import ITEMS, MenuScene
 from hack_and_slash.scenes.options import ROWS, OptionsScene
 from hack_and_slash.scenes.play import PlayScene
@@ -45,6 +49,16 @@ def row(action: str) -> int:
 
 def press(scene, key: int):
     return scene.handle_event(pygame.event.Event(pygame.KEYDOWN, key=key))
+
+
+def row_of(action: str) -> int:
+    """The index of a Settings row, by id -- `row()` above, for the other screen."""
+    return [name for name, _ in ROWS].index(action)
+
+
+#: Where each action sits on the Controls screen. Derived, so re-ordering
+#: `bindings.LABELS` is a change to one dict rather than to a dozen indices here.
+ROW_OF = {action: i for i, action in enumerate(ROWS_C) if action in Action.__members__.values()}
 
 
 def a_saved_run(stage: int = 7, hero: str = "rogue") -> Run:
@@ -332,6 +346,23 @@ def test_load_game_returns_the_saved_run_to_the_stage_it_was_left_on(atlas) -> N
     assert loaded.run.stage_number == 7
     assert loaded.run.hero_type_id == "rogue"
     assert loaded.run.gold == 1234
+
+
+def test_restarting_keeps_the_settings_the_run_was_started_with(atlas) -> None:
+    """`restarted()` passed the difficulty and not the preferences.
+
+    A real bug before rebinding landed -- press R and screenshake came back on --
+    and invisible enough to have gone unnoticed, because nothing about a restart
+    says it should have kept anything. With the key bindings on the same object
+    it stops being invisible: it would mean the keys reverting under somebody
+    who pressed restart, which reads as a broken build.
+    """
+    settings = Settings(screenshake=False, bindings={"dodge": ["c"]})
+    scene = PlayScene(campaign(), BESTIARY, atlas, settings=settings)
+
+    again = scene.restarted()
+    assert again.settings.screenshake is False
+    assert keymap.keycodes(again.settings)[Action.DODGE] == (pygame.K_c,)
 
 
 def test_a_promoted_run_loads_back_as_the_class_it_became(atlas) -> None:
@@ -717,6 +748,148 @@ def test_a_loaded_run_restarts_where_it_originally_began(atlas) -> None:
     assert restarted.world.hero.type.id == "magician"
 
 
+# --- the controls screen -----------------------------------------------------
+def controls(**kwargs) -> ControlsScene:
+    return ControlsScene(kwargs.pop("settings", Settings()), kwargs.pop("on_exit", None))
+
+
+def bound(scene, action) -> tuple[int, ...]:
+    return keymap.keycodes(scene.settings)[action]
+
+
+def test_the_controls_row_opens_the_controls_screen(atlas) -> None:
+    screen = OptionsScene(Settings(), None)
+    screen.index = row_of("controls")
+
+    assert isinstance(press(screen, pygame.K_RETURN), ControlsScene)
+
+
+def test_the_controls_screen_comes_back_to_the_settings_it_was_opened_from(
+    atlas,
+) -> None:
+    """And to the same row, because a player went to look something up.
+
+    `OptionsScene._resume` hands back the live instance rather than rebuilding
+    it, unlike `menu._back` -- nothing on the settings screen is a snapshot of
+    anything, so there is nothing that could have gone stale behind it.
+    """
+    screen = OptionsScene(Settings(), None)
+    screen.index = row_of("controls")
+    opened = press(screen, pygame.K_RETURN)
+
+    assert press(opened, pygame.K_ESCAPE) is screen
+    assert screen.index == row_of("controls")
+
+
+def test_arming_a_row_and_pressing_a_key_rebinds_it(atlas) -> None:
+    scene = controls()
+    scene.index = ROW_OF[Action.HEAVY]
+
+    press(scene, pygame.K_RETURN)
+    assert scene.armed is Action.HEAVY
+
+    press(scene, pygame.K_v)
+    assert scene.armed is None
+    assert bound(scene, Action.HEAVY) == (pygame.K_v,)
+
+
+def test_escape_while_armed_cancels_instead_of_leaving(atlas) -> None:
+    """The one place in the game Escape does not mean "back".
+
+    It is also the thing that makes the screen safe to use: a player who armed a
+    row by accident needs a way out that is not "bind Escape to the roll", and
+    Escape is the key they will reach for.
+    """
+    left = []
+    scene = controls(on_exit=lambda: left.append(True))
+    scene.index = ROW_OF[Action.DODGE]
+    press(scene, pygame.K_RETURN)
+
+    assert press(scene, pygame.K_ESCAPE) is None
+    assert not left, "Escape left the screen instead of cancelling the arming"
+    assert scene.armed is None
+    assert bound(scene, Action.DODGE) == (
+        pygame.K_SPACE,
+        pygame.K_LSHIFT,
+        pygame.K_RSHIFT,
+    )
+
+
+def test_escape_leaves_when_nothing_is_armed(atlas) -> None:
+    left = []
+    scene = controls(on_exit=lambda: left.append(True) or None)
+
+    press(scene, pygame.K_ESCAPE)
+    assert left, "Escape did not leave a screen with no row armed"
+
+
+def test_a_refused_binding_says_why_and_changes_nothing(atlas) -> None:
+    scene = controls()
+    scene.index = ROW_OF[Action.DODGE]
+    press(scene, pygame.K_RETURN)
+    press(scene, pygame.K_1)
+
+    assert scene.complaint, "a refusal drew no reason"
+    assert scene.settings.bindings == {}
+
+
+def test_moving_the_cursor_clears_the_last_complaint(atlas) -> None:
+    """A refusal answers a keypress; it is not a state to be stuck in."""
+    scene = controls()
+    scene.index = ROW_OF[Action.DODGE]
+    press(scene, pygame.K_RETURN)
+    press(scene, pygame.K_1)
+    assert scene.complaint
+
+    press(scene, pygame.K_DOWN)
+    assert not scene.complaint
+
+
+def test_resetting_takes_two_presses(atlas) -> None:
+    """The same confirmation the erase row uses, for a smaller loss."""
+    scene = controls()
+    scene.index = ROW_OF[Action.HEAVY]
+    press(scene, pygame.K_RETURN)
+    press(scene, pygame.K_v)
+
+    scene.index = len(ROWS_C) - 1
+    press(scene, pygame.K_RETURN)
+    assert scene.confirming
+    assert bound(scene, Action.HEAVY) == (pygame.K_v,), "one press reset it"
+
+    press(scene, pygame.K_RETURN)
+    assert bound(scene, Action.HEAVY) == (pygame.K_e,)
+    assert scene.settings.bindings == {}
+
+
+def test_moving_away_disarms_the_reset_row(atlas) -> None:
+    scene = controls()
+    scene.index = len(ROWS_C) - 1
+    press(scene, pygame.K_RETURN)
+
+    press(scene, pygame.K_UP)
+    assert not scene.confirming
+
+
+def test_a_rebinding_is_written_on_the_way_out(atlas) -> None:
+    """Written on exit, not per keypress -- `options.py`'s rule, same reason."""
+    scene = controls()
+    scene.index = ROW_OF[Action.DODGE]
+    press(scene, pygame.K_RETURN)
+    press(scene, pygame.K_c)
+
+    assert settings_module.load().bindings == {}, "written before leaving"
+
+    press(scene, pygame.K_ESCAPE)
+    assert settings_module.load().bindings == {"dodge": ["c"]}
+
+
+def test_the_screen_draws_something(atlas, display) -> None:
+    surface = pygame.Surface((config.INTERNAL_W, config.INTERNAL_H))
+    controls().draw(surface)
+    assert not is_blank(surface)
+
+
 # --- layout ------------------------------------------------------------------
 def test_the_menu_column_is_centred_and_nothing_else_is_on_the_screen(atlas) -> None:
     """384 pixels, one column, measured with the menu's own fonts.
@@ -770,8 +943,8 @@ def test_no_settings_row_runs_into_its_own_value(atlas) -> None:
         assert right <= screen.VALUE_X, f"'{label}' runs into its value"
 
         text, _ = drawn._value(name, selected=True)
-        assert screen.VALUE_X + drawn.body.size(text)[0] <= screen.CONTROLS_X, (
-            f"the value for '{label}' runs into the controls column"
+        assert screen.VALUE_X + drawn.body.size(text)[0] <= config.INTERNAL_W, (
+            f"the value for '{label}' runs off the right edge"
         )
 
     last_row = screen.ROW_Y + (len(ROWS) - 1) * screen.ROW_H
@@ -779,26 +952,55 @@ def test_no_settings_row_runs_into_its_own_value(atlas) -> None:
     assert screen.HINT_Y + 11 <= config.INTERNAL_H
 
 
-def test_the_controls_column_fits_beside_the_settings(atlas) -> None:
-    """The check that moved here with the tuple it measures.
+def test_every_controls_row_fits_beside_its_keys(atlas) -> None:
+    """The check that followed the tuple onto the screen it became.
 
-    Settings is the tighter of the two screens for this: the menu had six short
-    labels beside the controls and this has six labels *and* six values. The
-    left column gives up the middle of the screen for it, which is exactly the
-    kind of change that fits until somebody adds a seventh setting.
+    Twelve rows on a 216px surface is the tightest column in the game, and the
+    value side is the half that grows: the roll ships with three keys and every
+    label here is a whole phrase. Measured with the screen's own font, because a
+    row that overruns is a rendering bug that reads as a wording one.
     """
-    from hack_and_slash.scenes import options as screen
+    from hack_and_slash.scenes import controls as screen
 
-    drawn = OptionsScene(Settings(), None)
-    for key, action in screen.CONTROLS:
-        key_right = screen.CONTROLS_X + drawn.small.size(key)[0]
-        assert key_right <= screen.CONTROLS_ACTION_X, f"'{key}' runs into its own action"
+    drawn = ControlsScene(Settings(), None)
+    for i, row in enumerate(screen.ROWS):
+        label, value, _ = drawn._row(row, selected=True)
 
-        action_right = screen.CONTROLS_ACTION_X + drawn.small.size(action)[0]
-        assert action_right <= config.INTERNAL_W, f"'{action}' runs off the right edge"
+        right = screen.LABEL_X + drawn.body.size(label)[0]
+        assert right <= screen.KEY_X, f"'{label}' runs into its keys"
 
-    head_bottom = screen.CONTROLS_HEAD_Y + 11
-    assert head_bottom <= screen.CONTROLS_Y, "the heading is drawn over the first key"
+        value_right = screen.KEY_X + drawn.body.size(value)[0]
+        assert value_right <= config.INTERNAL_W, f"the keys for '{label}' run off"
 
-    last = screen.CONTROLS_Y + (len(screen.CONTROLS) - 1) * screen.CONTROLS_H
-    assert last + 11 <= screen.HINT_Y, "the last binding is drawn over the hint line"
+        assert screen.row_y(i) + 11 <= screen.HINT_Y, f"'{label}' crosses the hint"
+
+    assert screen.TITLE_Y + 22 <= screen.ROW_Y, "the title is drawn over the first row"
+    assert screen.HINT_Y + 11 <= config.INTERNAL_H, "the hint line is off the bottom"
+
+
+def test_the_widest_thing_the_controls_screen_can_say_still_fits(atlas) -> None:
+    """Every transient string, not just the resting state.
+
+    The armed row, the reset confirmation and all three hint lines are drawn in
+    the same places as the values they replace, and each is longer than what it
+    covers. A screen that fits until somebody presses a key is not one that fits.
+    """
+    from hack_and_slash.scenes import controls as screen
+
+    drawn = ControlsScene(Settings(), None)
+    drawn.armed = list(screen.ROWS)[0]
+    _, armed_value, _ = drawn._row(screen.ROWS[0], selected=True)
+    assert screen.KEY_X + drawn.body.size(armed_value)[0] <= config.INTERNAL_W
+
+    drawn.armed = None
+    drawn.confirming = True
+    _, confirm_value, _ = drawn._row(screen.RESET, selected=True)
+    assert screen.KEY_X + drawn.body.size(confirm_value)[0] <= config.INTERNAL_W
+
+    longest = max(
+        "up / down  choose      Enter  rebind      Esc  back",
+        "press a key to bind it, Esc to cancel",
+        "space is the only Dodge roll key",
+        key=lambda text: drawn.small.size(text)[0],
+    )
+    assert drawn.small.size(longest)[0] <= config.INTERNAL_W

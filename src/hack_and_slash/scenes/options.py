@@ -1,22 +1,30 @@
-"""The Settings screen: six preferences on the left, the controls on the right.
+"""The Settings screen: seven preferences, one of which opens another screen.
 
-The controls used to be printed down the side of the title screen. They are a
-reference and the title screen is a decision, and a player who wants to look up
-which key rolls is not a player who is choosing what to do next -- they are
-already in a run, and Escape brings them here. This is the screen you arrive at
-knowing what you want to find out.
+The controls used to be printed down the side of the title screen, then down the
+side of this one. They are a reference and the title screen is a decision, and a
+player who wants to look up which key rolls is not a player who is choosing what
+to do next -- they are already in a run, and Escape brings them here.
 
-They are drawn, not editable. Rebinding is a real feature and this is not it; the
-column would be the same column with a cursor in it, and the day that lands it
-takes `CONTROLS` with it rather than replacing anything here.
+**They are editable now, and they left.** This module used to say that rebinding
+"would be the same column with a cursor in it, and the day that lands it takes
+`CONTROLS` with it rather than replacing anything here". That is what happened:
+eleven actions and a reset row do not fit in a column beside seven settings, so
+`scenes/controls.py` is a screen and the Controls row is how you reach it. The
+prediction was right about the tuple and wrong about the column.
 
-Six rows, and the discipline behind them is worth stating once: **five of them
-change how the game looks and the sixth changes what is remembered. None of them
-changes how a fight resolves.** That is not an accident of what happened to be
-easy -- it is the line this screen is drawn on. A difficulty row, a damage
-slider, a "start with more health" toggle would each be a balance decision worn
-as a preference, and the project's whole measurement culture rests on balance
-decisions being made in `data/` where they can be swept.
+Seven rows, and the discipline behind them is worth stating once: **five of them
+change how the game looks, one changes what is remembered, and the seventh
+changes which key does a thing. None of them changes how a fight resolves.**
+That is not an accident of what happened to be easy -- it is the line this
+screen is drawn on. A difficulty row, a damage slider, a "start with more
+health" toggle would each be a balance decision worn as a preference, and the
+project's whole measurement culture rests on balance decisions being made in
+`data/` where they can be swept.
+
+The bindings row is that line holding rather than bending, and it is worth being
+explicit about why, because it is the first row here that a player uses *during*
+a fight: which key swings is not how hard the swing lands. The sim takes an
+`Intent` and never learns a key was involved.
 
 **The game now has difficulty tiers, and they are still not here.** They live in
 `data/difficulty.json` -- swept by `tools/balance.py --difficulty`, with the
@@ -49,6 +57,7 @@ from .. import config, settings as settings_module
 from ..game import profile, save
 from ..settings import SCALES, Settings
 from .base import Scene
+from .controls import ControlsScene
 
 #: The rows, in order, as `(id, label)`. Branched on by id so a relabelling is
 #: never a rewiring.
@@ -57,6 +66,7 @@ ROWS = (
     ("fullscreen", "Fullscreen"),
     ("screenshake", "Screenshake"),
     ("damage_numbers", "Damage numbers"),
+    ("controls", "Controls"),
     ("seed", "Run seed"),
     ("erase", "Erase saved run"),
 )
@@ -69,36 +79,30 @@ TOGGLES = frozenset({"fullscreen", "screenshake", "damage_numbers"})
 #: What each key does, as `(key, action)`. Moved here from the title screen
 #: unchanged. Prose rather than key names on the right -- "dodge roll" is what
 #: the player is looking for and `space` is the answer, not the question.
-CONTROLS = (
-    ("WASD", "move"),
-    ("mouse", "aim"),
-    ("left click", "swing"),
-    ("space", "dodge roll"),
-    ("Q E F", "the other attacks"),
-    ("I", "the character sheet"),
-    ("R", "restart the run"),
-    # "back here" while this list lived on the title screen, which it does not
-    # any more. Escape means the menu from inside a run and it means the menu
-    # from this screen, so the wording is true from wherever it is being read.
-    ("Esc", "back to the menu"),
-)
-
 # --- layout, in the 384x216 internal space -----------------------------------
-# Two columns now, so the preferences give up the right-hand half they had. The
-# widest value is "press twice" at 61px and the widest label "Damage numbers" at
-# 95px, which is what sets `VALUE_X`; `test_menu.py` measures both against the
-# real fonts rather than trusting these numbers to stay true.
+# One column again. The controls had the right-hand half and took it with them
+# when they became a screen of their own, so the widest thing on this one is now
+# the "Damage numbers" label at 95px against the "press twice" value at 61px,
+# which is what sets `VALUE_X`.
+#
+# `ROW_H` came down from 20 when the Controls row made this seven rows: at 20
+# the seventh sat at y=174 and its 13px of text crossed the hint line at 186.
+# The row spacing is the dial rather than the hint's position, because the hint
+# is the last line on the screen and has nowhere below it to go.
+#
+# `test_menu.py` measures all of it against the real fonts rather than trusting
+# these numbers to stay true.
 TITLE_Y = 18
 ROW_Y = 54
-ROW_H = 20
-LABEL_X = 30
-VALUE_X = 136
-
-CONTROLS_X = 224
-CONTROLS_ACTION_X = CONTROLS_X + 46
-CONTROLS_HEAD_Y = 54
-CONTROLS_Y = 70
-CONTROLS_H = 15
+ROW_H = 18
+# Shifted right by 78 when the controls left: the rows used to be the left
+# column of two and are now the only one, and a block hard against the left edge
+# under a centred title reads as a screen that lost something. The pair moves
+# together so the gap between a label and its value is the one that was
+# measured -- `LABEL_X` to the widest value's right edge is 167px, centred in
+# 384.
+LABEL_X = 108
+VALUE_X = 214
 
 HINT_Y = 186
 
@@ -143,7 +147,10 @@ class OptionsScene(Scene):
         elif event.key in (pygame.K_RIGHT, pygame.K_d):
             self._nudge(1)
         elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
-            self._activate()
+            # The only row that answers with a scene is Controls. Returned
+            # rather than swallowed, because a row that opens a screen is the
+            # one thing this handler could not do before.
+            return self._activate()
         elif ROWS[self.index][0] == "seed":
             # Typing only reaches the seed row, so no other row has to defend
             # itself against a digit.
@@ -184,20 +191,27 @@ class OptionsScene(Scene):
             # player pressing right on a checkbox expects something to happen.
             self._activate()
 
-    def _activate(self) -> None:
+    def _activate(self) -> Optional[Scene]:
         row = ROWS[self.index][0]
+
+        if row == "controls":
+            # The bindings are written by that screen on its own way out, and
+            # `_resume` brings the cursor back to this row rather than to the
+            # top -- a player who went to look at the keys is a player who was
+            # in the middle of something here.
+            return ControlsScene(self.settings, self._resume)
 
         if row in TOGGLES:
             setattr(self.settings, row, not getattr(self.settings, row))
             self.confirming = False
             if row == "fullscreen":
                 self._apply_display()
-            return
+            return None
 
         if row == "erase":
             if not self.confirming:
                 self.confirming = True
-                return
+                return None
             # Both, together. They are presented as one row because they are one
             # idea -- "forget that I played this" -- and erasing the run while
             # keeping the scoreboard of it would be a strange half-answer.
@@ -205,6 +219,18 @@ class OptionsScene(Scene):
             profile.reset()
             self.confirming = False
             self.erased = True
+        return None
+
+    def _resume(self) -> "OptionsScene":
+        """This screen again, with the cursor where it was left.
+
+        Returned rather than rebuilt, unlike `menu._back`. That one is rebuilt
+        because the menu reads the save file when it is constructed and a screen
+        behind it may have deleted the run; nothing on this screen is a snapshot
+        of anything, so handing back the live instance keeps the cursor, the
+        erase row's state and the settings object all as they were.
+        """
+        return self
 
     def _type_seed(self, event: pygame.event.Event) -> None:
         """Digits and backspace, on the one row that holds a number.
@@ -280,8 +306,6 @@ class OptionsScene(Scene):
             text, color = self._value(row, selected)
             surface.blit(self.body.render(text, False, color), (VALUE_X, y))
 
-        self._draw_controls(surface)
-
         hint = self.small.render(
             "up / down  choose      left / right  change      Esc  back",
             False,
@@ -289,25 +313,14 @@ class OptionsScene(Scene):
         )
         surface.blit(hint, ((config.INTERNAL_W - hint.get_width()) // 2, HINT_Y))
 
-    def _draw_controls(self, surface: pygame.Surface) -> None:
-        """The right-hand column: a reference, headed so it is not read as a row.
-
-        Without the heading this is six settings and then seven more lines in the
-        same grid, and the first thing a player tries is pressing right on one of
-        them.
-        """
-        head = self.small.render("CONTROLS", False, config.ACCENT)
-        surface.blit(head, (CONTROLS_X, CONTROLS_HEAD_Y))
-
-        for i, (key, action) in enumerate(CONTROLS):
-            y = CONTROLS_Y + i * CONTROLS_H
-            surface.blit(self.small.render(key, False, config.WHITE), (CONTROLS_X, y))
-            surface.blit(
-                self.small.render(action, False, config.GREY), (CONTROLS_ACTION_X, y)
-            )
-
     def _value(self, row: str, selected: bool) -> tuple[str, tuple[int, int, int]]:
         """What to draw in the right-hand column, and in what colour."""
+        if row == "controls":
+            # Nothing. The row opens a screen rather than holding a value, and
+            # a summary of eleven bindings in 61 pixels would be a worse answer
+            # than the screen it is standing in front of.
+            return "", config.GREY
+
         if row == "erase":
             if self.confirming:
                 return "press again", config.BAD

@@ -1,9 +1,14 @@
 """What the player has chosen about how the game runs, and where it is kept.
 
-Five values, and none of them may touch a fight. That is the whole design rule
+Six values, and none of them may touch a fight. That is the whole design rule
 here: `config.py` is what the game *is* and this is how one person likes looking
 at it, so anything that would move a damage roll belongs in `data/`, behind a
 tuning decision and a sweep, rather than behind a menu row.
+
+The key bindings are the newest of the six and they follow the rule without
+needing an argument: which key swings is not how hard the swing lands. They are
+named actions from `bindings.py`, which is pure for the same reason this module
+is -- see the note on `Settings.bindings`.
 
 The difficulty tiers are that rule being followed, not broken: they are content
 in `data/difficulty.json`, they are chosen once per run on the character select,
@@ -27,10 +32,10 @@ same reason `progression` is not `levels`: one word, one meaning, per project.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
-from . import config
+from . import bindings, config
 
 #: `scale: 0` means "whatever the game shipped with". Stored as a sentinel
 #: rather than by writing `DEFAULT_SCALE` into the file, so a settings file
@@ -67,6 +72,21 @@ class Settings:
     #: there is no sentinel here and none is wanted.
     seed: int = 0
 
+    #: Which keys ask for which action, as `{action name: [key name]}` -- and
+    #: **only the actions the player actually moved.** Empty is the whole game
+    #: as it shipped, which is `AUTO_SCALE`'s rule applied a second time: an
+    #: action nobody rebound has had no opinion expressed about it, and
+    #: recording one anyway is how this file quietly outvotes `bindings.DEFAULTS`
+    #: if a shipped key ever moves.
+    #:
+    #: Names rather than keycodes, and the reason is the paragraph at the top of
+    #: this module -- `bindings.py` is pure for the same reason this is, so
+    #: neither can name a `pygame.K_*`. `scenes/keymap.py` does the translation.
+    #:
+    #: This is a preference and it cannot decide a fight: which key swings is
+    #: not how hard the swing lands. The line above holds.
+    bindings: dict[str, list[str]] = field(default_factory=dict)
+
     @property
     def window_size(self) -> tuple[int, int]:
         """Pixel size of the window this asks for.
@@ -77,6 +97,34 @@ class Settings:
         """
         scale = config.DEFAULT_SCALE if self.scale == AUTO_SCALE else self.scale
         return (config.INTERNAL_W * scale, config.INTERNAL_H * scale)
+
+
+def _clean_bindings(value: object) -> dict[str, list[str]]:
+    """Keep the entries that are shaped like bindings and drop the rest.
+
+    Forgiving in the same way and for the same reason as the loader that calls
+    it. Three ways this block can be wrong and none of them may stop the game:
+    it is not a mapping at all, it names an action this build does not have (a
+    file written by a later one), or a value is not a list of key names.
+
+    Whether a name is a key *SDL knows* is deliberately not checked here -- that
+    needs pygame, which this module may not import. `scenes/keymap.py` drops
+    unresolvable names when it translates, so a binding written on another
+    platform survives in the file and simply does not bind here.
+    """
+    if not isinstance(value, dict):
+        return {}
+
+    cleaned: dict[str, list[str]] = {}
+    for action, keys in value.items():
+        if action not in bindings.Action.__members__.values():
+            continue
+        if not isinstance(keys, list):
+            continue
+        named = [k for k in keys if isinstance(k, str) and k]
+        if named:
+            cleaned[str(action)] = named
+    return cleaned
 
 
 def load(path: Path | None = None) -> Settings:
@@ -111,6 +159,8 @@ def load(path: Path | None = None) -> Settings:
         if name in ("fullscreen", "screenshake", "damage_numbers"):
             if isinstance(value, bool):
                 accepted[name] = value
+        elif name == "bindings":
+            accepted[name] = _clean_bindings(value)
         elif isinstance(value, int) and not isinstance(value, bool):
             accepted[name] = value
 

@@ -39,6 +39,13 @@ SKILL_PIP_SPACING = 26
 #: One letter per skill pip, and it is the key you press. A pip labelled with
 #: the attack's name would be a pip you have to read; this one answers the only
 #: question being asked of it, which is "can I press that yet".
+#:
+#: **These are the shipped keys, and they are a fallback rather than the
+#: answer.** The keys are rebindable, so `PlayScene` passes its own labels down
+#: from `scenes/keymap.label` -- a pip still saying Q after the buff moved to C
+#: is worse than a pip with nothing on it, because it is confidently wrong. The
+#: default stays so that `tools/screenshot.py` and every test building a bare
+#: `Hud()` draw exactly what they always did.
 SKILL_PIP_LABELS = {
     skills.NEUTRAL: "Q",
     skills.HEAVY: "E",
@@ -62,7 +69,12 @@ class Hud:
         self.small = pygame.font.Font(None, 13)
 
     def draw(
-        self, surface: pygame.Surface, world: World, run=None, tick: int = 0
+        self,
+        surface: pygame.Surface,
+        world: World,
+        run=None,
+        tick: int = 0,
+        skill_labels: dict[int, str] | None = None,
     ) -> None:
         top = config.INTERNAL_H - config.HUD_H
         pygame.draw.rect(surface, config.PANEL, (0, top, config.INTERNAL_W, config.HUD_H))
@@ -74,7 +86,7 @@ class Hud:
         if hero is not None:
             self._draw_health(surface, hero, top, tick)
             self._draw_dodge(surface, hero, top)
-            self._draw_skills(surface, hero, top)
+            self._draw_skills(surface, hero, top, skill_labels)
 
         self._draw_gold(surface, world, top, run)
         self._draw_remaining(surface, world, top, run)
@@ -161,7 +173,13 @@ class Hud:
             "DODGE",
         )
 
-    def _draw_skills(self, surface: pygame.Surface, hero: Entity, top: int) -> None:
+    def _draw_skills(
+        self,
+        surface: pygame.Surface,
+        hero: Entity,
+        top: int,
+        labels: dict[int, str] | None = None,
+    ) -> None:
         """One pip per skill slot, in slot order, labelled with its key.
 
         Light is not drawn: it has no cooldown, so its pip would be permanently
@@ -188,6 +206,7 @@ class Hud:
         buff just did. Drawing it from empty would need the stamped duration
         remembered per slot, which is state the sim would carry for a cosmetic.
         """
+        labels = labels or SKILL_PIP_LABELS
         y = top + BAR_Y_OFFSET - BAR_H
         drawn = 0
         for slot in skills.COOLDOWN_SLOTS:
@@ -201,7 +220,7 @@ class Hud:
                 y,
                 hero.buff_ticks if buffing else hero.cooldown_on(slot),
                 weapon.buff_ticks if buffing else weapon.cooldown,
-                SKILL_PIP_LABELS[slot],
+                labels[slot],
                 active=buffing,
             )
             drawn += 1

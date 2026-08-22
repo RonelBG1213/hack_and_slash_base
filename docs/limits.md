@@ -207,6 +207,48 @@ the same cell layout to swap in real art — see [Content](content.md#tools).
 Nothing here would have to change to add it; hits already emit events with
 everything a sound cue needs.
 
+### Only the gameplay keys rebind
+
+The eleven actions in `bindings.py` can be moved on Settings → Controls. Four
+things around them cannot, and each is a decision rather than a next step.
+
+**Escape, Enter and the digits are refused**, by name, in `keymap.RESERVED`.
+Escape leaves every screen in the game and closes the shop, the sheet and the
+level panel; Enter dismisses all three and takes a row on the menu; `1`-`8` buy
+at a stall, spend at a shrine and choose a path at the fork, and none of those
+three panels has anywhere else to put a digit. They are how a player reaches the
+rebinding screen and leaves it, so a screen that handed them out could strand
+somebody in the arena they were standing in. The refusal is what makes the
+feature safe rather than a hazard, and it is not a limitation of the
+implementation.
+
+> [!NOTE]
+> **Space is deliberately not reserved, and the reason is worth keeping.** It
+> confirms on every menu *and* it is the shipped dodge key. That works because
+> the arena and the panels are never taking keys in the same moment -- so
+> reserving it would have meant the screen refusing the game's own default,
+> which is the reductio that decided where the line went.
+
+**Menu navigation is not rebindable.** Up, down, left, right and confirm are
+open-coded in `scenes/menu.py`, `options.py`, `select.py` and the four panel
+handlers in `play.py`, and routing them through actions would mean re-expressing
+every panel's exit rule -- including the promotion panel's deliberate refusal to
+have one. The accessibility argument that carried the gameplay keys is much
+weaker here: a menu is navigated a few times a session, an attack is pressed
+hundreds of times a stage.
+
+**The mouse buttons are not rebindable.** Left click swings and right click
+rolls. A button is not a key, `bindings.py` models only keys, and the button
+pair is small enough that a player who cannot use it is not helped by swapping
+which of the two does what.
+
+**Rebinding an action replaces every key it had**, rather than adding to a list.
+So binding Move up to the up arrow drops `W` from it, and the roll's three
+shipped keys become one the moment it is touched. The alternative -- a screen
+that adds -- needs a way to *remove* a binding, which is a second interaction on
+a screen whose whole job is "press the key you want". Reset puts the alternates
+back.
+
 ---
 
 ## Unmeasured
@@ -268,13 +310,24 @@ They are round numbers picked to be legible, not swept values, and all three
 tiers are flagged as untuned in the data file *and on the select screen*, so a
 player choosing one is told.
 
-The monster dials are the less measured half, and unevenly so. `hp` and `aggro`
-have recorded findings behind their *direction* (durability is the strongest
-lever on an ordinary creature; disengaging is what decides a run) but nothing
-behind their size. `cadence` has a recorded finding that it is nearly inert and
-is in anyway, so it may be doing nothing at all. `evasion` has no precedent in
-the project whatsoever — no enemy has ever defended before — and it lengthens
-fights, which is a tick-limit question as much as a balance one.
+The per-stage bracket **has** been swept for all three, and it moved every
+number twice: Easy clears 20/20, Hard 19/20, Nightmare 15/20, at eight seeds
+over stages 1–20. The first draft of Nightmare left fifteen of twenty stages
+unclearable from full health, because six moderate dials compound into an
+impossible one. `data/difficulty.json` carries the trace.
+
+What is still unmeasured is everything run-level — both harder tiers finish 0/8
+runs, and that cannot be read as a verdict while the run bracket is red at
+Normal too. `cadence` is the dial most likely to be doing nothing: it scales
+only the pause, which is 20 ticks of a chaser's ~65-tick cycle, so Nightmare's
+12.5% cut moves the gap a chaser actually shows you by about 5%.
+
+**One cell must not be tuned with these dials at all.** Stage 20, the Sovereign,
+is chaotic in them rather than monotonic — at 32 seeds Normal clears 31/32 and
+Hard 14/32, while a *harsher* Nightmare draft cleared 26/32, and putting a
+single dial back to its identity made it worse. Same shape as the fountain that
+flipped a run by healing the hero. Only `incoming` moves it monotonically, and
+gently.
 
 What is pinned rather than guessed is the thing a tier could quietly destroy: a
 hero that walks in swinging still loses every run on the gentlest tier, checked

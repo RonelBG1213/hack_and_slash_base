@@ -24,6 +24,10 @@ EQUIPMENT_DATA = DATA_DIR / "equipment.json"
 DIFFICULTY_DATA = DATA_DIR / "difficulty.json"
 SPRITE_ATLAS = ASSETS_DIR / "sprites.png"
 
+#: One WAV per cue, generated like the atlas and committed like it -- which is
+#: to say not at all. See `SOUND_NAMES`.
+SOUNDS_DIR = ASSETS_DIR / "sfx"
+
 # Written while the game runs, never committed and never read by the logic
 # suite. Kept apart from `data/` on purpose: that directory is *content* -- it
 # is edited by hand, it is reviewed in a diff, and a tuning change to it is a
@@ -210,6 +214,58 @@ ATLAS_COLUMNS = 8
 
 def sprite_index(name: str) -> int:
     return SPRITE_ORDER.index(name)
+
+
+# --- sound cues --------------------------------------------------------------
+# Every noise the game can make, as the stem of a file in `assets/sfx/`. Declared
+# here for the same reason SPRITE_ORDER is: this module imports nothing, so
+# `tools/gen_sfx.py` (which writes them) and `audio/bank.py` (which loads them)
+# cannot drift apart, and a test can check the two agree without pulling pygame
+# into the logic suite.
+#
+# **Unlike SPRITE_ORDER, order does not matter here and inserting is safe.** A
+# sprite is found by its index into a grid, so a name added in the middle
+# silently renumbers every cell after it. A cue is found by its filename. That is
+# the whole difference, and it is why this tuple carries no "append, never
+# insert" warning.
+#
+# The pairs are deliberate. `hit`/`hurt` and `death`/`hero_death` split on
+# `Event.is_hero`, because a blow you land and a blow you take are opposite
+# events to a player -- the same argument `render/effects.py` already makes when
+# it colours the damage number red for one and pale for the other. `coin`/`relic`
+# split on `Event.rarity` being non-empty, which is the same test the PICKUP case
+# in `effects.feed` uses to pick a colour.
+#
+# There is deliberately no cue for PROJECTILE_SPENT. Three places emit it -- an
+# arrow hit a body, an arrow hit a wall, an arrow aged out over empty floor --
+# and nothing in the payload tells them apart, so the only honest cue for it
+# would click every time a shot expired into nothing.
+SOUND_NAMES = (
+    # what the hero does
+    "swing",
+    "shoot",
+    "dodge",
+    "buff",
+    # what lands
+    "hit",  # something else was hurt
+    "hurt",  # the hero was
+    "crit",  # layered over its `hit`, exactly as the event is
+    "blocked",  # i-frames or an evasion roll
+    # what stops
+    "death",
+    "hero_death",
+    # what the floor and the rooms do
+    "trap",
+    "prop",
+    # what a kill leaves behind
+    "coin",
+    "relic",
+)
+
+#: Sample rate and width of the generated cues. Read by the generator and by
+#: nothing else -- the mixer is told the same numbers in `main.py` so that no
+#: resampling happens between the file and the speaker.
+SOUND_RATE = 44100
 
 
 # --- palette -----------------------------------------------------------------

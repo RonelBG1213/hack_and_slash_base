@@ -62,21 +62,20 @@ from ..render.level_panel import ROW_KEYS as LEVEL_ROW_KEYS
 from ..render.level_panel import LevelPanel
 from ..render.renderer import Renderer
 from ..render.shop_panel import ROW_KEYS, ShopPanel
+from ..bindings import Action
 from ..settings import Settings
+from . import keymap
 from .base import Scene
 
-MOVE_KEYS = {
-    pygame.K_w: Vec2(0, -1),
-    pygame.K_UP: Vec2(0, -1),
-    pygame.K_s: Vec2(0, 1),
-    pygame.K_DOWN: Vec2(0, 1),
-    pygame.K_a: Vec2(-1, 0),
-    pygame.K_LEFT: Vec2(-1, 0),
-    pygame.K_d: Vec2(1, 0),
-    pygame.K_RIGHT: Vec2(1, 0),
+#: Which way each movement action pushes. The *directions* are the game and the
+#: *keys* are a preference, so this stays here as a constant while which key
+#: reaches it lives in `bindings.py` and is edited on the Controls screen.
+MOVE_DIRECTIONS = {
+    Action.MOVE_UP: Vec2(0, -1),
+    Action.MOVE_DOWN: Vec2(0, 1),
+    Action.MOVE_LEFT: Vec2(-1, 0),
+    Action.MOVE_RIGHT: Vec2(1, 0),
 }
-
-DODGE_KEYS = (pygame.K_SPACE, pygame.K_LSHIFT, pygame.K_RSHIFT)
 
 #: How many simulation ticks a dodge press stays live, waiting for the sim to be
 #: willing to take it.
@@ -93,19 +92,17 @@ DODGE_KEYS = (pygame.K_SPACE, pygame.K_LSHIFT, pygame.K_RSHIFT)
 #: and gets the last word.
 DODGE_BUFFER_TICKS = actions.STAGGER_TICKS + 1
 
-#: The three attacks that are not the light one, on the keys the left hand can
-#: reach without leaving WASD -- the right hand is on the mouse and aiming, so
-#: it has nothing spare. R is not among them: it is already "restart the run",
-#: and quietly rebinding it would cost somebody a run.
+#: Which slot each attack action spends. Positional, like the boss weapons: the
+#: sim selects by index, so index meaning is a contract between the content
+#: files, the input and the HUD -- and `game/skills.py` names the indices rather
+#: than letting bare integers appear in three places.
 #:
-#: There is deliberately no second set of alternates. Light has one (J) because
-#: it predates this and someone may be playing keyboard-only, but inventing a
-#: parallel binding for every slot is three more things to document and three
-#: more chances for two of them to disagree.
-SKILL_KEYS = {
-    pygame.K_q: skills.NEUTRAL,
-    pygame.K_e: skills.HEAVY,
-    pygame.K_f: skills.ULTIMATE,
+#: The keys that reach these slots, and the reasoning behind the ones that
+#: shipped, are in `bindings.DEFAULTS`.
+SKILL_SLOTS = {
+    Action.NEUTRAL: skills.NEUTRAL,
+    Action.HEAVY: skills.HEAVY,
+    Action.ULTIMATE: skills.ULTIMATE,
 }
 
 #: How long the between-stage banner stays up, in frames. Long enough to read
@@ -161,17 +158,13 @@ SHOP_SETTLE_FRAMES = 8
 #: panel should only be inescapable when leaving it is unrecoverable.
 LEVEL_EXIT_KEYS = SHOP_EXIT_KEYS
 
-#: Opens the character sheet. Both keys were free: every other key this scene
-#: reads is spoken for, and `R` is deliberately not among these -- it is already
-#: "restart the run", and quietly rebinding it would cost somebody a run.
+#: The sheet's own key is `Action.SHEET`, read only from the branch that runs
+#: when no panel is up -- so the sheet cannot be opened over the shop, the
+#: shrine or the fork. Those three are decisions and this is a readout; a
+#: readout has no business interrupting one.
 #:
-#: Read only from the branch that runs when no panel is up, so the sheet cannot
-#: be opened over the shop, the shrine or the fork. Those three are decisions and
-#: this is a readout; a readout has no business interrupting one.
-SHEET_KEYS = (pygame.K_i, pygame.K_TAB)
-
-#: It toggles, so its own keys close it as well as open it -- and it takes the
-#: shop's exit keys too, which means **Escape closes the sheet rather than
+#: It toggles, so its own key closes it as well as opens it, and it takes the
+#: shop's exit keys too -- which means **Escape closes the sheet rather than
 #: leaving to the menu**. The same trade the shop makes, for the same reason: a
 #: player reaching for Escape to shut a panel is not asking to end a forty-stage
 #: run.
@@ -180,7 +173,9 @@ SHEET_KEYS = (pygame.K_i, pygame.K_TAB)
 #: behind it and nothing is lost by closing it at any moment. So there is no
 #: argument here for the promotion panel's no-exit treatment, and every key that
 #: could plausibly mean "close" does.
-SHEET_EXIT_KEYS = SHOP_EXIT_KEYS + SHEET_KEYS
+#:
+#: Derived per scene rather than as a constant, because the sheet key is
+#: rebindable and a rebound key has to close the panel it just opened.
 
 
 class PlayScene(Scene):
@@ -217,6 +212,31 @@ class PlayScene(Scene):
             screenshake=self.settings.screenshake,
             damage_numbers=self.settings.damage_numbers,
         )
+
+        # Resolved once, here, rather than per frame: a rebinding takes effect
+        # on the next scene, which is the same rule the effect toggles follow
+        # and for the same reason -- the Controls screen is not reachable from
+        # inside a fight, so there is no moment where a stale table is what the
+        # player is looking at.
+        self.keys = keymap.keycodes(self.settings)
+        self.move_keys = {
+            code: direction
+            for action, direction in MOVE_DIRECTIONS.items()
+            for code in self.keys[action]
+        }
+        self.skill_keys = {
+            code: slot
+            for action, slot in SKILL_SLOTS.items()
+            for code in self.keys[action]
+        }
+        # See the note above `MOVE_DIRECTIONS` about why this one is derived.
+        self.sheet_exit_keys = SHOP_EXIT_KEYS + self.keys[Action.SHEET]
+        #: What the HUD prints on each cooldown pip. Passed down rather than
+        #: read there, so a pip cannot go on saying Q after the buff moved.
+        self.skill_labels = {
+            slot: keymap.label(action, self.settings)
+            for action, slot in SKILL_SLOTS.items()
+        }
 
         # A run handed in is a run loaded off disk. The three parameters that
         # describe how to *start* one are then read back off it rather than
@@ -402,21 +422,21 @@ class PlayScene(Scene):
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 return self.on_exit() if self.on_exit else None
-            if event.key == pygame.K_r:
+            if event.key in self.keys[Action.RESTART]:
                 return self.restarted()
-            if event.key in SHEET_KEYS:
+            if event.key in self.keys[Action.SHEET]:
                 self.inspecting = True
                 # Nothing else this frame. The world stops on the next update,
                 # and a swing queued on the way in would come out on the far
                 # side of the pause.
                 return None
-            if event.key in DODGE_KEYS:
+            if event.key in self.keys[Action.DODGE]:
                 self._dodge_buffer = DODGE_BUFFER_TICKS
-            if event.key in SKILL_KEYS:
+            if event.key in self.skill_keys:
                 # Highest slot wins when two arrive in one frame, and the slots
                 # ascend by commitment -- so mashing resolves toward the thing
                 # you least want swallowed rather than toward the cheapest.
-                slot = SKILL_KEYS[event.key]
+                slot = self.skill_keys[event.key]
                 if self._skill_pressed is None or slot > self._skill_pressed:
                     self._skill_pressed = slot
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
@@ -454,7 +474,7 @@ class PlayScene(Scene):
         if event.type != pygame.KEYDOWN:
             return None
 
-        if event.key in SHEET_EXIT_KEYS:
+        if event.key in self.sheet_exit_keys:
             self.inspecting = False
         return None
 
@@ -538,8 +558,16 @@ class PlayScene(Scene):
 
         Restarting a *stage* would let a player grind the run's hardest fight at
         full health, which is the tension the carry-over exists to create. The
-        class is kept because R is "try that again" -- going back to the
-        character select is what Esc is for.
+        class is kept because restart means "try that again" -- going back to
+        the character select is what Esc is for.
+
+        **The settings come with it**, which they did not before rebinding
+        landed. The difficulty was passed here and the preferences were not, so
+        a restart quietly put screenshake and the damage numbers back to their
+        defaults -- invisible enough to have gone unnoticed. With the key
+        bindings on the same object it stops being invisible: it would mean the
+        keys reverting under a player who pressed restart, which reads as a
+        broken build rather than as a settings bug.
         """
         return PlayScene(
             self.campaign,
@@ -549,6 +577,7 @@ class PlayScene(Scene):
             on_exit=self.on_exit,
             start_stage=self.start_stage,
             hero_type_id=self.hero_type_id,
+            settings=self.settings,
             difficulty=self.difficulty,
         )
 
@@ -567,7 +596,7 @@ class PlayScene(Scene):
         keys = pygame.key.get_pressed()
 
         move = ZERO
-        for key, direction in MOVE_KEYS.items():
+        for key, direction in self.move_keys.items():
             if keys[key]:
                 move = move + direction
 
@@ -577,7 +606,11 @@ class PlayScene(Scene):
         # it. Holding the mouse down is the normal state of playing this game,
         # so a skill that waited its turn would never come out.
         slot = self._skill_pressed
-        attacking = slot is not None or pygame.mouse.get_pressed()[0] or keys[pygame.K_j]
+        attacking = (
+            slot is not None
+            or pygame.mouse.get_pressed()[0]
+            or any(keys[code] for code in self.keys[Action.ATTACK])
+        )
 
         return Intent(
             move=move.clamped(1.0),
@@ -826,7 +859,13 @@ class PlayScene(Scene):
 
         viewport = surface.subsurface((0, 0, config.INTERNAL_W, config.VIEWPORT_H))
         self.renderer.draw(viewport, self.world, self.camera, self.effects)
-        self.hud.draw(surface, self.world, self.run, self.world.tick)
+        self.hud.draw(
+            surface,
+            self.world,
+            self.run,
+            self.world.tick,
+            skill_labels=self.skill_labels,
+        )
 
         if self.shopping or self.promoting or self.levelling or self.inspecting:
             # A panel, or the banner -- never both. Both at once puts the stage
@@ -853,7 +892,11 @@ class PlayScene(Scene):
                 # same time as another. Written as a fourth `if` rather than an
                 # `elif` on the chain above, which is the shape this branch has
                 # been burned by once already; see the note at the top of it.
-                self.hero_panel.draw(surface, self.run)
+                self.hero_panel.draw(
+                    surface,
+                    self.run,
+                    close_key=keymap.label(Action.SHEET, self.settings),
+                )
         elif self.banner > 0:
             self._draw_banner(surface)
 
@@ -908,7 +951,12 @@ class PlayScene(Scene):
         # file and gold does not persist -- so this is a score, and it is the
         # only one the game keeps.
         purse = small.render(f"{self.run.gold_total}g collected", False, config.GOLD)
-        hint = small.render("R for a new run    Esc for the menu", False, config.GREY)
+        # The restart key is rebindable, so this is asked rather than written
+        # down. Esc is not, which is why it is still a literal.
+        restart = keymap.label(Action.RESTART, self.settings)
+        hint = small.render(
+            f"{restart} for a new run    Esc for the menu", False, config.GREY
+        )
 
         # A dim wash rather than a solid panel, so the arena stays visible behind
         # the result -- seeing what killed you is part of the message.
